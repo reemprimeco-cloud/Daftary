@@ -1,4 +1,71 @@
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; font-family: "Tajawal", sans-serif; background: #FAF7F2; color: #1F2937; }
-button { font-family: inherit; cursor: pointer; border: none; }
-input, select, textarea { font-family: inherit; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: "Tajawal", sans-serif;
+  background: #FAF7F2;
+  color: #1F2937;
+  height: 100%;
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html {
+  height: -webkit-fill-available;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  height: 100dvh;
+  height: -webkit-fill-available;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.app-root {
+  height: 100%;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-scroll {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+.app-scroll::-webkit-scrollbar { display: none; }
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+button:active {
+  transform: scale(0.97);
+}
+button:disabled:active {
+  transform: none;
+}
+
+a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 16px;
+  touch-action: manipulation;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+}

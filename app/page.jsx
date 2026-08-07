@@ -104,6 +104,18 @@ export default function Home() {
     setTelegramLinked(tData.linked);
   }
 
+  function handleLogout() {
+    if (!confirm("تسجيل الخروج من دفتري؟")) return;
+    localStorage.removeItem("daftary_mother");
+    setMother(null);
+    setChildren([]);
+    setTasks([]);
+    setRequirements([]);
+    setTelegramLink(null);
+    setTelegramLinked(false);
+    setView("dashboard");
+  }
+
   async function handleRegister(name, phone) {
     const res = await fetch("/api/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, phone }) });
     const data = await res.json();
@@ -135,7 +147,7 @@ export default function Home() {
   }
 
   if (loading || (mother && !schools)) {
-    return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>...جاري التحميل</div>;
+    return <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#9CA3AF" }}>...جاري التحميل</div>;
   }
 
   if (!mother) return <Onboarding onDone={handleRegister} />;
@@ -143,57 +155,65 @@ export default function Home() {
   const weekTasksFor = (childId) => tasks.filter((t) => t.child_id === childId);
 
   return (
-    <div dir="rtl" style={{ minHeight: "100vh", paddingBottom: 90 }}>
-      <div style={{ position: "sticky", top: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(6px)", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0EEE8" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 12, background: "#6FBFA0", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800 }}>د</div>
-          <div>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>مرحباً {mother.name}</p>
-            <p style={{ margin: 0, fontSize: 11, color: "#9CA3AF" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
+    <div dir="rtl" className="app-root" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(6px)", padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0EEE8" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 12, background: "#6FBFA0", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, flexShrink: 0 }}>د</div>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً {mother.name}</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
           </div>
         </div>
-        <button onClick={() => setShowUpload(true)} style={{ background: "#6FBFA0", color: "white", fontWeight: 700, fontSize: 14, padding: "8px 14px", borderRadius: 12 }}>
-          رفع جدول
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <button onClick={() => setShowUpload(true)} style={{ background: "#6FBFA0", color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
+            رفع جدول
+          </button>
+          <button onClick={handleLogout} title="تسجيل خروج" style={{ background: "#F3F4F6", color: "#6B7280", fontWeight: 700, fontSize: 12, padding: "10px 12px", borderRadius: 12, minHeight: 40 }}>
+            خروج
+          </button>
+        </div>
       </div>
 
-      {!telegramLinked && telegramLink && (
-        <a href={telegramLink} target="_blank" rel="noreferrer" style={{ display: "block", margin: 12, padding: 12, borderRadius: 14, background: "#EBF7F1", color: "#3D7A63", fontSize: 13, fontWeight: 700, textAlign: "center", textDecoration: "none" }}>
-          فعّلي تذكيرات تيليجرام الآن ⬅️
-        </a>
-      )}
+      <div className="app-scroll" style={{ flex: 1 }}>
+        {!telegramLinked && telegramLink && (
+          <a href={telegramLink} target="_blank" rel="noreferrer" style={{ display: "block", margin: 12, padding: 14, borderRadius: 14, background: "#EBF7F1", color: "#3D7A63", fontSize: 13, fontWeight: 700, textAlign: "center", textDecoration: "none" }}>
+            فعّلي تذكيرات تيليجرام الآن ⬅️
+          </a>
+        )}
 
-      {view === "dashboard" ? (
-        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-          {children.length === 0 ? (
-            <EmptyState onAdd={() => setShowAddChild(true)} />
-          ) : (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 12, color: "#9CA3AF" }}>واجبات هذا الأسبوع</span>
-                <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#6FBFA0", fontWeight: 700, fontSize: 13 }}>+ إضافة طفل</button>
-              </div>
-              {children.map((c) => (
-                <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} onOpenTask={setOpenTask} />
-              ))}
-            </>
-          )}
-        </div>
-      ) : (
-        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-          {children.length === 0 ? (
-            <EmptyState onAdd={() => setShowAddChild(true)} />
-          ) : (
-            children.map((c) => (
-              <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} />
-            ))
-          )}
-        </div>
-      )}
+        {view === "dashboard" ? (
+          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+            {children.length === 0 ? (
+              <EmptyState onAdd={() => setShowAddChild(true)} />
+            ) : (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>واجبات هذا الأسبوع</span>
+                  <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#6FBFA0", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طفل</button>
+                </div>
+                {children.map((c) => (
+                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} onOpenTask={setOpenTask} />
+                ))}
+              </>
+            )}
+          </div>
+        ) : (
+          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+            {children.length === 0 ? (
+              <EmptyState onAdd={() => setShowAddChild(true)} />
+            ) : (
+              children.map((c) => (
+                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} />
+              ))
+            )}
+          </div>
+        )}
+        <div style={{ height: 8 }} />
+      </div>
 
-      <div style={{ position: "fixed", bottom: 0, insetInline: 0, background: "white", borderTop: "1px solid #F0EEE8", display: "flex" }}>
-        <button onClick={() => setView("dashboard")} style={{ flex: 1, padding: "10px 0", background: "none", color: view === "dashboard" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12 }}>الرئيسية</button>
-        <button onClick={() => setView("requirements")} style={{ flex: 1, padding: "10px 0", background: "none", color: view === "requirements" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12 }}>المتطلبات</button>
+      <div style={{ flexShrink: 0, background: "white", borderTop: "1px solid #F0EEE8", display: "flex", paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <button onClick={() => setView("dashboard")} style={{ flex: 1, padding: "12px 0", background: "none", color: view === "dashboard" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12, minHeight: 48 }}>الرئيسية</button>
+        <button onClick={() => setView("requirements")} style={{ flex: 1, padding: "12px 0", background: "none", color: view === "requirements" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12, minHeight: 48 }}>المتطلبات</button>
       </div>
 
       {showAddChild && <AddChildModal schools={schools} nextColorIdx={children.length} onClose={() => setShowAddChild(false)} onSave={handleAddChild} />}
@@ -208,12 +228,13 @@ function Onboarding({ onDone }) {
   const [phone, setPhone] = useState("");
   const canSubmit = name.trim().length > 1 && /^[0-9]{8}$/.test(phone.trim());
   return (
-    <div dir="rtl" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "linear-gradient(180deg,#FAF7F2,#F3EFE7)" }}>
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px)", background: "linear-gradient(180deg,#FAF7F2,#F3EFE7)" }}>
       <div style={{ width: "100%", maxWidth: 380 }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ width: 64, height: 64, borderRadius: 18, background: "#6FBFA0", margin: "0 auto 14px", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 28, fontWeight: 800 }}>د</div>
           <h1 style={{ color: "#3D7A63", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
-          <p style={{ color: "#6B7280", fontSize: 14 }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
+          <p style={{ color: "#6B7280", fontSize: 14, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
+          <p style={{ color: "#9CA3AF", fontSize: 12, margin: "6px 0 0" }}>الأب أو أي أحد بالعائلة يقدر يدخل بنفس رقم الجوال ويشوف نفس الجدول</p>
         </div>
         <div style={{ background: "white", borderRadius: 20, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 6 }}>اسمك</label>
@@ -223,7 +244,7 @@ function Onboarding({ onDone }) {
             <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="XXXXXXXX" maxLength={8} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14 }} />
           </div>
-          <button disabled={!canSubmit} onClick={() => onDone(name.trim(), "+965" + phone.trim())} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, opacity: canSubmit ? 1 : 0.4 }}>
+          <button disabled={!canSubmit} onClick={() => onDone(name.trim(), "+965" + phone.trim())} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSubmit ? 1 : 0.4 }}>
             ابدئي المتابعة
           </button>
         </div>
@@ -254,14 +275,14 @@ function ChildCard({ child, tasks, onOpenTask }) {
         <Avatar child={child} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
-          <p style={{ margin: 0, fontSize: 11, color: color.text, opacity: 0.75 }}>الصف {child.grade}/{child.section} · {child.school}</p>
+          <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>الصف {child.grade}/{child.section} · {child.school}</p>
         </div>
       </div>
       <div style={{ background: "white", padding: 12 }}>
         {tasks.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا واجبات هذا الأسبوع 🎉</p>}
         {byDay.filter((d) => d.items.length).map(({ day, items }) => (
           <div key={day} style={{ marginBottom: 8 }}>
-            <p style={{ fontSize: 11, fontWeight: 800, color: "#9CA3AF", margin: "0 0 4px" }}>{day}</p>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#9CA3AF", margin: "0 0 4px" }}>{day}</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {items.map((t) => (
                 <button key={t.id} onClick={() => onOpenTask(t)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: color.soft, color: color.text }}>
@@ -284,7 +305,7 @@ function RequirementsCard({ child, items, onToggle }) {
         <Avatar child={child} size={44} />
         <div>
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
-          <p style={{ margin: 0, fontSize: 11, color: color.text, opacity: 0.75 }}>{items.length} طلب</p>
+          <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{items.length} طلب</p>
         </div>
       </div>
       <div style={{ background: "white", padding: 12 }}>
@@ -293,9 +314,9 @@ function RequirementsCard({ child, items, onToggle }) {
           <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F3F4F6" }}>
             <div>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: r.bought ? "#9CA3AF" : "#374151", textDecoration: r.bought ? "line-through" : "none" }}>{r.item}</p>
-              <p style={{ margin: 0, fontSize: 11, color: "#9CA3AF" }}>{fmtDate(r.due_date)}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{fmtDate(r.due_date)}</p>
             </div>
-            <button onClick={() => onToggle(r.id)} style={{ fontSize: 11, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: r.bought ? "#F0FDF4" : color.soft, color: r.bought ? "#166534" : color.text }}>
+            <button onClick={() => onToggle(r.id)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: r.bought ? "#F0FDF4" : color.soft, color: r.bought ? "#166534" : color.text }}>
               {r.bought ? "تم الشراء" : "تحديد كمُشترى"}
             </button>
           </div>
@@ -309,17 +330,17 @@ function TaskModal({ task, color, onClose, onMarkDone }) {
   const meta = TYPE_META[task.type] || TYPE_META["واجب"];
   return (
     <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, borderRadius: "24px 24px 0 0", padding: 22 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, borderRadius: "24px 24px 0 0", padding: "22px 22px calc(env(safe-area-inset-bottom) + 22px)", maxHeight: "85vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
           <div>
             <span style={{ fontSize: 22 }}>{meta.icon}</span>
-            <h3 style={{ margin: "4px 0 2px", color: color.text }}>{task.subject}</h3>
+            <h3 style={{ margin: "4px 0 2px", color: color.text, fontSize: 18 }}>{task.subject}</h3>
             <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>{task.type} · {fmtDate(task.due_date)}</p>
           </div>
-          <button onClick={onClose} style={{ background: "none", fontSize: 20, color: "#9CA3AF" }}>×</button>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36, flexShrink: 0 }}>×</button>
         </div>
         {task.details && <div style={{ background: color.bg, borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 13 }}>{task.details}</div>}
-        <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 13, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800 }}>
+        <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48 }}>
           {meta.done}
         </button>
       </div>
@@ -342,12 +363,12 @@ function AddChildModal({ schools, nextColorIdx, onClose, onSave }) {
 
   return (
     <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", borderRadius: "24px 24px 0 0" }}>
-        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
+        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 17 }}>إضافة طفل</h2>
-          <button onClick={onClose} style={{ background: "none", fontSize: 20, color: "#9CA3AF" }}>×</button>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
         </div>
-        <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <button onClick={() => fileRef.current?.click()} style={{ position: "relative", background: "none" }}>
               {photo ? <img src={photo} style={{ width: 92, height: 92, borderRadius: "50%", objectFit: "cover", border: `2px solid ${PALETTE[nextColorIdx % PALETTE.length].ring}` }} /> :
@@ -403,7 +424,7 @@ function AddChildModal({ schools, nextColorIdx, onClose, onSave }) {
             </div>
           )}
 
-          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo })} style={{ padding: 13, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, opacity: canSave ? 1 : 0.4 }}>
+          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo })} style={{ padding: 14, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
             إضافة الطفل
           </button>
         </div>
@@ -443,12 +464,12 @@ function UploadView({ children, motherId, onClose, onDone }) {
   }
 
   return (
-    <div dir="rtl" style={{ position: "fixed", inset: 0, zIndex: 50, background: "white", overflowY: "auto" }}>
-      <div style={{ position: "sticky", top: 0, background: "white", padding: "14px 16px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
-        <button onClick={onClose} style={{ background: "none", fontSize: 18 }}>←</button>
-        <p style={{ margin: 0, fontWeight: 800 }}>رفع الجدول</p>
+    <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "white", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 14px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={onClose} style={{ background: "none", fontSize: 20, width: 36, height: 36 }}>←</button>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>رفع الجدول</p>
       </div>
-      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="app-scroll" style={{ padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <label style={{ fontSize: 13, fontWeight: 700 }}>هذي الصور من مدرسة:</label>
           <select value={school} onChange={(e) => setSchool(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
@@ -466,7 +487,7 @@ function UploadView({ children, motherId, onClose, onDone }) {
             {images.map((img, i) => (
               <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: 8, overflow: "hidden" }}>
                 <img src={img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                <button onClick={() => setImages((p) => p.filter((_, idx) => idx !== i))} style={{ position: "absolute", top: 3, left: 3, background: "rgba(0,0,0,.6)", color: "white", borderRadius: "50%", width: 18, height: 18, fontSize: 11 }}>×</button>
+                <button onClick={() => setImages((p) => p.filter((_, idx) => idx !== i))} style={{ position: "absolute", top: 3, left: 3, background: "rgba(0,0,0,.6)", color: "white", borderRadius: "50%", width: 18, height: 18, fontSize: 12 }}>×</button>
               </div>
             ))}
           </div>
