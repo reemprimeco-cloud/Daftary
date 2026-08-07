@@ -305,6 +305,7 @@ export default function Home() {
           endpoint="/api/upload-class-schedule"
           title="رفع جدول الحصص"
           buttonLabel="تحليل وتصميم الجدول"
+          selectChild={false}
           renderSummary={(s) => (
             <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
               تم تحليل {s.imagesProcessed} صورة ✓ — تصميم جدول الحصص لـ {s.matchedChildren} طالب/ة.
@@ -646,14 +647,20 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
   );
 }
 
-function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, onClose, onDone }) {
+function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, selectChild = true, onClose, onDone }) {
   const [school, setSchool] = useState("");
+  const [childId, setChildId] = useState("");
   const [images, setImages] = useState([]);
   const [status, setStatus] = useState("idle");
   const [summary, setSummary] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
   const fileRef = useRef();
   const schoolsOfChildren = [...new Set(children.map((c) => c.school))];
+  const childrenOfSchool = school ? children.filter((c) => c.school === school) : [];
+  const autoChild = childrenOfSchool.length === 1 ? childrenOfSchool[0] : null;
+  const effectiveChildId = autoChild ? autoChild.id : childId;
+  const needsChildConfirm = selectChild && childrenOfSchool.length > 1;
+  const canRun = school && images.length > 0 && (!selectChild || effectiveChildId);
 
   async function handleFiles(e) {
     const files = Array.from(e.target.files || []);
@@ -664,7 +671,8 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   async function run() {
     setStatus("loading");
     try {
-      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId, school, images }) });
+      const body = selectChild ? { motherId, childId: effectiveChildId, images } : { motherId, school, images };
+      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setSummary(data);
@@ -687,11 +695,32 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
       <div className="app-scroll" style={{ padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <label style={{ fontSize: 13, fontWeight: 700 }}>هذي الصور من مدرسة:</label>
-          <select value={school} onChange={(e) => setSchool(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
+          <select value={school} onChange={(e) => { setSchool(e.target.value); setChildId(""); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
             <option value="">— اختاري —</option>
             {schoolsOfChildren.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
+        {selectChild && autoChild && (
+          <div style={{ background: "#EBF7F1", color: "#3D7A63", borderRadius: 12, padding: 12, fontSize: 13, fontWeight: 700 }}>
+            هذا الجدول لـ {autoChild.name} — الصف {autoChild.grade}/{autoChild.section}
+          </div>
+        )}
+        {needsChildConfirm && (
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>هذا الجدول لأي طالب/ة؟</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+              {childrenOfSchool.map((c) => (
+                <label key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 12, border: `1px solid ${childId === c.id ? "#6FBFA0" : "#E5E7EB"}`, background: childId === c.id ? "#EBF7F1" : "white", cursor: "pointer" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input type="radio" name="uploadChild" checked={childId === c.id} onChange={() => setChildId(c.id)} style={{ accentColor: "#6FBFA0" }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{c.name}</span>
+                  </span>
+                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>الصف {c.grade}/{c.section}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <div onClick={() => fileRef.current?.click()} style={{ border: "2px dashed #D1D5DB", borderRadius: 16, padding: 30, textAlign: "center", background: "#FAFAFA", cursor: "pointer" }}>
           <p style={{ margin: 0, fontWeight: 700 }}>اضغطي لاختيار الصور</p>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "#9CA3AF" }}>يمكنك اختيار أكثر من صورة دفعة وحدة</p>
@@ -707,7 +736,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             ))}
           </div>
         )}
-        <button disabled={!school || images.length === 0 || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, opacity: (!school || images.length === 0) ? 0.4 : 1 }}>
+        <button disabled={!canRun || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, opacity: canRun ? 1 : 0.4 }}>
           {status === "loading" ? "جاري التحليل..." : buttonLabel}
         </button>
         {status === "done" && summary && (renderSummary ? renderSummary(summary) : (

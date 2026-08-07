@@ -32,8 +32,8 @@ export async function POST(req) {
 }
 
 async function handleUpload(req) {
-  const { motherId, school, images } = await req.json();
-  if (!motherId || !school || !images?.length) {
+  const { motherId, childId, images } = await req.json();
+  if (!motherId || !childId || !images?.length) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }
 
@@ -43,15 +43,13 @@ async function handleUpload(req) {
   }
 
   const sb = supabaseAdmin();
-  const { data: children, error: cErr } = await sb
+  const { data: child, error: cErr } = await sb
     .from("children")
     .select("*")
+    .eq("id", childId)
     .eq("mother_id", motherId)
-    .eq("school", school);
-  if (cErr) return NextResponse.json({ error: cErr.message }, { status: 400 });
-  if (!children?.length) {
-    return NextResponse.json({ error: "ما فيه طلاب مسجلين لهذي المدرسة" }, { status: 400 });
-  }
+    .single();
+  if (cErr || !child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
 
   const { map, sunday, thursday } = weekMap();
   const todayLabel = new Date().toLocaleDateString("ar-KW", {
@@ -61,21 +59,19 @@ async function handleUpload(req) {
   const content = [
     {
       type: "text",
-      text: `أنت مساعد يقرأ صور جداول واجبات مدرسية كويتية (من إنستقرام حساب المدرسة). أمامك ${images.length} صورة قد تخص صفوفاً وشعباً مختلفة، بترتيب عشوائي.
+      text: `أنت مساعد يقرأ صور جداول واجبات مدرسية كويتية (من إنستقرام حساب المدرسة). أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص واجبات طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
 
 السياق: اليوم ${todayLabel}. الأسبوع الحالي من الأحد ${sunday} إلى الخميس ${thursday}.
 تواريخ أيام هذا الأسبوع بالتحديد:
 الأحد=${map["الأحد"]}, الاثنين=${map["الاثنين"]}, الثلاثاء=${map["الثلاثاء"]}, الأربعاء=${map["الأربعاء"]}, الخميس=${map["الخميس"]}.
 
 اقرأ كل صورة واستخرج:
-1) الصف والشعبة الظاهرين (رقم الصف من 1-12 ورقم الشعبة، مثل "٣/١" = صف 3 شعبة 1).
-2) كل مهمة (واجب/حفظ قرآن أو حديث/اختبار/مشروع) بمادتها وتاريخها الفعلي (YYYY-MM-DD) بمطابقة اسم اليوم بالجدول أعلاه. أي صفحة أو رقم درس أو نطاق حفظ ضعه في details.
-3) أي طلبات أو مستلزمات مدرسية إن وُجدت.
+1) كل مهمة (واجب/حفظ قرآن أو حديث/اختبار/مشروع) بمادتها وتاريخها الفعلي (YYYY-MM-DD) بمطابقة اسم اليوم بالجدول أعلاه. أي صفحة أو رقم درس أو نطاق حفظ ضعه في details.
+2) أي طلبات أو مستلزمات مدرسية إن وُجدت.
+3) إذا ظهر رقم صف أو شعبة بوضوح بالصورة، اذكره بحقل gradeSeen (مثلاً "٣/١") — هذا اختياري وللمرجعية فقط، ولا يمنع استخراج البيانات لو ما ظهر أو كانت الصورة مقصوصة.
 
 أرجع JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"entries":[{"grade":3,"section":1,"subject":"اسم المادة","type":"واجب|حفظ|اختبار|مشروع","dueDate":"YYYY-MM-DD","details":"نص اختياري"}],"requirements":[{"grade":3,"section":1,"item":"اسم الغرض","dueDate":"YYYY-MM-DD"}]}
-
-إن لم تستطع قراءة صف أو شعبة بوضوح من صورة معينة، تجاهل تلك الصورة بالكامل ولا تخترع بيانات.`,
+{"entries":[{"subject":"اسم المادة","type":"واجب|حفظ|اختبار|مشروع","dueDate":"YYYY-MM-DD","details":"نص اختياري","gradeSeen":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD"}]}`,
     },
     ...images.map((img) => ({
       type: "image",
@@ -129,14 +125,16 @@ async function handleUpload(req) {
       skippedOld++;
       continue;
     }
-    const child = children.find((c) => c.grade === Number(e.grade) && c.section === Number(e.section));
-    if (!child) continue;
+    let details = e.details || null;
+    if (e.gradeSeen) {
+      details = details ? `${details} (الصف بالصورة: ${e.gradeSeen})` : `الصف بالصورة: ${e.gradeSeen}`;
+    }
     await sb.from("tasks").insert({
       child_id: child.id,
       subject: e.subject,
       type: e.type || "واجب",
       due_date: e.dueDate,
-      details: e.details || null,
+      details,
       status: "active",
       source: "image",
     });
@@ -148,8 +146,6 @@ async function handleUpload(req) {
       skippedOld++;
       continue;
     }
-    const child = children.find((c) => c.grade === Number(r.grade) && c.section === Number(r.section));
-    if (!child) continue;
     await sb.from("requirements").insert({
       child_id: child.id,
       item: r.item,
