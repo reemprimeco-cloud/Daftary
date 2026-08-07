@@ -6,22 +6,15 @@ html, body {
   font-family: "Tajawal", sans-serif;
   background: #FAF7F2;
   color: #1F2937;
-  height: 100%;
   overscroll-behavior-y: none;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-}
-
-html {
-  height: -webkit-fill-available;
 }
 
 body {
   position: fixed;
   inset: 0;
   overflow: hidden;
-  height: 100dvh;
-  height: -webkit-fill-available;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
