@@ -35,6 +35,7 @@ export async function POST(req) {
       grade: body.grade,
       section: body.section,
       color_idx: colorIdx,
+      pe_uniform_color: body.peUniformColor || null,
     })
     .select()
     .single();

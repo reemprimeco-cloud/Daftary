@@ -15,6 +15,7 @@ export async function PATCH(req, { params }) {
       grade: body.grade,
       section: body.section,
       color_idx: body.colorIdx,
+      pe_uniform_color: body.peUniformColor || null,
     })
     .eq("id", params.id)
     .select()

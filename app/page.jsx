@@ -36,6 +36,15 @@ const SUBJECT_ICON_MAP = [
   { file: "music", keywords: ["موسيقى", "نشيد"] },
   { file: "computer", keywords: ["حاسوب", "حاسب", "كمبيوتر", "تقنية"] },
 ];
+const PE_COLORS = [
+  { value: "#3B82F6", label: "أزرق" },
+  { value: "#EF4444", label: "أحمر" },
+  { value: "#EAB308", label: "أصفر" },
+  { value: "#22C55E", label: "أخضر" },
+  { value: "#FFFFFF", label: "أبيض" },
+  { value: "#F97316", label: "برتقالي" },
+  { value: "#A855F7", label: "بنفسجي" },
+];
 const stageForGrade = (g) => (g <= 5 ? "ابتدائي" : g <= 9 ? "متوسط" : "ثانوي");
 const studentWord = (gender) => (gender === "بنات" ? "الطالبة" : "الطالب");
 
@@ -247,6 +256,8 @@ export default function Home() {
   }
 
   const weekTasksFor = (childId) => tasks.filter((t) => t.child_id === childId);
+  const todayDayName = DAYS[new Date().getDay()];
+  const hasPEToday = (childId) => classSchedule.some((s) => s.child_id === childId && s.day === todayDayName && getSubjectIconFile(s.subject) === "pe");
 
   return (
     <div dir="rtl" className="app-root" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -286,7 +297,7 @@ export default function Home() {
                   <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
                 </div>
                 {children.map((c) => (
-                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} />
+                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} hasPEToday={hasPEToday(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} />
                 ))}
               </>
             )}
@@ -475,13 +486,24 @@ function EmptyState({ onAdd }) {
   );
 }
 
-function ChildCard({ child, tasks, onOpenTask, onEdit }) {
+function ChildCard({ child, tasks, hasPEToday, onOpenTask, onEdit }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const byDay = DAYS.map((day) => ({
     day,
     items: tasks.filter((t) => DAYS[new Date(t.due_date + "T00:00:00").getDay()] === day),
   }));
   return (
+    <div>
+      {hasPEToday && (
+        <div style={{ marginBottom: 6, marginInlineStart: 4 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#FDF3E7", color: "#8C6027", fontSize: 11, fontWeight: 800, padding: "4px 10px", borderRadius: 999 }}>
+            🏃 بدنية اليوم
+            {child.pe_uniform_color && (
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
+            )}
+          </span>
+        </div>
+      )}
     <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, background: color.bg }}>
         <Avatar child={child} />
@@ -506,6 +528,7 @@ function ChildCard({ child, tasks, onOpenTask, onEdit }) {
           </div>
         ))}
       </div>
+    </div>
     </div>
   );
 }
@@ -582,7 +605,12 @@ function ScheduleCard({ child, schedule, onUpload }) {
                         <td key={p} style={{ padding: "6px 4px", textAlign: "center", background: dayPal.bg, borderRadius: 8, verticalAlign: entry ? "top" : "middle" }}>
                           {entry ? (
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                              <SubjectIcon subject={entry.subject} size={26} />
+                              <div style={{ position: "relative" }}>
+                                <SubjectIcon subject={entry.subject} size={26} />
+                                {getSubjectIconFile(entry.subject) === "pe" && child.pe_uniform_color && (
+                                  <span style={{ position: "absolute", bottom: -2, left: -2, width: 10, height: 10, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
+                                )}
+                              </div>
                               <span style={{ fontSize: 10, fontWeight: 800, color: dayPal.text }}>{entry.subject}</span>
                               {entry.teacher && <span style={{ fontSize: 9, color: dayPal.text, opacity: 0.75 }}>{entry.teacher}</span>}
                               {(entry.start_time || entry.end_time) && (
@@ -641,6 +669,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
   const [school, setSchool] = useState(child?.school || "");
   const [photo, setPhoto] = useState(child?.photo_url || null);
   const [colorIdx, setColorIdx] = useState((child?.color_idx ?? nextColorIdx) % PALETTE.length);
+  const [peColor, setPeColor] = useState(child?.pe_uniform_color || null);
   const fileRef = useRef();
   const stage = stageForGrade(grade);
   const options = gov ? schools?.[gov]?.[stage]?.[gender] || [] : [];
@@ -702,6 +731,24 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
           </div>
 
           <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>لون ملابس البدنية (اختياري)</label>
+            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+              {PE_COLORS.map((c) => (
+                <button
+                  key={c.value}
+                  onClick={() => setPeColor(peColor === c.value ? null : c.value)}
+                  title={c.label}
+                  style={{
+                    width: 30, height: 30, borderRadius: "50%", background: c.value, flexShrink: 0,
+                    border: c.value === "#FFFFFF" ? "1px solid #E5E7EB" : "3px solid transparent",
+                    boxShadow: peColor === c.value ? "0 0 0 2px white, 0 0 0 4px #B7A6E8" : "none",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
             <label style={{ fontSize: 13, fontWeight: 700 }}>المحافظة</label>
             <select value={gov} onChange={(e) => { setGov(e.target.value); setSchool(""); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
               <option value="">— اختاري —</option>
@@ -719,7 +766,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
             </div>
           )}
 
-          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo, colorIdx })} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo, colorIdx, peUniformColor: peColor })} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
             {isEdit ? "حفظ التعديلات" : `إضافة ${word === "طالبة" ? "الطالبة" : "الطالب"}`}
           </button>
           {isEdit && (
