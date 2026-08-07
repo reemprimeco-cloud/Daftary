@@ -50,7 +50,7 @@ async function handleUpload(req) {
     .eq("school", school);
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 400 });
   if (!children?.length) {
-    return NextResponse.json({ error: "ما فيه أطفال مسجلين لهذي المدرسة" }, { status: 400 });
+    return NextResponse.json({ error: "ما فيه طلاب مسجلين لهذي المدرسة" }, { status: 400 });
   }
 
   const { map, sunday, thursday } = weekMap();

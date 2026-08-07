@@ -20,6 +20,7 @@ const TYPE_META = {
   "مشروع": { icon: "🎨", done: "تم" },
 };
 const stageForGrade = (g) => (g <= 5 ? "ابتدائي" : g <= 9 ? "متوسط" : "ثانوي");
+const studentWord = (gender) => (gender === "بنات" ? "الطالبة" : "الطالب");
 
 function fmtDate(dateStr) {
   if (!dateStr) return "";
@@ -76,6 +77,7 @@ export default function Home() {
   const [requirements, setRequirements] = useState([]);
   const [view, setView] = useState("dashboard");
   const [showAddChild, setShowAddChild] = useState(false);
+  const [editingChild, setEditingChild] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [openTask, setOpenTask] = useState(null);
   const [telegramLink, setTelegramLink] = useState(null);
@@ -135,8 +137,33 @@ export default function Home() {
     }
   }
 
+  async function handleUpdateChild(id, child) {
+    const res = await fetch(`/api/children/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(child) });
+    const data = await res.json();
+    if (data.child) {
+      setChildren((prev) => prev.map((c) => (c.id === id ? data.child : c)));
+      setEditingChild(null);
+    }
+  }
+
+  async function handleDeleteChild(id) {
+    if (!confirm("حذف هذا الطالب/ـة نهائياً؟ راح تنحذف كل واجباته ومتطلباته معه.")) return;
+    await fetch(`/api/children/${id}`, { method: "DELETE" });
+    setChildren((prev) => prev.filter((c) => c.id !== id));
+    setTasks((prev) => prev.filter((t) => t.child_id !== id));
+    setRequirements((prev) => prev.filter((r) => r.child_id !== id));
+    setEditingChild(null);
+  }
+
   async function handleMarkDone(taskId) {
     await fetch(`/api/tasks/${taskId}/done`, { method: "POST" });
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setOpenTask(null);
+  }
+
+  async function handleDeleteTask(taskId) {
+    if (!confirm("حذف هذا الواجب نهائياً؟")) return;
+    await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenTask(null);
   }
@@ -144,6 +171,12 @@ export default function Home() {
   async function handleToggleReq(id) {
     await fetch(`/api/requirements/${id}/toggle`, { method: "POST" });
     setRequirements((prev) => prev.map((r) => (r.id === id ? { ...r, bought: !r.bought } : r)));
+  }
+
+  async function handleDeleteReq(id) {
+    if (!confirm("حذف هذا الطلب؟")) return;
+    await fetch(`/api/requirements/${id}`, { method: "DELETE" });
+    setRequirements((prev) => prev.filter((r) => r.id !== id));
   }
 
   if (loading || (mother && !schools)) {
@@ -189,10 +222,10 @@ export default function Home() {
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "#9CA3AF" }}>واجبات هذا الأسبوع</span>
-                  <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#6FBFA0", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طفل</button>
+                  <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#6FBFA0", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
                 </div>
                 {children.map((c) => (
-                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} onOpenTask={setOpenTask} />
+                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} />
                 ))}
               </>
             )}
@@ -203,7 +236,7 @@ export default function Home() {
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
               children.map((c) => (
-                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} />
+                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onEdit={() => setEditingChild(c)} onDeleteReq={handleDeleteReq} />
               ))
             )}
           </div>
@@ -217,8 +250,18 @@ export default function Home() {
       </div>
 
       {showAddChild && <AddChildModal schools={schools} nextColorIdx={children.length} onClose={() => setShowAddChild(false)} onSave={handleAddChild} />}
+      {editingChild && (
+        <AddChildModal
+          schools={schools}
+          nextColorIdx={editingChild.color_idx}
+          child={editingChild}
+          onClose={() => setEditingChild(null)}
+          onSave={(data) => handleUpdateChild(editingChild.id, data)}
+          onDelete={() => handleDeleteChild(editingChild.id)}
+        />
+      )}
       {showUpload && <UploadView children={children} motherId={mother.id} onClose={() => setShowUpload(false)} onDone={() => loadAll(mother.id)} />}
-      {openTask && <TaskModal task={openTask} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} />}
+      {openTask && <TaskModal task={openTask} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} />}
     </div>
   );
 }
@@ -256,14 +299,14 @@ function Onboarding({ onDone }) {
 function EmptyState({ onAdd }) {
   return (
     <div style={{ textAlign: "center", padding: "60px 0" }}>
-      <p style={{ fontWeight: 800, marginBottom: 4 }}>ابدئي بإضافة أول طفل</p>
+      <p style={{ fontWeight: 800, marginBottom: 4 }}>ابدئي بإضافة أول طالب/ة</p>
       <p style={{ color: "#9CA3AF", fontSize: 14, marginBottom: 18 }}>سجّلي مدرسته وصفه، وبعدها ارفعي صور الجدول</p>
-      <button onClick={onAdd} style={{ background: "#6FBFA0", color: "white", fontWeight: 700, padding: "10px 20px", borderRadius: 12 }}>+ إضافة طفل</button>
+      <button onClick={onAdd} style={{ background: "#6FBFA0", color: "white", fontWeight: 700, padding: "10px 20px", borderRadius: 12 }}>+ إضافة طالب/ة</button>
     </div>
   );
 }
 
-function ChildCard({ child, tasks, onOpenTask }) {
+function ChildCard({ child, tasks, onOpenTask, onEdit }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const byDay = DAYS.map((day) => ({
     day,
@@ -277,6 +320,7 @@ function ChildCard({ child, tasks, onOpenTask }) {
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>الصف {child.grade}/{child.section} · {child.school}</p>
         </div>
+        <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>✏️ تعديل</button>
       </div>
       <div style={{ background: "white", padding: 12 }}>
         {tasks.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا واجبات هذا الأسبوع 🎉</p>}
@@ -297,28 +341,30 @@ function ChildCard({ child, tasks, onOpenTask }) {
   );
 }
 
-function RequirementsCard({ child, items, onToggle }) {
+function RequirementsCard({ child, items, onToggle, onEdit, onDeleteReq }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   return (
     <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, background: color.bg }}>
         <Avatar child={child} size={44} />
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{items.length} طلب</p>
         </div>
+        <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>✏️ تعديل</button>
       </div>
       <div style={{ background: "white", padding: 12 }}>
         {items.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا توجد طلبات حالياً</p>}
         {items.map((r) => (
-          <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F3F4F6" }}>
-            <div>
+          <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F3F4F6", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: r.bought ? "#9CA3AF" : "#374151", textDecoration: r.bought ? "line-through" : "none" }}>{r.item}</p>
               <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{fmtDate(r.due_date)}</p>
             </div>
-            <button onClick={() => onToggle(r.id)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: r.bought ? "#F0FDF4" : color.soft, color: r.bought ? "#166534" : color.text }}>
+            <button onClick={() => onToggle(r.id)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: r.bought ? "#F0FDF4" : color.soft, color: r.bought ? "#166534" : color.text, flexShrink: 0 }}>
               {r.bought ? "تم الشراء" : "تحديد كمُشترى"}
             </button>
+            <button onClick={() => onDeleteReq(r.id)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 16, width: 24, height: 24, flexShrink: 0, padding: 0 }}>×</button>
           </div>
         ))}
       </div>
@@ -326,7 +372,7 @@ function RequirementsCard({ child, items, onToggle }) {
   );
 }
 
-function TaskModal({ task, color, onClose, onMarkDone }) {
+function TaskModal({ task, color, onClose, onMarkDone, onDelete }) {
   const meta = TYPE_META[task.type] || TYPE_META["واجب"];
   return (
     <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
@@ -340,32 +386,37 @@ function TaskModal({ task, color, onClose, onMarkDone }) {
           <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36, flexShrink: 0 }}>×</button>
         </div>
         {task.details && <div style={{ background: color.bg, borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 13 }}>{task.details}</div>}
-        <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48 }}>
+        <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
           {meta.done}
+        </button>
+        <button onClick={() => onDelete(task.id)} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+          حذف الواجب (دخل غلط)
         </button>
       </div>
     </div>
   );
 }
 
-function AddChildModal({ schools, nextColorIdx, onClose, onSave }) {
-  const [name, setName] = useState("");
-  const [gov, setGov] = useState("");
-  const [grade, setGrade] = useState(3);
-  const [section, setSection] = useState(1);
-  const [gender, setGender] = useState("بنين");
-  const [school, setSchool] = useState("");
-  const [photo, setPhoto] = useState(null);
+function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete }) {
+  const isEdit = !!child;
+  const [name, setName] = useState(child?.name || "");
+  const [gov, setGov] = useState(child?.governorate || "");
+  const [grade, setGrade] = useState(child?.grade || 3);
+  const [section, setSection] = useState(child?.section || 1);
+  const [gender, setGender] = useState(child?.gender || "بنين");
+  const [school, setSchool] = useState(child?.school || "");
+  const [photo, setPhoto] = useState(child?.photo_url || null);
   const fileRef = useRef();
   const stage = stageForGrade(grade);
   const options = gov ? schools?.[gov]?.[stage]?.[gender] || [] : [];
   const canSave = name.trim().length > 1 && gov && school;
+  const word = gender === "بنات" ? "طالبة" : "طالب";
 
   return (
     <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
         <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
-          <h2 style={{ margin: 0, fontSize: 17 }}>إضافة طفل</h2>
+          <h2 style={{ margin: 0, fontSize: 17 }}>{isEdit ? `تعديل بيانات ${studentWord(gender)}` : `إضافة ${word}`}</h2>
           <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
         </div>
         <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -378,7 +429,7 @@ function AddChildModal({ schools, nextColorIdx, onClose, onSave }) {
           </div>
 
           <div>
-            <label style={{ fontSize: 13, fontWeight: 700 }}>اسم الطفل</label>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>اسم {word === "طالبة" ? "الطالبة" : "الطالب"}</label>
             <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
           </div>
 
@@ -425,8 +476,13 @@ function AddChildModal({ schools, nextColorIdx, onClose, onSave }) {
           )}
 
           <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo })} style={{ padding: 14, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
-            إضافة الطفل
+            {isEdit ? "حفظ التعديلات" : `إضافة ${word === "طالبة" ? "الطالبة" : "الطالب"}`}
           </button>
+          {isEdit && (
+            <button onClick={onDelete} style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+              حذف {studentWord(gender)} نهائياً
+            </button>
+          )}
         </div>
       </div>
     </div>
