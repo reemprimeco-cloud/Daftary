@@ -446,11 +446,11 @@ function Onboarding({ onDone }) {
   const [phone, setPhone] = useState("");
   const canSubmit = name.trim().length > 1 && /^[0-9]{8}$/.test(phone.trim());
   return (
-    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
-      <div style={{ width: "100%", maxWidth: 380 }}>
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <img src="/logo.png" alt="دفتري" style={{ width: 64, height: 64, borderRadius: 16, margin: "0 auto 8px", display: "block", boxShadow: "0 4px 14px rgba(183,166,232,.35)" }} />
-          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 22, fontWeight: 800 }}>دفتري</h1>
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <img src="/logo.png" alt="دفتري" style={{ width: 96, height: 96, borderRadius: 22, margin: "0 auto 12px", display: "block", boxShadow: "0 4px 14px rgba(183,166,232,.35)" }} />
+          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
           <p style={{ color: "#6B7280", fontSize: 13, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
         </div>
         <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
@@ -465,12 +465,12 @@ function Onboarding({ onDone }) {
             متابعة
           </button>
         </div>
-        <div style={{ textAlign: "center", marginTop: 14 }}>
-          <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-            تواصل معنا
-          </a>
-          <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
-        </div>
+      </div>
+      <div style={{ textAlign: "center", flexShrink: 0, width: "100%", maxWidth: 380, margin: "0 auto" }}>
+        <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          تواصل معنا
+        </a>
+        <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
       </div>
     </div>
   );

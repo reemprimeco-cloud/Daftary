@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: "دفتري — متابعة واجبات العيال",
   description: "متابعة واجبات واختبارات العيال بدون تعقيد",
