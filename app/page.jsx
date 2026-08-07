@@ -19,6 +19,11 @@ const TYPE_META = {
   "اختبار": { icon: "📚", done: "تم المذاكرة" },
   "مشروع": { icon: "🎨", done: "تم" },
 };
+const TABS = [
+  { key: "dashboard", label: "الرئيسية", icon: "🏠" },
+  { key: "requirements", label: "المتطلبات", icon: "🎒" },
+  { key: "schedule", label: "جدول الحصص", icon: "🗓️" },
+];
 const stageForGrade = (g) => (g <= 5 ? "ابتدائي" : g <= 9 ? "متوسط" : "ثانوي");
 const studentWord = (gender) => (gender === "بنات" ? "الطالبة" : "الطالب");
 
@@ -280,10 +285,13 @@ export default function Home() {
         <div style={{ height: 8 }} />
       </div>
 
-      <div style={{ flexShrink: 0, background: "white", borderTop: "1px solid #F0EEE8", display: "flex", paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <button onClick={() => setView("dashboard")} style={{ flex: 1, padding: "12px 0", background: "none", color: view === "dashboard" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12, minHeight: 48 }}>الرئيسية</button>
-        <button onClick={() => setView("requirements")} style={{ flex: 1, padding: "12px 0", background: "none", color: view === "requirements" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12, minHeight: 48 }}>المتطلبات</button>
-        <button onClick={() => setView("schedule")} style={{ flex: 1, padding: "12px 0", background: "none", color: view === "schedule" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12, minHeight: 48 }}>جدول الحصص</button>
+      <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderTop: "1px solid #F0EEE8", display: "flex", paddingBottom: "env(safe-area-inset-bottom)" }}>
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setView(t.key)} style={{ flex: 1, padding: "8px 0 6px", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: view === t.key ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 11, minHeight: 52 }}>
+            <span style={{ fontSize: 21, lineHeight: 1 }}>{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
       </div>
 
       {showAddChild && <AddChildModal schools={schools} nextColorIdx={children.length} onClose={() => setShowAddChild(false)} onSave={handleAddChild} />}
@@ -297,7 +305,15 @@ export default function Home() {
           onDelete={() => handleDeleteChild(editingChild.id)}
         />
       )}
-      {showUpload && <UploadView children={children} motherId={mother.id} onClose={() => setShowUpload(false)} onDone={() => loadAll(mother.id)} />}
+      {showUpload && (
+        <UploadView
+          children={children}
+          motherId={mother.id}
+          hint="ارفعي الخطط الأسبوعية، جدول الاختبارات ومتطلبات العام الدراسي هنا"
+          onClose={() => setShowUpload(false)}
+          onDone={() => loadAll(mother.id)}
+        />
+      )}
       {showUploadSchedule && (
         <UploadView
           children={children}
@@ -306,6 +322,7 @@ export default function Home() {
           title="رفع جدول الحصص"
           buttonLabel="تحليل وتصميم الجدول"
           selectChild={false}
+          hint="ارفعي صورة جدول الحصص الأسبوعي (جدول المواد اليومي) هنا"
           renderSummary={(s) => (
             <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
               تم تحليل {s.imagesProcessed} صورة ✓ — تصميم جدول الحصص لـ {s.matchedChildren} طالب/ة.
@@ -507,21 +524,26 @@ function ScheduleCard({ child, schedule, onUpload }) {
           <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 4, fontSize: 11, minWidth: 440 }}>
             <thead>
               <tr>
-                <th style={{ padding: 4, width: 22 }}></th>
-                {DAYS.map((d) => <th key={d} style={{ padding: 4, color: color.text, fontWeight: 800 }}>{d}</th>)}
+                <th style={{ padding: 4, width: 62 }}></th>
+                {Array.from({ length: maxPeriod }, (_, i) => i + 1).map((p) => (
+                  <th key={p} style={{ padding: 4, color: "#9CA3AF", fontWeight: 800 }}>{p}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: maxPeriod }, (_, i) => i + 1).map((p) => (
-                <tr key={p}>
-                  <td style={{ padding: 4, color: "#9CA3AF", fontWeight: 700, textAlign: "center" }}>{p}</td>
-                  {DAYS.map((d) => (
-                    <td key={d} style={{ padding: "8px 4px", textAlign: "center", background: color.soft, color: color.text, borderRadius: 8, fontWeight: 700 }}>
-                      {grid[`${d}-${p}`] || "—"}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {DAYS.map((d, di) => {
+                const dayPal = PALETTE[di % PALETTE.length];
+                return (
+                  <tr key={d}>
+                    <td style={{ padding: "8px 6px", textAlign: "center", background: dayPal.soft, color: dayPal.text, borderRadius: 8, fontWeight: 800, whiteSpace: "nowrap" }}>{d}</td>
+                    {Array.from({ length: maxPeriod }, (_, i) => i + 1).map((p) => (
+                      <td key={p} style={{ padding: "8px 4px", textAlign: "center", background: dayPal.bg, color: dayPal.text, borderRadius: 8, fontWeight: 700 }}>
+                        {grid[`${d}-${p}`] || "—"}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -564,6 +586,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
   const [gender, setGender] = useState(child?.gender || "بنين");
   const [school, setSchool] = useState(child?.school || "");
   const [photo, setPhoto] = useState(child?.photo_url || null);
+  const [colorIdx, setColorIdx] = useState((child?.color_idx ?? nextColorIdx) % PALETTE.length);
   const fileRef = useRef();
   const stage = stageForGrade(grade);
   const options = gov ? schools?.[gov]?.[stage]?.[gender] || [] : [];
@@ -580,10 +603,19 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
         <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <button onClick={() => fileRef.current?.click()} style={{ position: "relative", background: "none" }}>
-              {photo ? <img src={photo} style={{ width: 92, height: 92, borderRadius: "50%", objectFit: "cover", border: `2px solid ${PALETTE[nextColorIdx % PALETTE.length].ring}` }} /> :
-                <div style={{ width: 92, height: 92, borderRadius: "50%", border: "2px dashed #D1D5DB", background: "#F9FAFB", display: "flex", alignItems: "center", justifyContent: "center", color: "#9CA3AF" }}>📷</div>}
+              {photo ? <img src={photo} style={{ width: 92, height: 92, borderRadius: "50%", objectFit: "cover", border: `2px solid ${PALETTE[colorIdx].ring}` }} /> :
+                <div style={{ width: 92, height: 92, borderRadius: "50%", border: `2px dashed ${PALETTE[colorIdx].ring}`, background: PALETTE[colorIdx].soft, display: "flex", alignItems: "center", justifyContent: "center", color: PALETTE[colorIdx].text }}>📷</div>}
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await resizeToDataUrl(f, 160, true)); }} />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>اللون المميز</label>
+            <div style={{ display: "flex", gap: 10, marginTop: 6, justifyContent: "center" }}>
+              {PALETTE.map((pal, i) => (
+                <button key={i} onClick={() => setColorIdx(i)} title={`لون ${i + 1}`} style={{ width: 32, height: 32, borderRadius: "50%", background: pal.solid, border: colorIdx === i ? `3px solid ${pal.text}` : "3px solid transparent", boxShadow: colorIdx === i ? `0 0 0 2px ${pal.ring}` : "none", flexShrink: 0 }} />
+              ))}
+            </div>
           </div>
 
           <div>
@@ -633,7 +665,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
             </div>
           )}
 
-          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo })} style={{ padding: 14, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo, colorIdx })} style={{ padding: 14, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
             {isEdit ? "حفظ التعديلات" : `إضافة ${word === "طالبة" ? "الطالبة" : "الطالب"}`}
           </button>
           {isEdit && (
@@ -647,7 +679,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
   );
 }
 
-function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, selectChild = true, onClose, onDone }) {
+function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, selectChild = true, hint, onClose, onDone }) {
   const [school, setSchool] = useState("");
   const [childId, setChildId] = useState("");
   const [images, setImages] = useState([]);
@@ -693,6 +725,11 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>{title}</p>
       </div>
       <div className="app-scroll" style={{ padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 14 }}>
+        {hint && (
+          <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12.5, fontWeight: 700, lineHeight: 1.6 }}>
+            {hint}
+          </div>
+        )}
         <div>
           <label style={{ fontSize: 13, fontWeight: 700 }}>هذي الصور من مدرسة:</label>
           <select value={school} onChange={(e) => { setSchool(e.target.value); setChildId(""); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>

@@ -14,10 +14,14 @@ export async function POST(req) {
   const body = await req.json();
   const sb = supabaseAdmin();
 
-  const { count } = await sb
-    .from("children")
-    .select("*", { count: "exact", head: true })
-    .eq("mother_id", body.motherId);
+  let colorIdx = body.colorIdx;
+  if (colorIdx === undefined || colorIdx === null) {
+    const { count } = await sb
+      .from("children")
+      .select("*", { count: "exact", head: true })
+      .eq("mother_id", body.motherId);
+    colorIdx = count ?? 0;
+  }
 
   const { data, error } = await sb
     .from("children")
@@ -30,7 +34,7 @@ export async function POST(req) {
       school: body.school,
       grade: body.grade,
       section: body.section,
-      color_idx: count ?? 0,
+      color_idx: colorIdx,
     })
     .select()
     .single();

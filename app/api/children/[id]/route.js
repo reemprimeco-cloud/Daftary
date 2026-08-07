@@ -14,6 +14,7 @@ export async function PATCH(req, { params }) {
       school: body.school,
       grade: body.grade,
       section: body.section,
+      color_idx: body.colorIdx,
     })
     .eq("id", params.id)
     .select()
