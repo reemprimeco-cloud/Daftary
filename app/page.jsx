@@ -92,6 +92,9 @@ export default function Home() {
       loadAll(m.id);
     }
     setLoading(false);
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
   }, []);
 
   async function loadAll(motherId) {
@@ -180,10 +183,22 @@ export default function Home() {
   }
 
   if (loading || (mother && !schools)) {
-    return <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#9CA3AF" }}>...جاري التحميل</div>;
+    return (
+      <>
+        <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#9CA3AF" }}>...جاري التحميل</div>
+        <InstallPrompt />
+      </>
+    );
   }
 
-  if (!mother) return <Onboarding onDone={handleRegister} />;
+  if (!mother) {
+    return (
+      <>
+        <Onboarding onDone={handleRegister} />
+        <InstallPrompt />
+      </>
+    );
+  }
 
   const weekTasksFor = (childId) => tasks.filter((t) => t.child_id === childId);
 
@@ -262,6 +277,64 @@ export default function Home() {
       )}
       {showUpload && <UploadView children={children} motherId={mother.id} onClose={() => setShowUpload(false)} onDone={() => loadAll(mother.id)} />}
       {openTask && <TaskModal task={openTask} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} />}
+      <InstallPrompt />
+    </div>
+  );
+}
+
+function InstallPrompt() {
+  const [platform, setPlatform] = useState(null);
+  const [visible, setVisible] = useState(false);
+  const promptRef = useRef(null);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    if (isStandalone || localStorage.getItem("daftary_install_dismissed")) return;
+
+    const isIOS = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+    if (isIOS) {
+      setPlatform("ios");
+      setVisible(true);
+      return;
+    }
+
+    function handler(e) {
+      e.preventDefault();
+      promptRef.current = e;
+      setPlatform("android");
+      setVisible(true);
+    }
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  function dismiss() {
+    setVisible(false);
+    localStorage.setItem("daftary_install_dismissed", "1");
+  }
+
+  async function install() {
+    if (!promptRef.current) return;
+    promptRef.current.prompt();
+    await promptRef.current.userChoice;
+    dismiss();
+  }
+
+  if (!visible) return null;
+
+  return (
+    <div dir="rtl" style={{ position: "fixed", bottom: "calc(env(safe-area-inset-bottom) + 12px)", left: 12, right: 12, zIndex: 60, background: "white", borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,.18)", padding: 14, display: "flex", alignItems: "center", gap: 10, maxWidth: 420, margin: "0 auto" }}>
+      <div style={{ width: 40, height: 40, borderRadius: 10, background: "#6FBFA0", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, flexShrink: 0, fontSize: 18 }}>د</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 13 }}>أضيفي دفتري للشاشة الرئيسية</p>
+        <p style={{ margin: 0, fontSize: 11, color: "#6B7280" }}>
+          {platform === "ios" ? 'اضغطي زر المشاركة ⬆️ ثم "إضافة إلى الشاشة الرئيسية"' : "وصول أسرع من شاشة جوالك مباشرة"}
+        </p>
+      </div>
+      {platform === "android" && (
+        <button onClick={install} style={{ background: "#6FBFA0", color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>تثبيت</button>
+      )}
+      <button onClick={dismiss} style={{ background: "none", color: "#9CA3AF", fontSize: 18, width: 28, height: 28, flexShrink: 0 }}>×</button>
     </div>
   );
 }
