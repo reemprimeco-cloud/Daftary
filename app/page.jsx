@@ -438,6 +438,7 @@ function UploadView({ children, motherId, onClose, onDone }) {
   const [images, setImages] = useState([]);
   const [status, setStatus] = useState("idle");
   const [summary, setSummary] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
   const fileRef = useRef();
   const schoolsOfChildren = [...new Set(children.map((c) => c.school))];
 
@@ -459,6 +460,7 @@ function UploadView({ children, motherId, onClose, onDone }) {
       onDone();
     } catch (err) {
       console.error(err);
+      setErrorMsg(err.message || "");
       setStatus("error");
     }
   }
@@ -500,7 +502,12 @@ function UploadView({ children, motherId, onClose, onDone }) {
             تم تحليل {summary.imagesProcessed} صورة ✓ — أُضيف {summary.matchedTasks} واجب/اختبار و {summary.matchedReqs} طلب مستلزمات.
           </div>
         )}
-        {status === "error" && <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 12, fontSize: 13 }}>صار خلل أثناء التحليل، حاولي مرة ثانية.</div>}
+        {status === "error" && (
+          <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 12, fontSize: 13 }}>
+            صار خلل أثناء التحليل، حاولي مرة ثانية.
+            {errorMsg && <div style={{ marginTop: 6, fontSize: 11, opacity: 0.8, wordBreak: "break-word" }}>{errorMsg}</div>}
+          </div>
+        )}
       </div>
     </div>
   );

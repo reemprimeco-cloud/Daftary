@@ -18,9 +18,23 @@ function weekMap() {
 }
 
 export async function POST(req) {
+  try {
+    return await handleUpload(req);
+  } catch (e) {
+    console.error("upload-schedule unexpected error:", e);
+    return NextResponse.json({ error: "خطأ غير متوقع: " + e.message }, { status: 500 });
+  }
+}
+
+async function handleUpload(req) {
   const { motherId, school, images } = await req.json();
   if (!motherId || !school || !images?.length) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error("ANTHROPIC_API_KEY is not set");
+    return NextResponse.json({ error: "مفتاح الذكاء الاصطناعي غير مُعدّ بالسيرفر" }, { status: 500 });
   }
 
   const sb = supabaseAdmin();
@@ -72,7 +86,7 @@ export async function POST(req) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       max_tokens: 4000,
       messages: [{ role: "user", content }],
     }),
@@ -80,19 +94,24 @@ export async function POST(req) {
 
   if (!aiRes.ok) {
     const errText = await aiRes.text();
-    return NextResponse.json({ error: "فشل استدعاء التحليل: " + errText }, { status: 500 });
+    console.error("Anthropic API error:", aiRes.status, errText);
+    return NextResponse.json({ error: `فشل استدعاء التحليل (${aiRes.status}): ${errText}` }, { status: 500 });
   }
 
   const aiData = await aiRes.json();
   const textBlock = (aiData.content || []).find((b) => b.type === "text");
-  if (!textBlock) return NextResponse.json({ error: "لم يصل رد نصي من التحليل" }, { status: 500 });
+  if (!textBlock) {
+    console.error("No text block in Anthropic response:", JSON.stringify(aiData));
+    return NextResponse.json({ error: "لم يصل رد نصي من التحليل" }, { status: 500 });
+  }
 
   const cleaned = textBlock.text.replace(/```json/g, "").replace(/```/g, "").trim();
   let parsed;
   try {
     parsed = JSON.parse(cleaned);
-  } catch {
-    return NextResponse.json({ error: "رد غير صالح من التحليل" }, { status: 500 });
+  } catch (e) {
+    console.error("Failed to parse AI JSON:", e.message, "raw text:", textBlock.text);
+    return NextResponse.json({ error: "رد غير صالح من التحليل: " + e.message }, { status: 500 });
   }
 
   let matchedTasks = 0;
