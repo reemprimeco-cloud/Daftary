@@ -400,31 +400,30 @@ function Onboarding({ onDone }) {
   const [phone, setPhone] = useState("");
   const canSubmit = name.trim().length > 1 && /^[0-9]{8}$/.test(phone.trim());
   return (
-    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
       <div style={{ width: "100%", maxWidth: 380 }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <img src="/logo.png" alt="دفتري" style={{ width: 84, height: 84, borderRadius: 20, margin: "0 auto 14px", display: "block", boxShadow: "0 4px 14px rgba(183,166,232,.35)" }} />
-          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
-          <p style={{ color: "#6B7280", fontSize: 14, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
-          <p style={{ color: "#9CA3AF", fontSize: 12, margin: "6px 0 0" }}>الأب أو أي أحد بالعائلة يقدر يدخل بنفس رقم الجوال ويشوف نفس الجدول</p>
+        <div style={{ textAlign: "center", marginBottom: 16 }}>
+          <img src="/logo.png" alt="دفتري" style={{ width: 64, height: 64, borderRadius: 16, margin: "0 auto 8px", display: "block", boxShadow: "0 4px 14px rgba(183,166,232,.35)" }} />
+          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 22, fontWeight: 800 }}>دفتري</h1>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
         </div>
-        <div style={{ background: "white", borderRadius: 20, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 6 }}>اسمك</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: أم فهد" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14, marginBottom: 14 }} />
-          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 6 }}>رقم الجوال</label>
-          <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+        <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>ولي الأمر</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: أم فهد" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14, marginBottom: 12 }} />
+          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>رقم الجوال</label>
+          <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
             <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="XXXXXXXX" maxLength={8} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14 }} />
           </div>
-          <button disabled={!canSubmit} onClick={() => onDone(name.trim(), "+965" + phone.trim())} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSubmit ? 1 : 0.4 }}>
-            ابدئي المتابعة
+          <button disabled={!canSubmit} onClick={() => onDone(name.trim(), "+965" + phone.trim())} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
+            متابعة
           </button>
         </div>
-        <div style={{ textAlign: "center", marginTop: 22 }}>
-          <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "10px 20px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <div style={{ textAlign: "center", marginTop: 14 }}>
+          <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
             تواصل معنا
           </a>
-          <p style={{ color: "#B7B2C4", fontSize: 11, margin: "12px 0 0" }}>Copyright © Reemora.app 2026</p>
+          <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
         </div>
       </div>
     </div>
