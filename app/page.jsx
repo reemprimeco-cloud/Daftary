@@ -75,10 +75,12 @@ export default function Home() {
   const [children, setChildren] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [requirements, setRequirements] = useState([]);
+  const [classSchedule, setClassSchedule] = useState([]);
   const [view, setView] = useState("dashboard");
   const [showAddChild, setShowAddChild] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [showUploadSchedule, setShowUploadSchedule] = useState(false);
   const [openTask, setOpenTask] = useState(null);
   const [telegramLink, setTelegramLink] = useState(null);
   const [telegramLinked, setTelegramLinked] = useState(false);
@@ -103,6 +105,7 @@ export default function Home() {
     setChildren(data.children || []);
     setTasks(data.tasks || []);
     setRequirements(data.requirements || []);
+    setClassSchedule(data.classSchedule || []);
     const tRes = await fetch(`/api/telegram/link?motherId=${motherId}`);
     const tData = await tRes.json();
     setTelegramLink(tData.link);
@@ -116,6 +119,7 @@ export default function Home() {
     setChildren([]);
     setTasks([]);
     setRequirements([]);
+    setClassSchedule([]);
     setTelegramLink(null);
     setTelegramLinked(false);
     setView("dashboard");
@@ -155,6 +159,7 @@ export default function Home() {
     setChildren((prev) => prev.filter((c) => c.id !== id));
     setTasks((prev) => prev.filter((t) => t.child_id !== id));
     setRequirements((prev) => prev.filter((r) => r.child_id !== id));
+    setClassSchedule((prev) => prev.filter((s) => s.child_id !== id));
     setEditingChild(null);
   }
 
@@ -245,7 +250,7 @@ export default function Home() {
               </>
             )}
           </div>
-        ) : (
+        ) : view === "requirements" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
             {children.length === 0 ? (
               <EmptyState onAdd={() => setShowAddChild(true)} />
@@ -255,6 +260,22 @@ export default function Home() {
               ))
             )}
           </div>
+        ) : (
+          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+            {children.length === 0 ? (
+              <EmptyState onAdd={() => setShowAddChild(true)} />
+            ) : (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>جدول الحصص الأسبوعي</span>
+                  <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: "#6FBFA0", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ رفع/تحديث الجدول</button>
+                </div>
+                {children.map((c) => (
+                  <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} />
+                ))}
+              </>
+            )}
+          </div>
         )}
         <div style={{ height: 8 }} />
       </div>
@@ -262,6 +283,7 @@ export default function Home() {
       <div style={{ flexShrink: 0, background: "white", borderTop: "1px solid #F0EEE8", display: "flex", paddingBottom: "env(safe-area-inset-bottom)" }}>
         <button onClick={() => setView("dashboard")} style={{ flex: 1, padding: "12px 0", background: "none", color: view === "dashboard" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12, minHeight: 48 }}>الرئيسية</button>
         <button onClick={() => setView("requirements")} style={{ flex: 1, padding: "12px 0", background: "none", color: view === "requirements" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12, minHeight: 48 }}>المتطلبات</button>
+        <button onClick={() => setView("schedule")} style={{ flex: 1, padding: "12px 0", background: "none", color: view === "schedule" ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 12, minHeight: 48 }}>جدول الحصص</button>
       </div>
 
       {showAddChild && <AddChildModal schools={schools} nextColorIdx={children.length} onClose={() => setShowAddChild(false)} onSave={handleAddChild} />}
@@ -276,6 +298,22 @@ export default function Home() {
         />
       )}
       {showUpload && <UploadView children={children} motherId={mother.id} onClose={() => setShowUpload(false)} onDone={() => loadAll(mother.id)} />}
+      {showUploadSchedule && (
+        <UploadView
+          children={children}
+          motherId={mother.id}
+          endpoint="/api/upload-class-schedule"
+          title="رفع جدول الحصص"
+          buttonLabel="تحليل وتصميم الجدول"
+          renderSummary={(s) => (
+            <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
+              تم تحليل {s.imagesProcessed} صورة ✓ — تصميم جدول الحصص لـ {s.matchedChildren} طالب/ة.
+            </div>
+          )}
+          onClose={() => setShowUploadSchedule(false)}
+          onDone={() => loadAll(mother.id)}
+        />
+      )}
       {openTask && <TaskModal task={openTask} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} />}
       <InstallPrompt />
     </div>
@@ -445,6 +483,52 @@ function RequirementsCard({ child, items, onToggle, onEdit, onDeleteReq }) {
   );
 }
 
+function ScheduleCard({ child, schedule, onUpload }) {
+  const color = PALETTE[child.color_idx % PALETTE.length];
+  const maxPeriod = schedule.reduce((max, s) => Math.max(max, s.period_no), 0);
+  const grid = {};
+  schedule.forEach((s) => { grid[`${s.day}-${s.period_no}`] = s.subject; });
+
+  return (
+    <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, background: color.bg }}>
+        <Avatar child={child} size={44} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
+          <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>الصف {child.grade}/{child.section}</p>
+        </div>
+        <button onClick={onUpload} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>{schedule.length ? "🔄 تحديث" : "+ رفع"}</button>
+      </div>
+      <div style={{ background: "white", padding: 12, overflowX: "auto" }}>
+        {schedule.length === 0 ? (
+          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا يوجد جدول حصص مضاف بعد</p>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 4, fontSize: 11, minWidth: 440 }}>
+            <thead>
+              <tr>
+                <th style={{ padding: 4, width: 22 }}></th>
+                {DAYS.map((d) => <th key={d} style={{ padding: 4, color: color.text, fontWeight: 800 }}>{d}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: maxPeriod }, (_, i) => i + 1).map((p) => (
+                <tr key={p}>
+                  <td style={{ padding: 4, color: "#9CA3AF", fontWeight: 700, textAlign: "center" }}>{p}</td>
+                  {DAYS.map((d) => (
+                    <td key={d} style={{ padding: "8px 4px", textAlign: "center", background: color.soft, color: color.text, borderRadius: 8, fontWeight: 700 }}>
+                      {grid[`${d}-${p}`] || "—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TaskModal({ task, color, onClose, onMarkDone, onDelete }) {
   const meta = TYPE_META[task.type] || TYPE_META["واجب"];
   return (
@@ -562,7 +646,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
   );
 }
 
-function UploadView({ children, motherId, onClose, onDone }) {
+function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, onClose, onDone }) {
   const [school, setSchool] = useState("");
   const [images, setImages] = useState([]);
   const [status, setStatus] = useState("idle");
@@ -580,7 +664,7 @@ function UploadView({ children, motherId, onClose, onDone }) {
   async function run() {
     setStatus("loading");
     try {
-      const res = await fetch("/api/upload-schedule", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId, school, images }) });
+      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId, school, images }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setSummary(data);
@@ -598,7 +682,7 @@ function UploadView({ children, motherId, onClose, onDone }) {
     <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "white", display: "flex", flexDirection: "column" }}>
       <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 14px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={onClose} style={{ background: "none", fontSize: 20, width: 36, height: 36 }}>←</button>
-        <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>رفع الجدول</p>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>{title}</p>
       </div>
       <div className="app-scroll" style={{ padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
@@ -624,16 +708,16 @@ function UploadView({ children, motherId, onClose, onDone }) {
           </div>
         )}
         <button disabled={!school || images.length === 0 || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, opacity: (!school || images.length === 0) ? 0.4 : 1 }}>
-          {status === "loading" ? "جاري التحليل والفرز..." : "تحليل وتوزيع الواجبات"}
+          {status === "loading" ? "جاري التحليل..." : buttonLabel}
         </button>
-        {status === "done" && summary && (
+        {status === "done" && summary && (renderSummary ? renderSummary(summary) : (
           <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
             تم تحليل {summary.imagesProcessed} صورة ✓ — أُضيف {summary.matchedTasks} واجب/اختبار و {summary.matchedReqs} طلب مستلزمات.
             {summary.skippedOld > 0 && (
               <div style={{ marginTop: 6, opacity: 0.85 }}>تم تجاهل {summary.skippedOld} عنصر لأن تاريخه فات (صورة قديمة).</div>
             )}
           </div>
-        )}
+        ))}
         {status === "error" && (
           <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 12, fontSize: 13 }}>
             صار خلل أثناء التحليل، حاولي مرة ثانية.

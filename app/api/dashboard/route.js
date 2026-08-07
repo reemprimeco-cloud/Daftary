@@ -32,6 +32,7 @@ export async function GET(req) {
 
   let tasks = [];
   let requirements = [];
+  let classSchedule = [];
   if (childIds.length) {
     const { data: t } = await sb
       .from("tasks")
@@ -45,7 +46,10 @@ export async function GET(req) {
 
     const { data: r } = await sb.from("requirements").select("*").in("child_id", childIds).order("created_at");
     requirements = r || [];
+
+    const { data: cs } = await sb.from("class_schedule").select("*").in("child_id", childIds).order("period_no");
+    classSchedule = cs || [];
   }
 
-  return NextResponse.json({ children, tasks, requirements, weekRange: { sunday, thursday } });
+  return NextResponse.json({ children, tasks, requirements, classSchedule, weekRange: { sunday, thursday } });
 }
