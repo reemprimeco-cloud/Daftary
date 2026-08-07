@@ -607,18 +607,22 @@ function ScheduleCard({ child, schedule, onUpload }) {
       ]);
       const canvas = await html2canvas(printRef.current, { scale: 2, backgroundColor: "#ffffff" });
       const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
       const margin = 10;
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      let w = pageWidth - margin * 2;
-      let h = (canvas.height * w) / canvas.width;
-      if (h > pageHeight - margin * 2) {
-        const scale = (pageHeight - margin * 2) / h;
-        h *= scale;
-        w *= scale;
+      const maxW = pageWidth - margin * 2;
+      const maxH = pageHeight - margin * 2;
+      const canvasRatio = canvas.width / canvas.height;
+      let w = maxW;
+      let h = w / canvasRatio;
+      if (h > maxH) {
+        h = maxH;
+        w = h * canvasRatio;
       }
-      pdf.addImage(imgData, "PNG", margin, margin, w, h);
+      const x = (pageWidth - w) / 2;
+      const y = (pageHeight - h) / 2;
+      pdf.addImage(imgData, "PNG", x, y, w, h);
       pdf.save(`جدول-حصص-${child.name}.pdf`);
     } catch (e) {
       console.error("PDF export failed:", e);
@@ -696,7 +700,7 @@ function ScheduleCard({ child, schedule, onUpload }) {
         )}
       </div>
       {schedule.length > 0 && (
-        <div style={{ position: "fixed", top: 0, left: -9999, width: 780 }}>
+        <div style={{ position: "fixed", top: 0, left: -9999, width: 1100 }}>
           <div ref={printRef} style={{ background: "white", padding: 24, direction: "rtl" }}>
             <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #111", paddingBottom: 12 }}>
               <h2 style={{ margin: 0, fontSize: 22, color: "#111" }}>جدول حصص {child.name}</h2>
@@ -722,6 +726,12 @@ function ScheduleCard({ child, schedule, onUpload }) {
                           {entry ? (
                             <div>
                               <div style={{ fontWeight: 800 }}>{entry.subject}</div>
+                              {getSubjectIconFile(entry.subject) === "pe" && child.pe_uniform_color && (
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 2 }}>
+                                  <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: child.pe_uniform_color, border: "1px solid #999" }} />
+                                  <span style={{ fontSize: 8, color: "#666" }}>لون البدنية</span>
+                                </div>
+                              )}
                               {entry.teacher && <div style={{ fontSize: 9, color: "#444" }}>{entry.teacher}</div>}
                               {(entry.start_time || entry.end_time) && (
                                 <div style={{ fontSize: 8, color: "#666" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</div>
