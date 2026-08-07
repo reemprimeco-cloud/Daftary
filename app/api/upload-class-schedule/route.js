@@ -13,8 +13,8 @@ export async function POST(req) {
 }
 
 async function handleUpload(req) {
-  const { motherId, school, images } = await req.json();
-  if (!motherId || !school || !images?.length) {
+  const { motherId, childId, images } = await req.json();
+  if (!motherId || !childId || !images?.length) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }
 
@@ -24,29 +24,25 @@ async function handleUpload(req) {
   }
 
   const sb = supabaseAdmin();
-  const { data: children, error: cErr } = await sb
+  const { data: child, error: cErr } = await sb
     .from("children")
     .select("*")
+    .eq("id", childId)
     .eq("mother_id", motherId)
-    .eq("school", school);
-  if (cErr) return NextResponse.json({ error: cErr.message }, { status: 400 });
-  if (!children?.length) {
-    return NextResponse.json({ error: "ما فيه طلاب مسجلين لهذي المدرسة" }, { status: 400 });
-  }
+    .single();
+  if (cErr || !child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
 
   const content = [
     {
       type: "text",
-      text: `أنت مساعد يقرأ صور "الجدول الدراسي الأسبوعي" (جدول الحصص) لمدرسة كويتية — جدول يبيّن مادة كل حصة في كل يوم دراسي، وليس جدول واجبات أو تواريخ. أمامك ${images.length} صورة قد تخص صفوفاً وشعباً مختلفة، بترتيب عشوائي.
+      text: `أنت مساعد يقرأ صور "الجدول الدراسي الأسبوعي" (جدول الحصص) لمدرسة كويتية — جدول يبيّن مادة ومعلم/ـة كل حصة في كل يوم دراسي، وليس جدول واجبات أو تواريخ. أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
 
-اقرأ كل صورة واستخرج:
-1) الصف والشعبة الظاهرين (رقم الصف من 1-12 ورقم الشعبة، مثل "٣/١" = صف 3 شعبة 1).
-2) لكل يوم من أيام الأسبوع الدراسي (الأحد, الاثنين, الثلاثاء, الأربعاء, الخميس) قائمة أسماء المواد لكل حصة بالترتيب من الحصة الأولى إلى الأخيرة كما تظهر بالجدول. إذا كانت حصة "فسحة" أو "نشاط" اكتبيها كما هي بدل تجاهلها.
+اقرأ كل صورة واستخرج لكل يوم من أيام الأسبوع الدراسي (الأحد, الاثنين, الثلاثاء, الأربعاء, الخميس) كل حصة بالترتيب من الأولى للأخيرة: رقم الحصة، اسم المادة، اسم المعلم/ـة إن وُجد بالجدول، ووقت البداية والنهاية إن وُجدا (مثل "8:00"). إذا كانت حصة "فسحة" أو "نشاط" اكتبيها بحقل subject كما هي بدل تجاهلها. اترك teacher أو startTime أو endTime فارغة/null لو ما ظهرت بالصورة، ولا تخترعي بيانات.
 
-أرجع JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"schedules":[{"grade":3,"section":1,"days":{"الأحد":["مادة1","مادة2"],"الاثنين":["مادة1","مادة2"],"الثلاثاء":["مادة1","مادة2"],"الأربعاء":["مادة1","مادة2"],"الخميس":["مادة1","مادة2"]}}]}
+أرجعي JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
+{"days":{"الأحد":[{"period":1,"subject":"اسم المادة","teacher":"اسم اختياري","startTime":"اختياري","endTime":"اختياري"}],"الاثنين":[],"الثلاثاء":[],"الأربعاء":[],"الخميس":[]}}
 
-إن لم تستطع قراءة صف أو شعبة بوضوح من صورة معينة، تجاهل تلك الصورة بالكامل ولا تخترع بيانات.`,
+إن لم تستطعي قراءة الجدول بوضوح من الصور، أرجعي كل الأيام بمصفوفات فارغة.`,
     },
     ...images.map((img) => ({
       type: "image",
@@ -90,29 +86,31 @@ async function handleUpload(req) {
     return NextResponse.json({ error: "رد غير صالح من التحليل: " + e.message }, { status: 500 });
   }
 
-  let matchedChildren = 0;
-
-  for (const s of parsed.schedules || []) {
-    const child = children.find((c) => c.grade === Number(s.grade) && c.section === Number(s.section));
-    if (!child) continue;
-
-    const rows = [];
-    for (const day of DAYS) {
-      const subjects = s.days?.[day] || [];
-      subjects.forEach((subject, i) => {
-        if (subject) rows.push({ child_id: child.id, day, period_no: i + 1, subject });
+  const rows = [];
+  for (const day of DAYS) {
+    const periods = parsed.days?.[day] || [];
+    periods.forEach((p) => {
+      if (!p.subject || !p.period) return;
+      rows.push({
+        child_id: child.id,
+        day,
+        period_number: Number(p.period),
+        subject: p.subject,
+        teacher: p.teacher || null,
+        start_time: p.startTime || null,
+        end_time: p.endTime || null,
       });
-    }
-    if (!rows.length) continue;
+    });
+  }
 
-    await sb.from("class_schedule").delete().eq("child_id", child.id);
+  await sb.from("class_schedule").delete().eq("child_id", child.id);
+  if (rows.length) {
     const { error: insErr } = await sb.from("class_schedule").insert(rows);
     if (insErr) {
       console.error("class_schedule insert error:", insErr.message);
-      continue;
+      return NextResponse.json({ error: insErr.message }, { status: 400 });
     }
-    matchedChildren++;
   }
 
-  return NextResponse.json({ ok: true, matchedChildren, imagesProcessed: images.length });
+  return NextResponse.json({ ok: true, matchedPeriods: rows.length, imagesProcessed: images.length });
 }

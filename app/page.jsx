@@ -321,11 +321,10 @@ export default function Home() {
           endpoint="/api/upload-class-schedule"
           title="رفع جدول الحصص"
           buttonLabel="تحليل وتصميم الجدول"
-          selectChild={false}
           hint="ارفعي صورة جدول الحصص الأسبوعي (جدول المواد اليومي) هنا"
           renderSummary={(s) => (
             <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
-              تم تحليل {s.imagesProcessed} صورة ✓ — تصميم جدول الحصص لـ {s.matchedChildren} طالب/ة.
+              تم تحليل {s.imagesProcessed} صورة ✓ — تصميم جدول الحصص ({s.matchedPeriods} حصة).
             </div>
           )}
           onClose={() => setShowUploadSchedule(false)}
@@ -508,9 +507,9 @@ function RequirementsCard({ child, items, onToggle, onEdit, onDeleteReq }) {
 
 function ScheduleCard({ child, schedule, onUpload }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
-  const maxPeriod = schedule.reduce((max, s) => Math.max(max, s.period_no), 0);
+  const maxPeriod = schedule.reduce((max, s) => Math.max(max, s.period_number), 0);
   const grid = {};
-  schedule.forEach((s) => { grid[`${s.day}-${s.period_no}`] = s.subject; });
+  schedule.forEach((s) => { grid[`${s.day}-${s.period_number}`] = s.subject; });
 
   return (
     <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>

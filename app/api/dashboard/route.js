@@ -47,7 +47,7 @@ export async function GET(req) {
     const { data: r } = await sb.from("requirements").select("*").in("child_id", childIds).order("created_at");
     requirements = r || [];
 
-    const { data: cs } = await sb.from("class_schedule").select("*").in("child_id", childIds).order("period_no");
+    const { data: cs } = await sb.from("class_schedule").select("*").in("child_id", childIds).order("period_number");
     classSchedule = cs || [];
   }
 
