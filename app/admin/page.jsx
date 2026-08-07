@@ -91,7 +91,7 @@ function AdminDashboard({ stats }) {
               {stats.recentMothers.map((m) => (
                 <tr key={m.id} style={{ borderTop: "1px solid #F3F4F6" }}>
                   <td style={{ padding: "10px 12px", fontWeight: 700 }}>{m.name}</td>
-                  <td style={{ padding: "10px 12px", color: "#6B7280" }}>{m.phone}</td>
+                  <td dir="ltr" style={{ padding: "10px 12px", color: "#6B7280", textAlign: "right" }}>{m.phone}</td>
                   <td style={{ padding: "10px 12px", color: "#6B7280" }}>{m.childrenCount}</td>
                   <td style={{ padding: "10px 12px", color: "#6B7280" }}>{fmtDate(m.created_at)}</td>
                 </tr>
