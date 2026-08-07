@@ -124,6 +124,7 @@ export default function Home() {
   const [schools, setSchools] = useState(null);
   const [children, setChildren] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [undatedTasks, setUndatedTasks] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [classSchedule, setClassSchedule] = useState([]);
   const [view, setView] = useState("dashboard");
@@ -154,6 +155,7 @@ export default function Home() {
     const data = await res.json();
     setChildren(data.children || []);
     setTasks(data.tasks || []);
+    setUndatedTasks(data.undatedTasks || []);
     setRequirements(data.requirements || []);
     setClassSchedule(data.classSchedule || []);
     const tRes = await fetch(`/api/telegram/link?motherId=${motherId}`);
@@ -168,6 +170,7 @@ export default function Home() {
     setMother(null);
     setChildren([]);
     setTasks([]);
+    setUndatedTasks([]);
     setRequirements([]);
     setClassSchedule([]);
     setTelegramLink(null);
@@ -208,6 +211,7 @@ export default function Home() {
     await fetch(`/api/children/${id}`, { method: "DELETE" });
     setChildren((prev) => prev.filter((c) => c.id !== id));
     setTasks((prev) => prev.filter((t) => t.child_id !== id));
+    setUndatedTasks((prev) => prev.filter((t) => t.child_id !== id));
     setRequirements((prev) => prev.filter((r) => r.child_id !== id));
     setClassSchedule((prev) => prev.filter((s) => s.child_id !== id));
     setEditingChild(null);
@@ -216,6 +220,7 @@ export default function Home() {
   async function handleMarkDone(taskId) {
     await fetch(`/api/tasks/${taskId}/done`, { method: "POST" });
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenTask(null);
   }
 
@@ -223,7 +228,14 @@ export default function Home() {
     if (!confirm("حذف هذا الواجب نهائياً؟")) return;
     await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenTask(null);
+  }
+
+  async function handleUpdateTaskDate(taskId, dueDate) {
+    await fetch(`/api/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dueDate }) });
+    setOpenTask(null);
+    await loadAll(mother.id);
   }
 
   async function handleToggleReq(id) {
@@ -256,6 +268,7 @@ export default function Home() {
   }
 
   const weekTasksFor = (childId) => tasks.filter((t) => t.child_id === childId);
+  const undatedTasksFor = (childId) => undatedTasks.filter((t) => t.child_id === childId);
   const todayDayName = DAYS[new Date().getDay()];
   const hasPEToday = (childId) => classSchedule.some((s) => s.child_id === childId && s.day === todayDayName && getSubjectIconFile(s.subject) === "pe");
 
@@ -297,7 +310,7 @@ export default function Home() {
                   <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
                 </div>
                 {children.map((c) => (
-                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} hasPEToday={hasPEToday(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} />
+                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} undatedTasks={undatedTasksFor(c.id)} hasPEToday={hasPEToday(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} />
                 ))}
               </>
             )}
@@ -378,7 +391,7 @@ export default function Home() {
           onDone={() => loadAll(mother.id)}
         />
       )}
-      {openTask && <TaskModal task={openTask} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} />}
+      {openTask && <TaskModal task={openTask} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateDate={handleUpdateTaskDate} />}
       <InstallPrompt />
     </div>
   );
@@ -486,7 +499,7 @@ function EmptyState({ onAdd }) {
   );
 }
 
-function ChildCard({ child, tasks, hasPEToday, onOpenTask, onEdit }) {
+function ChildCard({ child, tasks, undatedTasks, hasPEToday, onOpenTask, onEdit }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const byDay = DAYS.map((day) => ({
     day,
@@ -514,7 +527,7 @@ function ChildCard({ child, tasks, hasPEToday, onOpenTask, onEdit }) {
         <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>✏️ تعديل</button>
       </div>
       <div style={{ background: "white", padding: 12 }}>
-        {tasks.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا واجبات هذا الأسبوع 🎉</p>}
+        {tasks.length === 0 && undatedTasks.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا واجبات هذا الأسبوع 🎉</p>}
         {byDay.filter((d) => d.items.length).map(({ day, items }) => (
           <div key={day} style={{ marginBottom: 8 }}>
             <p style={{ fontSize: 12, fontWeight: 800, color: "#9CA3AF", margin: "0 0 4px" }}>{day}</p>
@@ -527,6 +540,18 @@ function ChildCard({ child, tasks, hasPEToday, onOpenTask, onEdit }) {
             </div>
           </div>
         ))}
+        {undatedTasks.length > 0 && (
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#B45309", margin: "0 0 4px" }}>⚠️ مهام بدون تاريخ محدد</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {undatedTasks.map((t) => (
+                <button key={t.id} onClick={() => onOpenTask(t)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: "#FEF3C7", color: "#92400E" }}>
+                  {TYPE_META[t.type]?.icon} {t.subject}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
     </div>
@@ -717,8 +742,17 @@ function ScheduleCard({ child, schedule, onUpload }) {
   );
 }
 
-function TaskModal({ task, color, onClose, onMarkDone, onDelete }) {
+function TaskModal({ task, color, onClose, onMarkDone, onDelete, onUpdateDate }) {
   const meta = TYPE_META[task.type] || TYPE_META["واجب"];
+  const [dateValue, setDateValue] = useState(task.due_date || "");
+  const [saving, setSaving] = useState(false);
+  const dateChanged = dateValue !== (task.due_date || "");
+
+  async function saveDate() {
+    setSaving(true);
+    await onUpdateDate(task.id, dateValue || null);
+  }
+
   return (
     <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, borderRadius: "24px 24px 0 0", padding: "22px 22px calc(env(safe-area-inset-bottom) + 22px)", maxHeight: "85vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -726,11 +760,22 @@ function TaskModal({ task, color, onClose, onMarkDone, onDelete }) {
           <div>
             <span style={{ fontSize: 22 }}>{meta.icon}</span>
             <h3 style={{ margin: "4px 0 2px", color: color.text, fontSize: 18 }}>{task.subject}</h3>
-            <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>{task.type} · {fmtDate(task.due_date)}</p>
+            <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>{task.type} · {task.due_date ? fmtDate(task.due_date) : "بدون تاريخ محدد"}</p>
           </div>
           <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36, flexShrink: 0 }}>×</button>
         </div>
         {task.details && <div style={{ background: color.bg, borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 13 }}>{task.details}</div>}
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>تاريخ الاستحقاق</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 14 }} />
+            <button onClick={saveDate} disabled={saving || !dateChanged} style={{ padding: "9px 16px", borderRadius: 12, background: color.solid, color: "white", fontWeight: 700, fontSize: 13, opacity: (saving || !dateChanged) ? 0.5 : 1, flexShrink: 0 }}>
+              {saving ? "..." : "حفظ التاريخ"}
+            </button>
+          </div>
+        </div>
+
         <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
           {meta.done}
         </button>

@@ -55,23 +55,30 @@ async function handleUpload(req) {
   const todayLabel = new Date().toLocaleDateString("ar-KW", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
+  const currentYear = new Date(Date.now() + 3 * 60 * 60 * 1000).getUTCFullYear();
 
   const content = [
     {
       type: "text",
       text: `أنت مساعد يقرأ صور جداول واجبات مدرسية كويتية (من إنستقرام حساب المدرسة). أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص واجبات طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
 
-السياق: اليوم ${todayLabel}. الأسبوع الحالي من الأحد ${sunday} إلى الخميس ${thursday}.
+السياق: اليوم ${todayLabel}. السنة الحالية ${currentYear}. الأسبوع الحالي من الأحد ${sunday} إلى الخميس ${thursday}.
 تواريخ أيام هذا الأسبوع بالتحديد:
 الأحد=${map["الأحد"]}, الاثنين=${map["الاثنين"]}, الثلاثاء=${map["الثلاثاء"]}, الأربعاء=${map["الأربعاء"]}, الخميس=${map["الخميس"]}.
 
-اقرأ كل صورة واستخرج:
-1) كل مهمة (واجب/حفظ قرآن أو حديث/اختبار/مشروع) بمادتها وتاريخها الفعلي (YYYY-MM-DD) بمطابقة اسم اليوم بالجدول أعلاه. أي صفحة أو رقم درس أو نطاق حفظ ضعه في details.
-2) أي طلبات أو مستلزمات مدرسية إن وُجدت.
-3) إذا ظهر رقم صف أو شعبة بوضوح بالصورة، اذكره بحقل gradeSeen (مثلاً "٣/١") — هذا اختياري وللمرجعية فقط، ولا يمنع استخراج البيانات لو ما ظهر أو كانت الصورة مقصوصة.
+اقرأ كل صورة واستخرج كل مهمة (واجب/حفظ قرآن أو حديث/اختبار/مشروع) بمادتها، وحدّدي حقل dueDate حسب الحالات التالية بالضبط:
+1) لو مكتوب بالصورة تاريخ صريح (مثل "24 مارس" أو "٢٠٢٦/٣/٢٤" أو "24/3")، حوّليه لصيغة YYYY-MM-DD واستخدميه كما هو حتى لو كان بعيداً عن الأسبوع الحالي (مشروع نهاية فصل، اختبار بعد أسابيع، إلخ). استخدمي سنة ${currentYear} إلا لو الشهر المذكور سابق زمنياً وبشكل واضح عن الشهر الحالي، فاستخدمي ${currentYear + 1}.
+2) لو مذكور بس اسم يوم (الأحد، الاثنين...) بدون تاريخ صريح، طابقيه بجدول الأسبوع الحالي أعلاه.
+3) لو مذكورة عبارة نسبية بدون تاريخ فعلي مرفق (مثل "نهاية الفصل الدراسي" أو "الأسبوع الثامن")، لا تخترعي تاريخاً إطلاقاً — خلّي dueDate تساوي null، واكتبي النص الأصلي كما هو بحقل details (مثلاً "تسليم: نهاية الفصل الدراسي").
 
-أرجع JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"entries":[{"subject":"اسم المادة","type":"واجب|حفظ|اختبار|مشروع","dueDate":"YYYY-MM-DD","details":"نص اختياري","gradeSeen":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD"}]}`,
+أي صفحة أو رقم درس أو نطاق حفظ أو ملاحظة إضافية ضعيها بحقل details أيضاً.
+
+استخرجي أيضاً أي طلبات أو مستلزمات مدرسية إن وُجدت (بنفس منطق تحديد dueDate أعلاه لو كان لها تاريخ تسليم، وإلا null).
+
+إذا ظهر رقم صف أو شعبة بوضوح بالصورة، اذكريه بحقل gradeSeen (مثلاً "٣/١") — هذا اختياري وللمرجعية فقط، ولا يمنع استخراج البيانات لو ما ظهر أو كانت الصورة مقصوصة.
+
+أرجعي JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
+{"entries":[{"subject":"اسم المادة","type":"واجب|حفظ|اختبار|مشروع","dueDate":"YYYY-MM-DD أو null","details":"نص اختياري","gradeSeen":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null"}]}`,
     },
     ...images.map((img) => ({
       type: "image",
@@ -116,12 +123,15 @@ async function handleUpload(req) {
   }
 
   const todayStr = kuwaitTodayStr();
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const normalizeDueDate = (v) => (typeof v === "string" && DATE_RE.test(v) ? v : null);
   let matchedTasks = 0;
   let matchedReqs = 0;
   let skippedOld = 0;
 
   for (const e of parsed.entries || []) {
-    if (e.dueDate && e.dueDate < todayStr) {
+    const dueDate = normalizeDueDate(e.dueDate);
+    if (dueDate && dueDate < todayStr) {
       skippedOld++;
       continue;
     }
@@ -133,7 +143,7 @@ async function handleUpload(req) {
       child_id: child.id,
       subject: e.subject,
       type: e.type || "واجب",
-      due_date: e.dueDate,
+      due_date: dueDate,
       details,
       status: "active",
       source: "image",
@@ -142,14 +152,15 @@ async function handleUpload(req) {
   }
 
   for (const r of parsed.requirements || []) {
-    if (r.dueDate && r.dueDate < todayStr) {
+    const dueDate = normalizeDueDate(r.dueDate);
+    if (dueDate && dueDate < todayStr) {
       skippedOld++;
       continue;
     }
     await sb.from("requirements").insert({
       child_id: child.id,
       item: r.item,
-      due_date: r.dueDate || null,
+      due_date: dueDate,
       bought: false,
     });
     matchedReqs++;

@@ -31,6 +31,7 @@ export async function GET(req) {
   const { sunday, thursday } = weekRange();
 
   let tasks = [];
+  let undatedTasks = [];
   let requirements = [];
   let classSchedule = [];
   if (childIds.length) {
@@ -44,6 +45,15 @@ export async function GET(req) {
       .order("due_date");
     tasks = t || [];
 
+    const { data: u } = await sb
+      .from("tasks")
+      .select("*")
+      .in("child_id", childIds)
+      .eq("status", "active")
+      .is("due_date", null)
+      .order("created_at");
+    undatedTasks = u || [];
+
     const { data: r } = await sb.from("requirements").select("*").in("child_id", childIds).order("created_at");
     requirements = r || [];
 
@@ -51,5 +61,5 @@ export async function GET(req) {
     classSchedule = cs || [];
   }
 
-  return NextResponse.json({ children, tasks, requirements, classSchedule, weekRange: { sunday, thursday } });
+  return NextResponse.json({ children, tasks, undatedTasks, requirements, classSchedule, weekRange: { sunday, thursday } });
 }
