@@ -569,6 +569,39 @@ function ScheduleCard({ child, schedule, onUpload }) {
   const maxPeriod = schedule.reduce((max, s) => Math.max(max, s.period_number), 0);
   const grid = {};
   schedule.forEach((s) => { grid[`${s.day}-${s.period_number}`] = s; });
+  const periods = Array.from({ length: maxPeriod }, (_, i) => i + 1);
+  const printRef = useRef();
+  const [exporting, setExporting] = useState(false);
+
+  async function exportPdf() {
+    setExporting(true);
+    try {
+      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+        import("jspdf"),
+        import("html2canvas"),
+      ]);
+      const canvas = await html2canvas(printRef.current, { scale: 2, backgroundColor: "#ffffff" });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const margin = 10;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let w = pageWidth - margin * 2;
+      let h = (canvas.height * w) / canvas.width;
+      if (h > pageHeight - margin * 2) {
+        const scale = (pageHeight - margin * 2) / h;
+        h *= scale;
+        w *= scale;
+      }
+      pdf.addImage(imgData, "PNG", margin, margin, w, h);
+      pdf.save(`جدول-حصص-${child.name}.pdf`);
+    } catch (e) {
+      console.error("PDF export failed:", e);
+      alert("تعذّر تصدير PDF، حاولي مرة ثانية.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
@@ -584,6 +617,12 @@ function ScheduleCard({ child, schedule, onUpload }) {
         {schedule.length === 0 ? (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا يوجد جدول حصص مضاف بعد</p>
         ) : (
+          <>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
+              {exporting ? "جاري التصدير..." : "📄 تصدير PDF"}
+            </button>
+          </div>
           <table style={{ borderCollapse: "separate", borderSpacing: 5, fontSize: 11 }}>
             <thead>
               <tr>
@@ -628,8 +667,52 @@ function ScheduleCard({ child, schedule, onUpload }) {
               })}
             </tbody>
           </table>
+          </>
         )}
       </div>
+      {schedule.length > 0 && (
+        <div style={{ position: "fixed", top: 0, left: -9999, width: 780 }}>
+          <div ref={printRef} style={{ background: "white", padding: 24, direction: "rtl" }}>
+            <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #111", paddingBottom: 12 }}>
+              <h2 style={{ margin: 0, fontSize: 22, color: "#111" }}>جدول حصص {child.name}</h2>
+              <p style={{ margin: "6px 0 0", fontSize: 13, color: "#333" }}>{child.school} — الصف {child.grade}/{child.section}</p>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr>
+                  <th style={{ border: "1px solid #999", padding: "8px 6px" }}></th>
+                  {periods.map((p) => (
+                    <th key={p} style={{ border: "1px solid #999", padding: "8px 6px", color: "#111" }}>الحصة {p}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {DAYS.map((d) => (
+                  <tr key={d}>
+                    <td style={{ border: "1px solid #999", padding: "8px 6px", fontWeight: 800, color: "#111", textAlign: "center" }}>{d}</td>
+                    {periods.map((p) => {
+                      const entry = grid[`${d}-${p}`];
+                      return (
+                        <td key={p} style={{ border: "1px solid #999", padding: "8px 6px", textAlign: "center", color: "#111" }}>
+                          {entry ? (
+                            <div>
+                              <div style={{ fontWeight: 800 }}>{entry.subject}</div>
+                              {entry.teacher && <div style={{ fontSize: 9, color: "#444" }}>{entry.teacher}</div>}
+                              {(entry.start_time || entry.end_time) && (
+                                <div style={{ fontSize: 8, color: "#666" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</div>
+                              )}
+                            </div>
+                          ) : "—"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
