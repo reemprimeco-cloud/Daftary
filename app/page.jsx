@@ -24,8 +24,32 @@ const TABS = [
   { key: "requirements", label: "المتطلبات", icon: "🎒" },
   { key: "schedule", label: "جدول الحصص", icon: "🗓️" },
 ];
+const SUBJECT_ICON_MAP = [
+  { file: "islamic", keywords: ["اسلام", "قرآن", "تجويد", "فقه", "حديث"] },
+  { file: "arabic", keywords: ["عربي"] },
+  { file: "english", keywords: ["انجليزي", "english"] },
+  { file: "math", keywords: ["رياضيات"] },
+  { file: "science", keywords: ["علوم", "فيزياء", "كيمياء", "أحياء"] },
+  { file: "social", keywords: ["اجتماعيات", "وطني", "جغرافيا", "تاريخ"] },
+  { file: "pe", keywords: ["رياضة", "بدنية", "بدني"] },
+  { file: "art", keywords: ["فنية", "رسم"] },
+  { file: "music", keywords: ["موسيقى", "نشيد"] },
+  { file: "computer", keywords: ["حاسوب", "حاسب", "كمبيوتر", "تقنية"] },
+];
 const stageForGrade = (g) => (g <= 5 ? "ابتدائي" : g <= 9 ? "متوسط" : "ثانوي");
 const studentWord = (gender) => (gender === "بنات" ? "الطالبة" : "الطالب");
+
+function normalizeAr(s) {
+  return (s || "").replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه").trim();
+}
+
+function getSubjectIconFile(subject) {
+  const s = normalizeAr(subject);
+  for (const entry of SUBJECT_ICON_MAP) {
+    if (entry.keywords.some((k) => s.includes(normalizeAr(k)))) return entry.file;
+  }
+  return null;
+}
 
 function fmtDate(dateStr) {
   if (!dateStr) return "";
@@ -69,6 +93,18 @@ function Avatar({ child, size = 52 }) {
   return (
     <div style={{ width: size, height: size, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: pal.soft, border: `3px solid ${pal.ring}`, color: pal.text, fontWeight: 700, fontSize: size*0.38 }}>
       {child.name?.[0] || "؟"}
+    </div>
+  );
+}
+
+function SubjectIcon({ subject, size = 28 }) {
+  const file = getSubjectIconFile(subject);
+  if (file) {
+    return <img src={`/icons/${file}.png`} alt={subject} style={{ width: size, height: size, objectFit: "contain", flexShrink: 0 }} />;
+  }
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: "#E5E7EB", color: "#6B7280", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.42, fontWeight: 800, flexShrink: 0 }}>
+      {subject?.trim()?.[0] || "؟"}
     </div>
   );
 }
@@ -509,7 +545,7 @@ function ScheduleCard({ child, schedule, onUpload }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const maxPeriod = schedule.reduce((max, s) => Math.max(max, s.period_number), 0);
   const grid = {};
-  schedule.forEach((s) => { grid[`${s.day}-${s.period_number}`] = s.subject; });
+  schedule.forEach((s) => { grid[`${s.day}-${s.period_number}`] = s; });
 
   return (
     <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
@@ -525,12 +561,12 @@ function ScheduleCard({ child, schedule, onUpload }) {
         {schedule.length === 0 ? (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا يوجد جدول حصص مضاف بعد</p>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 4, fontSize: 11, minWidth: 440 }}>
+          <table style={{ borderCollapse: "separate", borderSpacing: 5, fontSize: 11 }}>
             <thead>
               <tr>
-                <th style={{ padding: 4, width: 62 }}></th>
+                <th style={{ padding: 4, width: 58 }}></th>
                 {Array.from({ length: maxPeriod }, (_, i) => i + 1).map((p) => (
-                  <th key={p} style={{ padding: 4, color: "#9CA3AF", fontWeight: 800 }}>{p}</th>
+                  <th key={p} style={{ padding: 4, color: "#9CA3AF", fontWeight: 800, minWidth: 86 }}>الحصة {p}</th>
                 ))}
               </tr>
             </thead>
@@ -540,11 +576,25 @@ function ScheduleCard({ child, schedule, onUpload }) {
                 return (
                   <tr key={d}>
                     <td style={{ padding: "8px 6px", textAlign: "center", background: dayPal.soft, color: dayPal.text, borderRadius: 8, fontWeight: 800, whiteSpace: "nowrap" }}>{d}</td>
-                    {Array.from({ length: maxPeriod }, (_, i) => i + 1).map((p) => (
-                      <td key={p} style={{ padding: "8px 4px", textAlign: "center", background: dayPal.bg, color: dayPal.text, borderRadius: 8, fontWeight: 700 }}>
-                        {grid[`${d}-${p}`] || "—"}
-                      </td>
-                    ))}
+                    {Array.from({ length: maxPeriod }, (_, i) => i + 1).map((p) => {
+                      const entry = grid[`${d}-${p}`];
+                      return (
+                        <td key={p} style={{ padding: "6px 4px", textAlign: "center", background: dayPal.bg, borderRadius: 8, verticalAlign: entry ? "top" : "middle" }}>
+                          {entry ? (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                              <SubjectIcon subject={entry.subject} size={26} />
+                              <span style={{ fontSize: 10, fontWeight: 800, color: dayPal.text }}>{entry.subject}</span>
+                              {entry.teacher && <span style={{ fontSize: 9, color: dayPal.text, opacity: 0.75 }}>{entry.teacher}</span>}
+                              {(entry.start_time || entry.end_time) && (
+                                <span style={{ fontSize: 8, color: dayPal.text, opacity: 0.55 }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span style={{ color: dayPal.text, opacity: 0.4 }}>—</span>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
