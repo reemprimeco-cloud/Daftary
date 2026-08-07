@@ -17,7 +17,7 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="دفتري" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#6FBFA0" />
+        <meta name="theme-color" content="#B7A6E8" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <link rel="icon" href="/icons/icon-192.png" />

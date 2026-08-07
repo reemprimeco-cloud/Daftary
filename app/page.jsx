@@ -216,14 +216,14 @@ export default function Home() {
     <div dir="rtl" className="app-root" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(6px)", padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0EEE8" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 12, background: "#6FBFA0", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, flexShrink: 0 }}>د</div>
+          <img src="/logo.png" alt="دفتري" style={{ width: 38, height: 38, borderRadius: 12, flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً {mother.name}</p>
             <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <button onClick={() => setShowUpload(true)} style={{ background: "#6FBFA0", color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
+          <button onClick={() => setShowUpload(true)} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
             رفع جدول
           </button>
           <button onClick={handleLogout} title="تسجيل خروج" style={{ background: "#F3F4F6", color: "#6B7280", fontWeight: 700, fontSize: 12, padding: "10px 12px", borderRadius: 12, minHeight: 40 }}>
@@ -233,8 +233,8 @@ export default function Home() {
       </div>
 
       <div className="app-scroll" style={{ flex: 1 }}>
-        {!telegramLinked && telegramLink && (
-          <a href={telegramLink} target="_blank" rel="noreferrer" style={{ display: "block", margin: 12, padding: 14, borderRadius: 14, background: "#EBF7F1", color: "#3D7A63", fontSize: 13, fontWeight: 700, textAlign: "center", textDecoration: "none" }}>
+        {!telegramLinked && (
+          <a href={telegramLink || "#"} target="_blank" rel="noreferrer" style={{ display: "block", margin: 12, padding: 14, borderRadius: 14, background: "#F1EFFA", color: "#5C4B8C", fontSize: 13, fontWeight: 700, textAlign: "center", textDecoration: "none" }}>
             فعّلي تذكيرات تيليجرام الآن ⬅️
           </a>
         )}
@@ -247,7 +247,7 @@ export default function Home() {
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "#9CA3AF" }}>واجبات هذا الأسبوع</span>
-                  <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#6FBFA0", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
+                  <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
                 </div>
                 {children.map((c) => (
                   <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} />
@@ -273,7 +273,7 @@ export default function Home() {
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "#9CA3AF" }}>جدول الحصص الأسبوعي</span>
-                  <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: "#6FBFA0", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ رفع/تحديث الجدول</button>
+                  <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ رفع/تحديث الجدول</button>
                 </div>
                 {children.map((c) => (
                   <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} />
@@ -287,7 +287,7 @@ export default function Home() {
 
       <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderTop: "1px solid #F0EEE8", display: "flex", paddingBottom: "env(safe-area-inset-bottom)" }}>
         {TABS.map((t) => (
-          <button key={t.key} onClick={() => setView(t.key)} style={{ flex: 1, padding: "8px 0 6px", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: view === t.key ? "#6FBFA0" : "#9CA3AF", fontWeight: 700, fontSize: 11, minHeight: 52 }}>
+          <button key={t.key} onClick={() => setView(t.key)} style={{ flex: 1, padding: "8px 0 6px", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: view === t.key ? "#B7A6E8" : "#9CA3AF", fontWeight: 700, fontSize: 11, minHeight: 52 }}>
             <span style={{ fontSize: 21, lineHeight: 1 }}>{t.icon}</span>
             <span>{t.label}</span>
           </button>
@@ -380,7 +380,7 @@ function InstallPrompt() {
 
   return (
     <div dir="rtl" style={{ position: "fixed", bottom: "calc(env(safe-area-inset-bottom) + 12px)", left: 12, right: 12, zIndex: 60, background: "white", borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,.18)", padding: 14, display: "flex", alignItems: "center", gap: 10, maxWidth: 420, margin: "0 auto" }}>
-      <div style={{ width: 40, height: 40, borderRadius: 10, background: "#6FBFA0", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, flexShrink: 0, fontSize: 18 }}>د</div>
+      <img src="/logo.png" alt="دفتري" style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ margin: 0, fontWeight: 800, fontSize: 13 }}>أضيفي دفتري للشاشة الرئيسية</p>
         <p style={{ margin: 0, fontSize: 11, color: "#6B7280" }}>
@@ -388,7 +388,7 @@ function InstallPrompt() {
         </p>
       </div>
       {platform === "android" && (
-        <button onClick={install} style={{ background: "#6FBFA0", color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>تثبيت</button>
+        <button onClick={install} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>تثبيت</button>
       )}
       <button onClick={dismiss} style={{ background: "none", color: "#9CA3AF", fontSize: 18, width: 28, height: 28, flexShrink: 0 }}>×</button>
     </div>
@@ -400,11 +400,11 @@ function Onboarding({ onDone }) {
   const [phone, setPhone] = useState("");
   const canSubmit = name.trim().length > 1 && /^[0-9]{8}$/.test(phone.trim());
   return (
-    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px)", background: "linear-gradient(180deg,#FAF7F2,#F3EFE7)" }}>
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
       <div style={{ width: "100%", maxWidth: 380 }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 18, background: "#6FBFA0", margin: "0 auto 14px", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 28, fontWeight: 800 }}>د</div>
-          <h1 style={{ color: "#3D7A63", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
+          <img src="/logo.png" alt="دفتري" style={{ width: 84, height: 84, borderRadius: 20, margin: "0 auto 14px", display: "block", boxShadow: "0 4px 14px rgba(183,166,232,.35)" }} />
+          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
           <p style={{ color: "#6B7280", fontSize: 14, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
           <p style={{ color: "#9CA3AF", fontSize: 12, margin: "6px 0 0" }}>الأب أو أي أحد بالعائلة يقدر يدخل بنفس رقم الجوال ويشوف نفس الجدول</p>
         </div>
@@ -416,9 +416,15 @@ function Onboarding({ onDone }) {
             <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="XXXXXXXX" maxLength={8} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14 }} />
           </div>
-          <button disabled={!canSubmit} onClick={() => onDone(name.trim(), "+965" + phone.trim())} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSubmit ? 1 : 0.4 }}>
+          <button disabled={!canSubmit} onClick={() => onDone(name.trim(), "+965" + phone.trim())} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSubmit ? 1 : 0.4 }}>
             ابدئي المتابعة
           </button>
+        </div>
+        <div style={{ textAlign: "center", marginTop: 22 }}>
+          <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "10px 20px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            تواصل معنا
+          </a>
+          <p style={{ color: "#B7B2C4", fontSize: 11, margin: "12px 0 0" }}>Copyright © Reemora.app 2026</p>
         </div>
       </div>
     </div>
@@ -430,7 +436,7 @@ function EmptyState({ onAdd }) {
     <div style={{ textAlign: "center", padding: "60px 0" }}>
       <p style={{ fontWeight: 800, marginBottom: 4 }}>ابدئي بإضافة أول طالب/ة</p>
       <p style={{ color: "#9CA3AF", fontSize: 14, marginBottom: 18 }}>سجّلي مدرسته وصفه، وبعدها ارفعي صور الجدول</p>
-      <button onClick={onAdd} style={{ background: "#6FBFA0", color: "white", fontWeight: 700, padding: "10px 20px", borderRadius: 12 }}>+ إضافة طالب/ة</button>
+      <button onClick={onAdd} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, padding: "10px 20px", borderRadius: 12 }}>+ إضافة طالب/ة</button>
     </div>
   );
 }
@@ -642,7 +648,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
             <label style={{ fontSize: 13, fontWeight: 700 }}>الجنس / نوع المدرسة</label>
             <div style={{ display: "flex", gap: 8, marginTop: 5 }}>
               {["بنين", "بنات"].map((g) => (
-                <button key={g} onClick={() => { setGender(g); setSchool(""); }} style={{ flex: 1, padding: 9, borderRadius: 12, border: `1px solid ${gender === g ? "#6FBFA0" : "#E5E7EB"}`, background: gender === g ? "#EBF7F1" : "white", color: gender === g ? "#3D7A63" : "#6B7280", fontWeight: 700 }}>{g}</button>
+                <button key={g} onClick={() => { setGender(g); setSchool(""); }} style={{ flex: 1, padding: 9, borderRadius: 12, border: `1px solid ${gender === g ? "#B7A6E8" : "#E5E7EB"}`, background: gender === g ? "#F1EFFA" : "white", color: gender === g ? "#5C4B8C" : "#6B7280", fontWeight: 700 }}>{g}</button>
               ))}
             </div>
           </div>
@@ -665,7 +671,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
             </div>
           )}
 
-          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo, colorIdx })} style={{ padding: 14, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo, colorIdx })} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
             {isEdit ? "حفظ التعديلات" : `إضافة ${word === "طالبة" ? "الطالبة" : "الطالب"}`}
           </button>
           {isEdit && (
@@ -738,7 +744,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
           </select>
         </div>
         {selectChild && autoChild && (
-          <div style={{ background: "#EBF7F1", color: "#3D7A63", borderRadius: 12, padding: 12, fontSize: 13, fontWeight: 700 }}>
+          <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 12, padding: 12, fontSize: 13, fontWeight: 700 }}>
             هذا الجدول لـ {autoChild.name} — الصف {autoChild.grade}/{autoChild.section}
           </div>
         )}
@@ -747,9 +753,9 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             <label style={{ fontSize: 13, fontWeight: 700 }}>هذا الجدول لأي طالب/ة؟</label>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
               {childrenOfSchool.map((c) => (
-                <label key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 12, border: `1px solid ${childId === c.id ? "#6FBFA0" : "#E5E7EB"}`, background: childId === c.id ? "#EBF7F1" : "white", cursor: "pointer" }}>
+                <label key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 12, border: `1px solid ${childId === c.id ? "#B7A6E8" : "#E5E7EB"}`, background: childId === c.id ? "#F1EFFA" : "white", cursor: "pointer" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <input type="radio" name="uploadChild" checked={childId === c.id} onChange={() => setChildId(c.id)} style={{ accentColor: "#6FBFA0" }} />
+                    <input type="radio" name="uploadChild" checked={childId === c.id} onChange={() => setChildId(c.id)} style={{ accentColor: "#B7A6E8" }} />
                     <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{c.name}</span>
                   </span>
                   <span style={{ fontSize: 12, color: "#9CA3AF" }}>الصف {c.grade}/{c.section}</span>
@@ -773,7 +779,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             ))}
           </div>
         )}
-        <button disabled={!canRun || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#6FBFA0", color: "white", fontWeight: 800, opacity: canRun ? 1 : 0.4 }}>
+        <button disabled={!canRun || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, opacity: canRun ? 1 : 0.4 }}>
           {status === "loading" ? "جاري التحليل..." : buttonLabel}
         </button>
         {status === "done" && summary && (renderSummary ? renderSummary(summary) : (
