@@ -468,7 +468,7 @@ function Onboarding({ onDone }) {
         </div>
         <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>ولي الأمر</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: أم فهد" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14, marginBottom: 12 }} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: ريم الفرج" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14, marginBottom: 12 }} />
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>رقم الجوال</label>
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
             <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
@@ -776,6 +776,11 @@ function TaskModal({ task, color, onClose, onMarkDone, onDelete, onUpdateDate })
           </div>
         </div>
 
+        {task.due_date && !dateChanged && (
+          <a href={`/api/tasks/${task.id}/ics`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
+            🔔 إضافة تذكير (قبل يوم)
+          </a>
+        )}
         <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
           {meta.done}
         </button>
@@ -1008,6 +1013,9 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         {status === "done" && summary && (renderSummary ? renderSummary(summary) : (
           <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
             تم تحليل {summary.imagesProcessed} صورة ✓ — أُضيف {summary.matchedTasks} واجب/اختبار و {summary.matchedReqs} طلب مستلزمات.
+            {(summary.updatedTasks > 0 || summary.updatedReqs > 0) && (
+              <div style={{ marginTop: 6, opacity: 0.85 }}>تم تحديث {summary.updatedTasks} واجب/اختبار و {summary.updatedReqs} طلب كانوا موجودين مسبقاً (المدرسة غيّرت تفاصيلهم).</div>
+            )}
             {summary.skippedOld > 0 && (
               <div style={{ marginTop: 6, opacity: 0.85 }}>تم تجاهل {summary.skippedOld} عنصر لأن تاريخه فات (صورة قديمة).</div>
             )}

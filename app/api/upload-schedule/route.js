@@ -126,7 +126,9 @@ async function handleUpload(req) {
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
   const normalizeDueDate = (v) => (typeof v === "string" && DATE_RE.test(v) ? v : null);
   let matchedTasks = 0;
+  let updatedTasks = 0;
   let matchedReqs = 0;
+  let updatedReqs = 0;
   let skippedOld = 0;
 
   for (const e of parsed.entries || []) {
@@ -139,16 +141,34 @@ async function handleUpload(req) {
     if (e.gradeSeen) {
       details = details ? `${details} (الصف بالصورة: ${e.gradeSeen})` : `الصف بالصورة: ${e.gradeSeen}`;
     }
-    await sb.from("tasks").insert({
-      child_id: child.id,
-      subject: e.subject,
-      type: e.type || "واجب",
-      due_date: dueDate,
-      details,
-      status: "active",
-      source: "image",
-    });
-    matchedTasks++;
+    const type = e.type || "واجب";
+
+    // لو فيه واجب نشط واحد بس بنفس المادة والنوع لهذا الطالب/ة، اعتبريه نفس الواجب
+    // وحدّثي تاريخه/تفاصيله بدل إضافة نسخة مكررة (تحافظ على نفس الـ id عشان التذكير المرتبط به يتحدّث بدل ما يتكرر).
+    // لو فيه أكثر من واجب نشط مطابق (مثل حفظ قرآن يومي بنفس المادة)، ما نخمّن أيهم — نضيف كسجل جديد.
+    const { data: existingTasks } = await sb
+      .from("tasks")
+      .select("id")
+      .eq("child_id", child.id)
+      .eq("subject", e.subject)
+      .eq("type", type)
+      .eq("status", "active");
+
+    if (existingTasks && existingTasks.length === 1) {
+      await sb.from("tasks").update({ due_date: dueDate, details }).eq("id", existingTasks[0].id);
+      updatedTasks++;
+    } else {
+      await sb.from("tasks").insert({
+        child_id: child.id,
+        subject: e.subject,
+        type,
+        due_date: dueDate,
+        details,
+        status: "active",
+        source: "image",
+      });
+      matchedTasks++;
+    }
   }
 
   for (const r of parsed.requirements || []) {
@@ -157,14 +177,27 @@ async function handleUpload(req) {
       skippedOld++;
       continue;
     }
-    await sb.from("requirements").insert({
-      child_id: child.id,
-      item: r.item,
-      due_date: dueDate,
-      bought: false,
-    });
-    matchedReqs++;
+
+    const { data: existingReqs } = await sb
+      .from("requirements")
+      .select("id")
+      .eq("child_id", child.id)
+      .eq("item", r.item)
+      .eq("bought", false);
+
+    if (existingReqs && existingReqs.length === 1) {
+      await sb.from("requirements").update({ due_date: dueDate }).eq("id", existingReqs[0].id);
+      updatedReqs++;
+    } else {
+      await sb.from("requirements").insert({
+        child_id: child.id,
+        item: r.item,
+        due_date: dueDate,
+        bought: false,
+      });
+      matchedReqs++;
+    }
   }
 
-  return NextResponse.json({ ok: true, matchedTasks, matchedReqs, skippedOld, imagesProcessed: images.length });
+  return NextResponse.json({ ok: true, matchedTasks, updatedTasks, matchedReqs, updatedReqs, skippedOld, imagesProcessed: images.length });
 }
