@@ -40,6 +40,7 @@ export async function GET(req) {
     .from("tasks")
     .select("*, children(mother_id, name)")
     .eq("status", "active")
+    .not("due_date", "is", null)
     .gte("created_at", new Date(Date.now() - 26 * 3600 * 1000).toISOString());
 
   let sent = 0;

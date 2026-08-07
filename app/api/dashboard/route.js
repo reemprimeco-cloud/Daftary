@@ -15,20 +15,22 @@ export async function GET(req) {
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 400 });
 
   const childIds = (children || []).map((c) => c.id);
-  const { sunday, thursday } = kuwaitWeekMap();
+  const { sunday, thursday, saturday } = kuwaitWeekMap();
 
   let tasks = [];
   let undatedTasks = [];
   let requirements = [];
   let classSchedule = [];
   if (childIds.length) {
+    // نجيب لين آخر السبت (مو الخميس بس) عشان أي واجب تاريخه صريح صادف
+    // يوم جمعة/سبت (نادر، لكن ممكن بعد ميزة التواريخ البعيدة) ما يختفي.
     const { data: t } = await sb
       .from("tasks")
       .select("*")
       .in("child_id", childIds)
       .eq("status", "active")
       .gte("due_date", sunday)
-      .lte("due_date", thursday)
+      .lte("due_date", saturday)
       .order("due_date");
     tasks = t || [];
 

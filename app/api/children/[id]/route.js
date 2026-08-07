@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+async function verifyOwnership(sb, childId, motherId) {
+  const { data } = await sb.from("children").select("mother_id").eq("id", childId).single();
+  return !!data && data.mother_id === motherId;
+}
+
 export async function PATCH(req, { params }) {
   const body = await req.json();
   const sb = supabaseAdmin();
+
+  if (!(await verifyOwnership(sb, params.id, body.motherId))) {
+    return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+  }
+
   const { data, error } = await sb
     .from("children")
     .update({
@@ -25,7 +35,13 @@ export async function PATCH(req, { params }) {
 }
 
 export async function DELETE(req, { params }) {
+  const body = await req.json().catch(() => ({}));
   const sb = supabaseAdmin();
+
+  if (!(await verifyOwnership(sb, params.id, body.motherId))) {
+    return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+  }
+
   const { error } = await sb.from("children").delete().eq("id", params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ ok: true });

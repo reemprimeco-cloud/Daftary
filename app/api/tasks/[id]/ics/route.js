@@ -13,10 +13,14 @@ function formatDateStamp(date) {
 }
 
 export async function GET(req, { params }) {
+  const motherId = req.nextUrl.searchParams.get("motherId");
   const sb = supabaseAdmin();
-  const { data: task, error } = await sb.from("tasks").select("*").eq("id", params.id).single();
+  const { data: task, error } = await sb.from("tasks").select("*, children(mother_id)").eq("id", params.id).single();
   if (error || !task) {
     return new Response("الواجب غير موجود", { status: 404 });
+  }
+  if (!motherId || task.children?.mother_id !== motherId) {
+    return new Response("غير مصرح", { status: 403 });
   }
   if (!task.due_date) {
     return new Response("لازم تحددي تاريخ الاستحقاق أولاً قبل إضافة التذكير", { status: 400 });

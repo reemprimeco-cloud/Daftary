@@ -13,6 +13,7 @@ const PALETTE = [
   { bg: "#EBF4FA", ring: "#93C6E2", solid: "#79B7DA", soft: "#D2E9F4", text: "#31607C" },
 ];
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
+const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
   "واجب": { icon: "📝", done: "تم" },
   "حفظ": { icon: "📖", done: "تم الحفظ" },
@@ -194,21 +195,26 @@ export default function Home() {
     if (data.child) {
       setChildren((prev) => [...prev, data.child]);
       setShowAddChild(false);
+    } else {
+      alert(data.error || "تعذّرت إضافة الطالب/ة، حاولي مرة ثانية.");
     }
   }
 
   async function handleUpdateChild(id, child) {
-    const res = await fetch(`/api/children/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(child) });
+    const res = await fetch(`/api/children/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...child, motherId: mother.id }) });
     const data = await res.json();
     if (data.child) {
       setChildren((prev) => prev.map((c) => (c.id === id ? data.child : c)));
       setEditingChild(null);
+    } else {
+      alert(data.error || "تعذّر حفظ التعديلات، حاولي مرة ثانية.");
     }
   }
 
   async function handleDeleteChild(id) {
     if (!confirm("حذف هذا الطالب/ـة نهائياً؟ راح تنحذف كل واجباته ومتطلباته معه.")) return;
-    await fetch(`/api/children/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/children/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
+    if (!res.ok) { alert("تعذّر حذف الطالب/ة، حاولي مرة ثانية."); return; }
     setChildren((prev) => prev.filter((c) => c.id !== id));
     setTasks((prev) => prev.filter((t) => t.child_id !== id));
     setUndatedTasks((prev) => prev.filter((t) => t.child_id !== id));
@@ -218,7 +224,8 @@ export default function Home() {
   }
 
   async function handleMarkDone(taskId) {
-    await fetch(`/api/tasks/${taskId}/done`, { method: "POST" });
+    const res = await fetch(`/api/tasks/${taskId}/done`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
+    if (!res.ok) { alert("تعذّر تحديث الواجب، حاولي مرة ثانية."); return; }
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenTask(null);
@@ -226,26 +233,33 @@ export default function Home() {
 
   async function handleDeleteTask(taskId) {
     if (!confirm("حذف هذا الواجب نهائياً؟")) return;
-    await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+    const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
+    if (!res.ok) { alert("تعذّر حذف الواجب، حاولي مرة ثانية."); return; }
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenTask(null);
   }
 
   async function handleUpdateTaskDate(taskId, dueDate) {
-    await fetch(`/api/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dueDate }) });
+    const res = await fetch(`/api/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dueDate, motherId: mother.id }) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "تعذّر حفظ التاريخ");
+    }
     setOpenTask(null);
     await loadAll(mother.id);
   }
 
   async function handleToggleReq(id) {
-    await fetch(`/api/requirements/${id}/toggle`, { method: "POST" });
+    const res = await fetch(`/api/requirements/${id}/toggle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
+    if (!res.ok) { alert("تعذّر تحديث الطلب، حاولي مرة ثانية."); return; }
     setRequirements((prev) => prev.map((r) => (r.id === id ? { ...r, bought: !r.bought } : r)));
   }
 
   async function handleDeleteReq(id) {
     if (!confirm("حذف هذا الطلب؟")) return;
-    await fetch(`/api/requirements/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/requirements/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
+    if (!res.ok) { alert("تعذّر حذف الطلب، حاولي مرة ثانية."); return; }
     setRequirements((prev) => prev.filter((r) => r.id !== id));
   }
 
@@ -391,7 +405,7 @@ export default function Home() {
           onDone={() => loadAll(mother.id)}
         />
       )}
-      {openTask && <TaskModal task={openTask} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateDate={handleUpdateTaskDate} />}
+      {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateDate={handleUpdateTaskDate} />}
       <InstallPrompt />
     </div>
   );
@@ -501,9 +515,11 @@ function EmptyState({ onAdd }) {
 
 function ChildCard({ child, tasks, undatedTasks, hasPEToday, onOpenTask, onEdit }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
-  const byDay = DAYS.map((day) => ({
+  // معظم المهام تقع الأحد-الخميس (أيام الدراسة)، لكن تاريخ صريح مستخرج من صورة
+  // (ميزة التواريخ البعيدة) ممكن نادراً يصادف جمعة/سبت — نعرضها بدل ما تختفي.
+  const byDay = FULL_DAY_NAMES.map((day) => ({
     day,
-    items: tasks.filter((t) => DAYS[new Date(t.due_date + "T00:00:00").getDay()] === day),
+    items: tasks.filter((t) => FULL_DAY_NAMES[new Date(t.due_date + "T00:00:00").getDay()] === day),
   }));
   return (
     <div>
@@ -752,15 +768,22 @@ function ScheduleCard({ child, schedule, onUpload }) {
   );
 }
 
-function TaskModal({ task, color, onClose, onMarkDone, onDelete, onUpdateDate }) {
+function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpdateDate }) {
   const meta = TYPE_META[task.type] || TYPE_META["واجب"];
   const [dateValue, setDateValue] = useState(task.due_date || "");
   const [saving, setSaving] = useState(false);
+  const [dateError, setDateError] = useState("");
   const dateChanged = dateValue !== (task.due_date || "");
 
   async function saveDate() {
     setSaving(true);
-    await onUpdateDate(task.id, dateValue || null);
+    setDateError("");
+    try {
+      await onUpdateDate(task.id, dateValue || null);
+    } catch (e) {
+      setDateError(e.message || "تعذّر حفظ التاريخ، حاولي مرة ثانية.");
+      setSaving(false);
+    }
   }
 
   return (
@@ -784,10 +807,11 @@ function TaskModal({ task, color, onClose, onMarkDone, onDelete, onUpdateDate })
               {saving ? "..." : "حفظ التاريخ"}
             </button>
           </div>
+          {dateError && <p style={{ color: "#B91C1C", fontSize: 12, margin: "6px 0 0" }}>{dateError}</p>}
         </div>
 
         {task.due_date && !dateChanged && (
-          <a href={`/api/tasks/${task.id}/ics`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
+          <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
             🔔 إضافة تذكير (قبل يوم)
           </a>
         )}
