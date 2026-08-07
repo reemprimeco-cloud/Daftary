@@ -500,6 +500,9 @@ function UploadView({ children, motherId, onClose, onDone }) {
         {status === "done" && summary && (
           <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
             تم تحليل {summary.imagesProcessed} صورة ✓ — أُضيف {summary.matchedTasks} واجب/اختبار و {summary.matchedReqs} طلب مستلزمات.
+            {summary.skippedOld > 0 && (
+              <div style={{ marginTop: 6, opacity: 0.85 }}>تم تجاهل {summary.skippedOld} عنصر لأن تاريخه فات (صورة قديمة).</div>
+            )}
           </div>
         )}
         {status === "error" && (

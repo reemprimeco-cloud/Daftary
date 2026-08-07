@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+function kuwaitTodayStr() {
+  const kuwaitNow = new Date(Date.now() + 3 * 60 * 60 * 1000);
+  return kuwaitNow.toISOString().slice(0, 10);
+}
+
 function weekMap() {
   const now = new Date();
   const day = now.getUTCDay();
@@ -114,10 +119,16 @@ async function handleUpload(req) {
     return NextResponse.json({ error: "رد غير صالح من التحليل: " + e.message }, { status: 500 });
   }
 
+  const todayStr = kuwaitTodayStr();
   let matchedTasks = 0;
   let matchedReqs = 0;
+  let skippedOld = 0;
 
   for (const e of parsed.entries || []) {
+    if (e.dueDate && e.dueDate < todayStr) {
+      skippedOld++;
+      continue;
+    }
     const child = children.find((c) => c.grade === Number(e.grade) && c.section === Number(e.section));
     if (!child) continue;
     await sb.from("tasks").insert({
@@ -133,6 +144,10 @@ async function handleUpload(req) {
   }
 
   for (const r of parsed.requirements || []) {
+    if (r.dueDate && r.dueDate < todayStr) {
+      skippedOld++;
+      continue;
+    }
     const child = children.find((c) => c.grade === Number(r.grade) && c.section === Number(r.section));
     if (!child) continue;
     await sb.from("requirements").insert({
@@ -144,5 +159,5 @@ async function handleUpload(req) {
     matchedReqs++;
   }
 
-  return NextResponse.json({ ok: true, matchedTasks, matchedReqs, imagesProcessed: images.length });
+  return NextResponse.json({ ok: true, matchedTasks, matchedReqs, skippedOld, imagesProcessed: images.length });
 }
