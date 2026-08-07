@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { kuwaitTodayStr, kuwaitNow } from "@/lib/kuwaitDate";
 
 async function sendTelegram(chatId, text) {
   await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -16,8 +17,10 @@ export async function GET(req) {
   }
 
   const sb = supabaseAdmin();
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const today = kuwaitTodayStr();
+  const tomorrowDate = kuwaitNow();
+  tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+  const tomorrow = tomorrowDate.toISOString().slice(0, 10);
 
   const { data: examsToday } = await sb
     .from("tasks")

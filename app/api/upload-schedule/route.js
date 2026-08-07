@@ -1,26 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-
-function kuwaitTodayStr() {
-  const kuwaitNow = new Date(Date.now() + 3 * 60 * 60 * 1000);
-  return kuwaitNow.toISOString().slice(0, 10);
-}
-
-function weekMap() {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const sunday = new Date(now);
-  sunday.setUTCDate(now.getUTCDate() - day);
-  sunday.setUTCHours(0, 0, 0, 0);
-  const days = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
-  const map = {};
-  days.forEach((d, i) => {
-    const dt = new Date(sunday);
-    dt.setUTCDate(sunday.getUTCDate() + i);
-    map[d] = dt.toISOString().slice(0, 10);
-  });
-  return { map, sunday: map["الأحد"], thursday: map["الخميس"] };
-}
+import { kuwaitTodayStr, kuwaitWeekMap, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
 
 export async function POST(req) {
   try {
@@ -51,11 +31,9 @@ async function handleUpload(req) {
     .single();
   if (cErr || !child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
 
-  const { map, sunday, thursday } = weekMap();
-  const todayLabel = new Date().toLocaleDateString("ar-KW", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
-  });
-  const currentYear = new Date(Date.now() + 3 * 60 * 60 * 1000).getUTCFullYear();
+  const { map, sunday, thursday } = kuwaitWeekMap();
+  const todayLabel = kuwaitTodayLabel();
+  const currentYear = kuwaitYear();
 
   const content = [
     {

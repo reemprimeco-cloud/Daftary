@@ -1,19 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-
-function weekRange() {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const sunday = new Date(now);
-  sunday.setUTCDate(now.getUTCDate() - day);
-  sunday.setUTCHours(0, 0, 0, 0);
-  const thursday = new Date(sunday);
-  thursday.setUTCDate(sunday.getUTCDate() + 4);
-  return {
-    sunday: sunday.toISOString().slice(0, 10),
-    thursday: thursday.toISOString().slice(0, 10),
-  };
-}
+import { kuwaitWeekMap } from "@/lib/kuwaitDate";
 
 export async function GET(req) {
   const motherId = req.nextUrl.searchParams.get("motherId");
@@ -28,7 +15,7 @@ export async function GET(req) {
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 400 });
 
   const childIds = (children || []).map((c) => c.id);
-  const { sunday, thursday } = weekRange();
+  const { sunday, thursday } = kuwaitWeekMap();
 
   let tasks = [];
   let undatedTasks = [];
