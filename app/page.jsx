@@ -126,6 +126,7 @@ export default function Home() {
   const [children, setChildren] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [undatedTasks, setUndatedTasks] = useState([]);
+  const [upcomingTasks, setUpcomingTasks] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [classSchedule, setClassSchedule] = useState([]);
   const [view, setView] = useState("dashboard");
@@ -157,6 +158,7 @@ export default function Home() {
     setChildren(data.children || []);
     setTasks(data.tasks || []);
     setUndatedTasks(data.undatedTasks || []);
+    setUpcomingTasks(data.upcomingTasks || []);
     setRequirements(data.requirements || []);
     setClassSchedule(data.classSchedule || []);
     const tRes = await fetch(`/api/telegram/link?motherId=${motherId}`);
@@ -172,6 +174,7 @@ export default function Home() {
     setChildren([]);
     setTasks([]);
     setUndatedTasks([]);
+    setUpcomingTasks([]);
     setRequirements([]);
     setClassSchedule([]);
     setTelegramLink(null);
@@ -218,6 +221,7 @@ export default function Home() {
     setChildren((prev) => prev.filter((c) => c.id !== id));
     setTasks((prev) => prev.filter((t) => t.child_id !== id));
     setUndatedTasks((prev) => prev.filter((t) => t.child_id !== id));
+    setUpcomingTasks((prev) => prev.filter((t) => t.child_id !== id));
     setRequirements((prev) => prev.filter((r) => r.child_id !== id));
     setClassSchedule((prev) => prev.filter((s) => s.child_id !== id));
     setEditingChild(null);
@@ -228,6 +232,7 @@ export default function Home() {
     if (!res.ok) { alert("تعذّر تحديث الواجب، حاولي مرة ثانية."); return; }
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setUpcomingTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenTask(null);
   }
 
@@ -237,6 +242,7 @@ export default function Home() {
     if (!res.ok) { alert("تعذّر حذف الواجب، حاولي مرة ثانية."); return; }
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setUpcomingTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenTask(null);
   }
 
@@ -283,6 +289,7 @@ export default function Home() {
 
   const weekTasksFor = (childId) => tasks.filter((t) => t.child_id === childId);
   const undatedTasksFor = (childId) => undatedTasks.filter((t) => t.child_id === childId);
+  const upcomingTasksFor = (childId) => upcomingTasks.filter((t) => t.child_id === childId);
   const todayDayName = DAYS[new Date().getDay()];
   const hasPEToday = (childId) => classSchedule.some((s) => s.child_id === childId && s.day === todayDayName && getSubjectIconFile(s.subject) === "pe");
 
@@ -324,7 +331,7 @@ export default function Home() {
                   <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
                 </div>
                 {children.map((c) => (
-                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} undatedTasks={undatedTasksFor(c.id)} hasPEToday={hasPEToday(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} />
+                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} undatedTasks={undatedTasksFor(c.id)} upcomingTasks={upcomingTasksFor(c.id)} hasPEToday={hasPEToday(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} />
                 ))}
               </>
             )}
@@ -513,7 +520,7 @@ function EmptyState({ onAdd }) {
   );
 }
 
-function ChildCard({ child, tasks, undatedTasks, hasPEToday, onOpenTask, onEdit }) {
+function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOpenTask, onEdit }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   // معظم المهام تقع الأحد-الخميس (أيام الدراسة)، لكن تاريخ صريح مستخرج من صورة
   // (ميزة التواريخ البعيدة) ممكن نادراً يصادف جمعة/سبت — نعرضها بدل ما تختفي.
@@ -543,7 +550,7 @@ function ChildCard({ child, tasks, undatedTasks, hasPEToday, onOpenTask, onEdit 
         <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>✏️ تعديل</button>
       </div>
       <div style={{ background: "white", padding: 12 }}>
-        {tasks.length === 0 && undatedTasks.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا واجبات هذا الأسبوع 🎉</p>}
+        {tasks.length === 0 && undatedTasks.length === 0 && upcomingTasks.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا واجبات هذا الأسبوع 🎉</p>}
         {byDay.filter((d) => d.items.length).map(({ day, items }) => (
           <div key={day} style={{ marginBottom: 8 }}>
             <p style={{ fontSize: 12, fontWeight: 800, color: "#9CA3AF", margin: "0 0 4px" }}>{day}</p>
@@ -557,12 +564,25 @@ function ChildCard({ child, tasks, undatedTasks, hasPEToday, onOpenTask, onEdit 
           </div>
         ))}
         {undatedTasks.length > 0 && (
-          <div>
+          <div style={{ marginBottom: upcomingTasks.length > 0 ? 8 : 0 }}>
             <p style={{ fontSize: 12, fontWeight: 800, color: "#B45309", margin: "0 0 4px" }}>⚠️ مهام بدون تاريخ محدد</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {undatedTasks.map((t) => (
                 <button key={t.id} onClick={() => onOpenTask(t)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: "#FEF3C7", color: "#92400E" }}>
                   {TYPE_META[t.type]?.icon} {t.subject}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {upcomingTasks.length > 0 && (
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#31607C", margin: "0 0 4px" }}>📅 مهام قادمة (بعد هذا الأسبوع)</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {upcomingTasks.map((t) => (
+                <button key={t.id} onClick={() => onOpenTask(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "8px 10px", borderRadius: 10, fontWeight: 700, background: "#EBF4FA", color: "#31607C", textAlign: "right" }}>
+                  <span>{TYPE_META[t.type]?.icon} {t.subject}</span>
+                  <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 700 }}>{fmtDate(t.due_date)}</span>
                 </button>
               ))}
             </div>

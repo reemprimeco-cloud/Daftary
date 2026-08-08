@@ -19,6 +19,7 @@ export async function GET(req) {
 
   let tasks = [];
   let undatedTasks = [];
+  let upcomingTasks = [];
   let requirements = [];
   let classSchedule = [];
   if (childIds.length) {
@@ -43,6 +44,17 @@ export async function GET(req) {
       .order("created_at");
     undatedTasks = u || [];
 
+    // واجبات لها تاريخ فعلي لكن بعد هذا الأسبوع (مشروع نهاية فصل، اختبار
+    // بعد أسابيع...) — بدون هذا الاستعلام تختفي تماماً لين يجي أسبوعها.
+    const { data: up } = await sb
+      .from("tasks")
+      .select("*")
+      .in("child_id", childIds)
+      .eq("status", "active")
+      .gt("due_date", saturday)
+      .order("due_date");
+    upcomingTasks = up || [];
+
     const { data: r } = await sb.from("requirements").select("*").in("child_id", childIds).order("created_at");
     requirements = r || [];
 
@@ -50,5 +62,5 @@ export async function GET(req) {
     classSchedule = cs || [];
   }
 
-  return NextResponse.json({ children, tasks, undatedTasks, requirements, classSchedule, weekRange: { sunday, thursday } });
+  return NextResponse.json({ children, tasks, undatedTasks, upcomingTasks, requirements, classSchedule, weekRange: { sunday, thursday } });
 }
