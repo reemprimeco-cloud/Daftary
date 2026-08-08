@@ -12,6 +12,12 @@ function formatDateStamp(date) {
   return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
 
+function nextDayCompact(dueDateStr) {
+  const d = new Date(dueDateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
 export async function GET(req, { params }) {
   const motherId = req.nextUrl.searchParams.get("motherId");
   const sb = supabaseAdmin();
@@ -34,18 +40,19 @@ export async function GET(req, { params }) {
     "VERSION:2.0",
     "PRODID:-//Daftary//Tasks//AR",
     "CALSCALE:GREGORIAN",
-    "BEGIN:VTODO",
+    "BEGIN:VEVENT",
     `UID:${task.id}@daftary.app`,
     `DTSTAMP:${formatDateStamp(new Date())}`,
     `SUMMARY:${escapeICS(summary)}`,
-    `DUE;VALUE=DATE:${dueDateCompact}`,
+    `DTSTART;VALUE=DATE:${dueDateCompact}`,
+    `DTEND;VALUE=DATE:${nextDayCompact(task.due_date)}`,
     task.details ? `DESCRIPTION:${escapeICS(task.details)}` : null,
     "BEGIN:VALARM",
     "ACTION:DISPLAY",
     `DESCRIPTION:${escapeICS("تذكير: " + summary)}`,
     "TRIGGER:-P1D",
     "END:VALARM",
-    "END:VTODO",
+    "END:VEVENT",
     "END:VCALENDAR",
   ].filter(Boolean);
 
