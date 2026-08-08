@@ -465,6 +465,7 @@ function PushPrompt({ motherId }) {
     try {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
+        alert("ما تم منح إذن الإشعارات (الحالة: " + permission + "). تأكدي من إعدادات الإشعارات بالجوال لتطبيق دفتري.");
         setVisible(false);
         localStorage.setItem("daftary_push_dismissed", "1");
         return;
@@ -474,15 +475,19 @@ function PushPrompt({ motherId }) {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
       });
-      await fetch("/api/push/subscribe", {
+      const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ motherId, subscription: sub.toJSON() }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error("فشل حفظ الاشتراك بالسيرفر: " + (data.error || res.status));
+      }
       setVisible(false);
     } catch (e) {
       console.error("push subscribe failed:", e);
-      alert("تعذّر تفعيل إشعارات المتصفح، حاولي مرة ثانية.");
+      alert("تعذّر تفعيل الإشعارات: " + (e?.message || e?.name || "خطأ غير معروف"));
     } finally {
       setLoading(false);
     }
