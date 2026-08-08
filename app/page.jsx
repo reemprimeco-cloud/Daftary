@@ -320,6 +320,7 @@ export default function Home() {
           </a>
         </div>
       )}
+      <PushPrompt motherId={mother.id} />
 
       <div className="app-scroll" style={{ flex: 1 }}>
         {view === "dashboard" ? (
@@ -416,6 +417,97 @@ export default function Home() {
       )}
       {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateDate={handleUpdateTaskDate} />}
       <InstallPrompt />
+    </div>
+  );
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+function PushPrompt({ motherId }) {
+  const [visible, setVisible] = useState(false);
+  const [needsInstall, setNeedsInstall] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
+    if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) return;
+    if (localStorage.getItem("daftary_push_dismissed")) return;
+
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    const isIOS = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+
+    // إشعارات Web Push على آيفون ما تشتغل إلا لو الموقع مضاف للشاشة الرئيسية
+    // (وضع standalone) — بدون هذا الشرط، زر "تفعيل" يفشل بصمت بمتصفح سفاري العادي.
+    if (isIOS && !isStandalone) {
+      setNeedsInstall(true);
+      setVisible(true);
+      return;
+    }
+
+    if (!("PushManager" in window)) return;
+    if (Notification.permission === "denied") return;
+
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => setVisible(!sub))
+      .catch(() => {});
+  }, []);
+
+  async function enable() {
+    setLoading(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setVisible(false);
+        localStorage.setItem("daftary_push_dismissed", "1");
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+      });
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motherId, subscription: sub.toJSON() }),
+      });
+      setVisible(false);
+    } catch (e) {
+      console.error("push subscribe failed:", e);
+      alert("تعذّر تفعيل إشعارات المتصفح، حاولي مرة ثانية.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function dismiss() {
+    setVisible(false);
+    localStorage.setItem("daftary_push_dismissed", "1");
+  }
+
+  if (!visible) return null;
+
+  return (
+    <div style={{ flexShrink: 0, padding: "10px 16px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, background: "#EBF7F1" }}>
+        <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#2F6E56" }}>
+          {needsInstall ? "🔔 ضيفي دفتري للشاشة الرئيسية عشان توصلك الإشعارات (اضغطي زر المشاركة ⬆️ ثم \"إضافة إلى الشاشة الرئيسية\")" : "🔔 فعّلي إشعارات المتصفح لتذكيرات الواجبات والاختبارات"}
+        </span>
+        {!needsInstall && (
+          <button onClick={enable} disabled={loading} style={{ background: "#68C29E", color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0, opacity: loading ? 0.6 : 1 }}>
+            {loading ? "..." : "تفعيل"}
+          </button>
+        )}
+        <button onClick={dismiss} style={{ background: "none", color: "#2F6E56", opacity: 0.6, fontSize: 16, width: 24, height: 24, flexShrink: 0 }}>×</button>
+      </div>
     </div>
   );
 }

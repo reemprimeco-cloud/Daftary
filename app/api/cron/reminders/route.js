@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { kuwaitTodayStr, kuwaitNow } from "@/lib/kuwaitDate";
+import webpush from "web-push";
 
 async function sendTelegram(chatId, text) {
   await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -10,10 +11,42 @@ async function sendTelegram(chatId, text) {
   });
 }
 
+function vapidConfigured() {
+  return !!(process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_SUBJECT);
+}
+
+async function sendPush(sb, sub, payload) {
+  try {
+    await webpush.sendNotification(
+      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+      JSON.stringify(payload)
+    );
+    return true;
+  } catch (err) {
+    if (err.statusCode === 404 || err.statusCode === 410) {
+      // الاشتراك ما عاد صالح (المستخدم مسح البيانات / ألغى الإذن) — نمسحه.
+      await sb.from("push_subscriptions").delete().eq("id", sub.id);
+    } else {
+      console.error("push send error:", err.message);
+    }
+    return false;
+  }
+}
+
+const KIND_TITLES = {
+  exam_day_before: "تذكير اختبار غداً",
+  exam_today: "اختبار اليوم",
+  new_task: "واجب جديد",
+};
+
 export async function GET(req) {
   const auth = req.headers.get("authorization");
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  if (vapidConfigured()) {
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT, process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
   }
 
   const sb = supabaseAdmin();
@@ -56,9 +89,25 @@ export async function GET(req) {
       if (exists) continue;
 
       const { data: mother } = await sb.from("mothers").select("*").eq("id", t.children.mother_id).single();
-      if (!mother?.telegram_chat_id) continue;
+      if (!mother) continue;
 
-      await sendTelegram(mother.telegram_chat_id, textFn(t));
+      const text = textFn(t);
+      let delivered = false;
+
+      if (mother.telegram_chat_id) {
+        await sendTelegram(mother.telegram_chat_id, text);
+        delivered = true;
+      }
+
+      if (vapidConfigured()) {
+        const { data: subs } = await sb.from("push_subscriptions").select("*").eq("mother_id", mother.id);
+        for (const sub of subs || []) {
+          const ok = await sendPush(sb, sub, { title: KIND_TITLES[kind] || "دفتري", body: text, url: "/" });
+          if (ok) delivered = true;
+        }
+      }
+
+      if (!delivered) continue;
       await sb.from("reminder_log").insert({ mother_id: mother.id, task_id: t.id, kind });
       sent++;
     }
