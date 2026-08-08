@@ -15,6 +15,12 @@ function vapidConfigured() {
   return !!(process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_SUBJECT);
 }
 
+// ننظّف مفاتيح VAPID من أي محارف مو من أبجدية base64url — مسافات أو محارف
+// اتجاه غير مرئية ممكن تنلصق بالقيمة عند نسخها ولصقها بإعدادات Vercel.
+function cleanVapidKey(key) {
+  return (key || "").trim().replace(/[^A-Za-z0-9\-_]/g, "");
+}
+
 async function sendPush(sb, sub, payload) {
   try {
     await webpush.sendNotification(
@@ -46,7 +52,11 @@ export async function GET(req) {
   }
 
   if (vapidConfigured()) {
-    webpush.setVapidDetails(process.env.VAPID_SUBJECT, process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT.trim(),
+      cleanVapidKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+      cleanVapidKey(process.env.VAPID_PRIVATE_KEY)
+    );
   }
 
   const sb = supabaseAdmin();
