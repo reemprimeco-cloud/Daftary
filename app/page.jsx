@@ -421,6 +421,11 @@ export default function Home() {
   );
 }
 
+// مفتاح VAPID العام مو سر (لازم يكون معروف للمتصفح) — نثبّته هنا مباشرة بدل الاعتماد
+// على متغير بيئة بـ Vercel، لأن نسخه ولصقه هناك سبب تلف متكرر (محارف غير مرئية
+// انلصقت بالقيمة). المفتاح الخاص يبقى سر بمتغيرات البيئة بالسيرفر فقط.
+const VAPID_PUBLIC_KEY = "BJy0YY9i1499cdXWvcK84tItXQ4bZ3vzoi6YvwldfQwHBDta1LWut5vqebBKuIFlNCie4FLYZcuTukqI9p1APNY";
+
 function urlBase64ToUint8Array(base64String) {
   // ننظّف أي محارف مو من أبجدية base64url — مسافات، أسطر جديدة، أو محارف
   // اتجاه غير مرئية (زي ‏RLM) ممكن تنلصق بالقيمة عند نسخها من مكان لثاني.
@@ -440,7 +445,6 @@ function PushPrompt({ motherId }) {
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
-    if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) return;
     if (localStorage.getItem("daftary_push_dismissed")) return;
 
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -476,7 +480,7 @@ function PushPrompt({ motherId }) {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
