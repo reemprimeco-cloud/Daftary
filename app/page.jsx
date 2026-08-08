@@ -313,13 +313,15 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="app-scroll" style={{ flex: 1 }}>
-        {!telegramLinked && (
-          <a href={telegramLink || "#"} target="_blank" rel="noreferrer" style={{ display: "block", margin: 12, padding: 14, borderRadius: 14, background: "#F1EFFA", color: "#5C4B8C", fontSize: 13, fontWeight: 700, textAlign: "center", textDecoration: "none" }}>
+      {!telegramLinked && (
+        <div style={{ flexShrink: 0, padding: "10px 16px 0" }}>
+          <a href={telegramLink || "#"} target="_blank" rel="noreferrer" style={{ display: "block", padding: 14, borderRadius: 14, background: "#F1EFFA", color: "#5C4B8C", fontSize: 13, fontWeight: 700, textAlign: "center", textDecoration: "none" }}>
             فعّلي تذكيرات تيليجرام الآن ⬅️
           </a>
-        )}
+        </div>
+      )}
 
+      <div className="app-scroll" style={{ flex: 1 }}>
         {view === "dashboard" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
             {children.length === 0 ? (
