@@ -1235,25 +1235,44 @@ function TeacherView({ children, motherId }) {
   }
 
   function toggleRecording() {
-    if (!speechSupported) return;
+    if (!speechSupported) {
+      setErrorMsg("متصفحك ما يدعم تحويل الصوت لنص (مدعوم بمتصفح Chrome غالباً، وغير مدعوم ببعض إصدارات Safari بآيفون).");
+      return;
+    }
     if (recording) {
       recognitionRef.current?.stop();
       return;
     }
+    setErrorMsg("");
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    recognition.lang = "ar-KW";
+    recognition.lang = "ar-SA";
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onresult = (e) => {
       const transcript = Array.from(e.results).map((r) => r[0].transcript).join(" ");
       setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
     };
-    recognition.onerror = () => setRecording(false);
+    recognition.onerror = (e) => {
+      setRecording(false);
+      const messages = {
+        "not-allowed": "ما قدرنا نوصل للمايك — تأكدي من السماح لإذن المايك للمتصفح من إعدادات الجهاز.",
+        "service-not-allowed": "خدمة التعرف الصوتي غير متاحة على هذا المتصفح.",
+        "language-not-supported": "اللغة العربية غير مدعومة بالتعرف الصوتي على هذا الجهاز.",
+        "no-speech": "ما سمعنا أي صوت، حاولي مرة ثانية.",
+        "network": "تعذّر الاتصال بخدمة التعرف الصوتي — تأكدي من الإنترنت.",
+      };
+      setErrorMsg(messages[e.error] || `تعذّر تسجيل الصوت (${e.error}).`);
+    };
     recognition.onend = () => setRecording(false);
     recognitionRef.current = recognition;
-    recognition.start();
-    setRecording(true);
+    try {
+      recognition.start();
+      setRecording(true);
+    } catch (err) {
+      setErrorMsg("تعذّر تشغيل المايك — جرّبي مرة ثانية.");
+      setRecording(false);
+    }
   }
 
   async function send() {
