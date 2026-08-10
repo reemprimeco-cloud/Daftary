@@ -1256,23 +1256,25 @@ function TeacherView({ children, motherId }) {
   }
 
   return (
-    <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 14, minHeight: "100%" }}>
-      {children.length > 1 && (
-        <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
-          {children.map((c) => (
-            <button key={c.id} onClick={() => setChildId(c.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px 6px 6px", borderRadius: 20, background: childId === c.id ? "#F1EFFA" : "#F9F9F7", border: `1px solid ${childId === c.id ? "#B7A6E8" : "#EEEDE8"}`, flexShrink: 0 }}>
-              <Avatar child={c} size={26} />
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: childId === c.id ? "#5C4B8C" : "#6B7280" }}>{c.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, padding: "16px 16px 0", display: "flex", flexDirection: "column", gap: 10 }}>
+        {children.length > 1 && (
+          <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+            {children.map((c) => (
+              <button key={c.id} onClick={() => setChildId(c.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px 6px 6px", borderRadius: 20, background: childId === c.id ? "#F1EFFA" : "#F9F9F7", border: `1px solid ${childId === c.id ? "#B7A6E8" : "#EEEDE8"}`, flexShrink: 0 }}>
+                <Avatar child={c} size={26} />
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: childId === c.id ? "#5C4B8C" : "#6B7280" }}>{c.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
-      <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 700, lineHeight: 1.6 }}>
-        اسألي عن أي واجب أو درس بمنهج {child ? `الصف ${child.grade}` : "ابنك/ابنتك"} — تقدرين ترفقين صورة الواجب مباشرة، والمعلم الذكي يستعين بمواد وزارة التربية الرسمية لما تكون متوفرة.
+        <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 700, lineHeight: 1.6 }}>
+          اسألي عن أي واجب أو درس بمنهج {child ? `الصف ${child.grade}` : "ابنك/ابنتك"} — تقدرين ترفقين صورة الواجب مباشرة، والمعلم الذكي يستعين بمواد وزارة التربية الرسمية لما تكون متوفرة.
+        </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {historyLoading ? (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>...جاري التحميل</p>
         ) : messages.length === 0 ? (
@@ -1307,7 +1309,7 @@ function TeacherView({ children, motherId }) {
         <div ref={bottomRef} />
       </div>
 
-      <div style={{ position: "sticky", bottom: 8, display: "flex", flexDirection: "column", gap: 8, background: "white", paddingTop: 6 }}>
+      <div style={{ flexShrink: 0, borderTop: "1px solid #F0EEE8", background: "white", padding: "10px 16px calc(env(safe-area-inset-bottom) + 10px)", display: "flex", flexDirection: "column", gap: 8 }}>
         {image && (
           <div style={{ position: "relative", width: 64, height: 64, borderRadius: 10, overflow: "hidden" }}>
             <img src={image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -1322,7 +1324,7 @@ function TeacherView({ children, motherId }) {
             onChange={(e) => setInput(e.target.value)}
             placeholder="اكتبي سؤالك..."
             rows={1}
-            style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "11px 12px", fontSize: 13.5, resize: "none", fontFamily: "inherit", minHeight: 44, maxHeight: 100 }}
+            style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "11px 12px", fontSize: 16, resize: "none", fontFamily: "inherit", minHeight: 44, maxHeight: 100 }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           />
           <button disabled={sending || (!input.trim() && !image)} onClick={send} style={{ background: "#B7A6E8", color: "white", borderRadius: 12, width: 44, height: 44, fontSize: 16, flexShrink: 0, opacity: sending || (!input.trim() && !image) ? 0.4 : 1 }}>➤</button>
