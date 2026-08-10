@@ -1207,9 +1207,12 @@ function TeacherView({ children, motherId }) {
   const [image, setImage] = useState(null);
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [recording, setRecording] = useState(false);
   const fileRef = useRef();
   const bottomRef = useRef();
+  const recognitionRef = useRef();
   const child = children.find((c) => c.id === childId);
+  const speechSupported = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
   useEffect(() => {
     if (!childId) return;
@@ -1229,6 +1232,28 @@ function TeacherView({ children, motherId }) {
     if (!file) return;
     const url = await resizeToDataUrl(file, 1400, false);
     setImage(url);
+  }
+
+  function toggleRecording() {
+    if (!speechSupported) return;
+    if (recording) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = "ar-KW";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results).map((r) => r[0].transcript).join(" ");
+      setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+    };
+    recognition.onerror = () => setRecording(false);
+    recognition.onend = () => setRecording(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setRecording(true);
   }
 
   async function send() {
@@ -1319,6 +1344,11 @@ function TeacherView({ children, motherId }) {
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <button onClick={() => fileRef.current?.click()} style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0 }}>📷</button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePickImage} />
+          {speechSupported && (
+            <button onClick={toggleRecording} style={{ background: recording ? "#FDEFF3" : "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0, animation: recording ? "pulse 1.2s infinite" : "none" }}>
+              {recording ? "⏹️" : "🎤"}
+            </button>
+          )}
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
