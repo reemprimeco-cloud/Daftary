@@ -24,6 +24,7 @@ const TABS = [
   { key: "dashboard", label: "الرئيسية", icon: "🏠" },
   { key: "requirements", label: "المتطلبات", icon: "🎒" },
   { key: "schedule", label: "جدول الحصص", icon: "🗓️" },
+  { key: "teacher", label: "المعلم الذكي", icon: "🎓" },
 ];
 const SUBJECT_ICON_MAP = [
   { file: "islamic", keywords: ["اسلام", "قرآن", "تجويد", "فقه", "حديث"] },
@@ -349,7 +350,7 @@ export default function Home() {
               ))
             )}
           </div>
-        ) : (
+        ) : view === "schedule" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
             {children.length === 0 ? (
               <EmptyState onAdd={() => setShowAddChild(true)} />
@@ -365,6 +366,12 @@ export default function Home() {
               </>
             )}
           </div>
+        ) : (
+          children.length === 0 ? (
+            <div style={{ padding: 16 }}><EmptyState onAdd={() => setShowAddChild(true)} /></div>
+          ) : (
+            <TeacherView children={children} motherId={mother.id} />
+          )
         )}
         <div style={{ height: 8 }} />
       </div>
@@ -1187,6 +1194,139 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             {errorMsg && <div style={{ marginTop: 6, fontSize: 11, opacity: 0.8, wordBreak: "break-word" }}>{errorMsg}</div>}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function TeacherView({ children, motherId }) {
+  const [childId, setChildId] = useState(children[0]?.id || "");
+  const [messages, setMessages] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [input, setInput] = useState("");
+  const [image, setImage] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const fileRef = useRef();
+  const bottomRef = useRef();
+  const child = children.find((c) => c.id === childId);
+
+  useEffect(() => {
+    if (!childId) return;
+    setHistoryLoading(true);
+    fetch(`/api/ai-teacher/history?childId=${childId}&motherId=${motherId}`)
+      .then((r) => r.json())
+      .then((data) => setMessages(data.messages || []))
+      .finally(() => setHistoryLoading(false));
+  }, [childId, motherId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending]);
+
+  async function handlePickImage(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = await resizeToDataUrl(file, 1400, false);
+    setImage(url);
+  }
+
+  async function send() {
+    if (!input.trim() && !image) return;
+    const questionText = input.trim();
+    const attachedImage = image;
+    setSending(true);
+    setErrorMsg("");
+    setMessages((prev) => [...prev, { role: "user", content: questionText || "📷 صورة مرفقة", had_image: !!attachedImage, id: `local-${Date.now()}` }]);
+    setInput("");
+    setImage(null);
+    try {
+      const res = await fetch("/api/ai-teacher/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motherId, childId, question: questionText, image: attachedImage || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "");
+      setMessages((prev) => [...prev, { role: "assistant", content: data.answer, had_image: false, id: `local-a-${Date.now()}` }]);
+    } catch (err) {
+      setErrorMsg(err.message || "تعذّر إرسال السؤال، حاولي مرة ثانية.");
+    }
+    setSending(false);
+  }
+
+  return (
+    <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 14, minHeight: "100%" }}>
+      {children.length > 1 && (
+        <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+          {children.map((c) => (
+            <button key={c.id} onClick={() => setChildId(c.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px 6px 6px", borderRadius: 20, background: childId === c.id ? "#F1EFFA" : "#F9F9F7", border: `1px solid ${childId === c.id ? "#B7A6E8" : "#EEEDE8"}`, flexShrink: 0 }}>
+              <Avatar child={c} size={26} />
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: childId === c.id ? "#5C4B8C" : "#6B7280" }}>{c.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 700, lineHeight: 1.6 }}>
+        اسألي عن أي واجب أو درس بمنهج {child ? `الصف ${child.grade}` : "ابنك/ابنتك"} — تقدرين ترفقين صورة الواجب مباشرة، والمعلم الذكي يستعين بمواد وزارة التربية الرسمية لما تكون متوفرة.
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {historyLoading ? (
+          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>...جاري التحميل</p>
+        ) : messages.length === 0 ? (
+          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>ابدئي بسؤال 👋</p>
+        ) : (
+          messages.map((m, i) => (
+            <div key={m.id || i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-start" : "flex-end" }}>
+              <div style={{
+                maxWidth: "82%",
+                padding: "10px 13px",
+                borderRadius: 14,
+                fontSize: 13.5,
+                lineHeight: 1.7,
+                whiteSpace: "pre-wrap",
+                background: m.role === "user" ? "#B7A6E8" : "#F3F2FA",
+                color: m.role === "user" ? "white" : "#374151",
+              }}>
+                {m.content}
+                {m.had_image && <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>📷 مع صورة</div>}
+              </div>
+            </div>
+          ))
+        )}
+        {sending && (
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ padding: "10px 13px", borderRadius: 14, fontSize: 13, background: "#F3F2FA", color: "#9CA3AF" }}>...المعلم الذكي يفكر</div>
+          </div>
+        )}
+        {errorMsg && (
+          <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 10, fontSize: 12.5 }}>{errorMsg}</div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <div style={{ position: "sticky", bottom: 8, display: "flex", flexDirection: "column", gap: 8, background: "white", paddingTop: 6 }}>
+        {image && (
+          <div style={{ position: "relative", width: 64, height: 64, borderRadius: 10, overflow: "hidden" }}>
+            <img src={image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <button onClick={() => setImage(null)} style={{ position: "absolute", top: 2, left: 2, background: "rgba(0,0,0,.6)", color: "white", borderRadius: "50%", width: 18, height: 18, fontSize: 12 }}>×</button>
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <button onClick={() => fileRef.current?.click()} style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0 }}>📷</button>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePickImage} />
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="اكتبي سؤالك..."
+            rows={1}
+            style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "11px 12px", fontSize: 13.5, resize: "none", fontFamily: "inherit", minHeight: 44, maxHeight: 100 }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          />
+          <button disabled={sending || (!input.trim() && !image)} onClick={send} style={{ background: "#B7A6E8", color: "white", borderRadius: 12, width: 44, height: 44, fontSize: 16, flexShrink: 0, opacity: sending || (!input.trim() && !image) ? 0.4 : 1 }}>➤</button>
+        </div>
       </div>
     </div>
   );
