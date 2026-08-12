@@ -139,6 +139,8 @@ export default function Home() {
   const [openTask, setOpenTask] = useState(null);
   const [telegramLink, setTelegramLink] = useState(null);
   const [telegramLinked, setTelegramLinked] = useState(false);
+  const [payment, setPayment] = useState(null);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     fetch("/schools.json").then((r) => r.json()).then(setSchools);
@@ -167,6 +169,34 @@ export default function Home() {
     const tData = await tRes.json();
     setTelegramLink(tData.link);
     setTelegramLinked(tData.linked);
+    await fetchPayment(motherId);
+  }
+
+  async function fetchPayment(motherId) {
+    const res = await fetch(`/api/payments/status?motherId=${motherId}`);
+    const data = await res.json();
+    if (!data.error) setPayment(data);
+  }
+
+  async function handlePay() {
+    setPaying(true);
+    try {
+      const res = await fetch("/api/payments/create-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motherId: mother.id }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "تعذّر بدء عملية الدفع، حاولي مرة ثانية.");
+        setPaying(false);
+      }
+    } catch (e) {
+      alert("تعذّر بدء عملية الدفع، حاولي مرة ثانية.");
+      setPaying(false);
+    }
   }
 
   function handleLogout() {
@@ -200,6 +230,7 @@ export default function Home() {
     if (data.child) {
       setChildren((prev) => [...prev, data.child]);
       setShowAddChild(false);
+      fetchPayment(mother.id);
     } else {
       alert(data.error || "تعذّرت إضافة الطالب/ة، حاولي مرة ثانية.");
     }
@@ -227,6 +258,7 @@ export default function Home() {
     setRequirements((prev) => prev.filter((r) => r.child_id !== id));
     setClassSchedule((prev) => prev.filter((s) => s.child_id !== id));
     setEditingChild(null);
+    fetchPayment(mother.id);
   }
 
   async function handleMarkDone(taskId) {
@@ -271,7 +303,7 @@ export default function Home() {
     setRequirements((prev) => prev.filter((r) => r.id !== id));
   }
 
-  if (loading || (mother && !schools)) {
+  if (loading || (mother && !schools) || (mother && payment === null)) {
     return (
       <>
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#9CA3AF" }}>...جاري التحميل</div>
@@ -284,6 +316,15 @@ export default function Home() {
     return (
       <>
         <Onboarding onDone={handleRegister} />
+        <InstallPrompt />
+      </>
+    );
+  }
+
+  if (payment && !payment.active) {
+    return (
+      <>
+        <PaywallScreen mother={mother} children={children} payment={payment} paying={paying} onPay={handlePay} onLogout={handleLogout} />
         <InstallPrompt />
       </>
     );
@@ -627,6 +668,38 @@ function Onboarding({ onDone }) {
           تواصل معنا
         </a>
         <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
+      </div>
+    </div>
+  );
+}
+
+function PaywallScreen({ mother, children, payment, paying, onPay, onLogout }) {
+  return (
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <img src="/logo.png" alt="دفتري" style={{ width: 80, height: 80, borderRadius: 20, margin: "0 auto 12px", display: "block", boxShadow: "0 4px 14px rgba(183,166,232,.35)" }} />
+          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 20, fontWeight: 800 }}>اشتراك العام الدراسي {payment.academicYear}</h1>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0" }}>{payment.pricePerStudent} د.ك لكل طالب/ة، يغطي العام الدراسي كامل حتى ٣٠ يوليو</p>
+        </div>
+        <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          {children.map((c) => (
+            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #F3F4F6", fontSize: 14 }}>
+              <span>{c.name}</span>
+              <span style={{ color: "#9CA3AF" }}>{payment.pricePerStudent}.000 د.ك</span>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0 4px", fontWeight: 800, fontSize: 16 }}>
+            <span>الإجمالي المستحق</span>
+            <span style={{ color: "#5C4B8C" }}>{payment.amountDueKwd.toFixed(3)} د.ك</span>
+          </div>
+          <button onClick={onPay} disabled={paying} style={{ width: "100%", marginTop: 12, padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: paying ? 0.6 : 1 }}>
+            {paying ? "جاري التحويل..." : "ادفعي الآن"}
+          </button>
+        </div>
+      </div>
+      <div style={{ textAlign: "center", flexShrink: 0 }}>
+        <button onClick={onLogout} style={{ background: "none", color: "#9CA3AF", fontSize: 13, fontWeight: 700, padding: "10px" }}>تسجيل خروج</button>
       </div>
     </div>
   );
