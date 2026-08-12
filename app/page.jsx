@@ -24,6 +24,7 @@ const TABS = [
   { key: "dashboard", label: "الرئيسية", icon: "🏠" },
   { key: "requirements", label: "المتطلبات", icon: "🎒" },
   { key: "schedule", label: "جدول الحصص", icon: "🗓️" },
+  { key: "progress", label: "الحفظ والدرجات", icon: "📖" },
   { key: "teacher", label: "المعلم الذكي", icon: "🎓" },
 ];
 const SUBJECT_ICON_MAP = [
@@ -364,6 +365,14 @@ export default function Home() {
                   <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} />
                 ))}
               </>
+            )}
+          </div>
+        ) : view === "progress" ? (
+          <div style={{ padding: 16 }}>
+            {children.length === 0 ? (
+              <EmptyState onAdd={() => setShowAddChild(true)} />
+            ) : (
+              <ProgressView children={children} motherId={mother.id} onDataCleared={() => loadAll(mother.id)} />
             )}
           </div>
         ) : (
@@ -1331,5 +1340,201 @@ function TeacherView({ children, motherId }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function ProgressView({ children, motherId, onDataCleared }) {
+  const [section, setSection] = useState("memorization");
+  const [childId, setChildId] = useState(children[0]?.id || "");
+  const child = children.find((c) => c.id === childId) || children[0];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {children.length > 1 && (
+        <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+          {children.map((c) => (
+            <button key={c.id} onClick={() => setChildId(c.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px 6px 6px", borderRadius: 20, background: (childId || children[0].id) === c.id ? "#F1EFFA" : "#F9F9F7", border: `1px solid ${(childId || children[0].id) === c.id ? "#B7A6E8" : "#EEEDE8"}`, flexShrink: 0 }}>
+              <Avatar child={c} size={26} />
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: (childId || children[0].id) === c.id ? "#5C4B8C" : "#6B7280" }}>{c.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setSection("memorization")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "memorization" ? "#B7A6E8" : "#F3F4F6", color: section === "memorization" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>🕌 الحفظ</button>
+        <button onClick={() => setSection("grades")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "grades" ? "#B7A6E8" : "#F3F4F6", color: section === "grades" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>📊 الدرجات</button>
+      </div>
+
+      {child && (section === "memorization" ? (
+        <MemorizationSection child={child} motherId={motherId} />
+      ) : (
+        <GradesSection child={child} motherId={motherId} />
+      ))}
+
+      <ResetYearButton motherId={motherId} onDone={onDataCleared} />
+    </div>
+  );
+}
+
+function MemorizationSection({ child, motherId }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  function load() {
+    setLoading(true);
+    fetch(`/api/memorization?childId=${child.id}&motherId=${motherId}`)
+      .then((r) => r.json())
+      .then((data) => setItems(data.items || []))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(load, [child.id, motherId]);
+
+  async function handleToggle(id) {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)));
+    const res = await fetch(`/api/memorization/${id}/toggle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
+    if (!res.ok) load();
+  }
+
+  if (loading) return <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>...جاري التحميل</p>;
+  if (items.length === 0) return <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>ما فيه مطلوبات حفظ حالياً لـ{child.name} — تُستخرج تلقائياً من صور الخطة الأسبوعية.</p>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {items.map((it) => (
+        <label key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: it.done ? "#F7F7F5" : "white", border: "1px solid #EEEDE8", cursor: "pointer" }}>
+          <input type="checkbox" checked={it.done} onChange={() => handleToggle(it.id)} style={{ marginTop: 3, width: 18, height: 18, accentColor: "#B7A6E8", flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: it.done ? "#9CA3AF" : "#374151", textDecoration: it.done ? "line-through" : "none" }}>
+              {it.kind === "حديث" ? "📗" : "📖"} {it.reference}
+            </p>
+            {it.details && <p style={{ margin: "3px 0 0", fontSize: 12, color: "#9CA3AF" }}>{it.details}</p>}
+          </div>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function GradesSection({ child, motherId }) {
+  const [grades, setGrades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [subject, setSubject] = useState("");
+  const [score, setScore] = useState("");
+  const [maxScore, setMaxScore] = useState("");
+  const [examName, setExamName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function load() {
+    setLoading(true);
+    fetch(`/api/grades?childId=${child.id}&motherId=${motherId}`)
+      .then((r) => r.json())
+      .then((data) => setGrades(data.grades || []))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(load, [child.id, motherId]);
+
+  async function handleAdd() {
+    if (!subject.trim() || !score || !maxScore) return;
+    setSaving(true);
+    const res = await fetch("/api/grades", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ motherId, childId: child.id, subject, score, maxScore, examName }),
+    });
+    if (res.ok) {
+      setSubject(""); setScore(""); setMaxScore(""); setExamName("");
+      setShowAdd(false);
+      load();
+    }
+    setSaving(false);
+  }
+
+  async function handleDelete(id) {
+    if (!confirm("حذف هذه الدرجة؟")) return;
+    setGrades((prev) => prev.filter((g) => g.id !== id));
+    await fetch(`/api/grades/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
+  }
+
+  const bySubject = {};
+  for (const g of grades) {
+    if (!bySubject[g.subject]) bySubject[g.subject] = [];
+    bySubject[g.subject].push(g);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <button onClick={() => setShowAdd((s) => !s)} style={{ padding: 10, borderRadius: 12, background: "#F1EFFA", color: "#5C4B8C", fontWeight: 700, fontSize: 13 }}>
+        {showAdd ? "إلغاء" : "+ إضافة درجة"}
+      </button>
+
+      {showAdd && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 12, background: "#FAFAF8", border: "1px solid #EEEDE8" }}>
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="المادة (مثال: الرياضيات)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 14 }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={score} onChange={(e) => setScore(e.target.value)} placeholder="الدرجة" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 14 }} />
+            <span style={{ alignSelf: "center", color: "#9CA3AF" }}>من</span>
+            <input value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="الدرجة الكلية" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 14 }} />
+          </div>
+          <input value={examName} onChange={(e) => setExamName(e.target.value)} placeholder="اسم الاختبار (اختياري)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 14 }} />
+          <button disabled={saving || !subject.trim() || !score || !maxScore} onClick={handleAdd} style={{ padding: 10, borderRadius: 10, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13, opacity: saving || !subject.trim() || !score || !maxScore ? 0.5 : 1 }}>
+            {saving ? "جاري الحفظ..." : "حفظ الدرجة"}
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>...جاري التحميل</p>
+      ) : Object.keys(bySubject).length === 0 ? (
+        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>ما فيه درجات مسجّلة بعد لـ{child.name}</p>
+      ) : (
+        Object.entries(bySubject).map(([subj, entries]) => {
+          const totalScore = entries.reduce((s, e) => s + Number(e.score), 0);
+          const totalMax = entries.reduce((s, e) => s + Number(e.max_score), 0);
+          const pct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
+          return (
+            <div key={subj} style={{ border: "1px solid #EEEDE8", borderRadius: 12, padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontWeight: 800, fontSize: 14 }}>{subj}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: "#5C4B8C" }}>{pct}% ({totalScore}/{totalMax})</span>
+              </div>
+              {entries.map((e) => (
+                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 12.5, color: "#6B7280" }}>
+                  <span>{e.exam_name || "اختبار"} — {e.score}/{e.max_score}</span>
+                  <button onClick={() => handleDelete(e.id)} style={{ background: "none", color: "#D1785A", fontSize: 12 }}>حذف</button>
+                </div>
+              ))}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function ResetYearButton({ motherId, onDone }) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleReset() {
+    if (!confirm("مسح كل بيانات هذا العام الدراسي (الواجبات، المتطلبات، جدول الحصص، الحفظ، الدرجات، ومحادثات المعلم الذكي) لكل الأطفال؟ هذا الإجراء نهائي ولا يمكن التراجع عنه. ملفات الأطفال نفسها تبقى، بس لازم تحدّثين الصف يدوياً بعدها.")) return;
+    if (!confirm("تأكيد أخير: راح تنمسح البيانات نهائياً. متأكدة؟")) return;
+    setBusy(true);
+    const res = await fetch("/api/reset-year", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
+    setBusy(false);
+    if (res.ok) {
+      alert("تم مسح بيانات العام الدراسي ✅");
+      onDone();
+    } else {
+      alert("تعذّر المسح، حاولي مرة ثانية.");
+    }
+  }
+
+  return (
+    <button onClick={handleReset} disabled={busy} style={{ marginTop: 8, padding: 10, borderRadius: 12, background: "none", color: "#B91C1C", fontWeight: 700, fontSize: 12.5, border: "1px solid #FECACA", opacity: busy ? 0.6 : 1 }}>
+      🗑️ مسح بيانات العام الدراسي (نهاية السنة)
+    </button>
   );
 }
