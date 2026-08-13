@@ -1,0 +1,12 @@
+{
+  "appId": "app.reemora.daftary",
+  "appName": "دفتري",
+  "webDir": "public",
+  "server": {
+    "url": "https://daftary.reemora.app",
+    "cleartext": false
+  },
+  "ios": {
+    "contentInset": "automatic"
+  }
+}

@@ -68,6 +68,13 @@ function fmtDate(dateStr) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" });
 }
 
+// نميّز نسخة التطبيق (Capacitor) عن الويب عشان نخفي دعوة "أضيفي للشاشة الرئيسية"
+// ونعرض رسالة تسجيل مختلفة تناسب كل واحدة.
+function isNativeApp() {
+  if (typeof window === "undefined") return false;
+  return !!window.Capacitor?.isNativePlatform?.();
+}
+
 async function resizeToDataUrl(file, maxSize = 900, square = false) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -547,7 +554,7 @@ function InstallPrompt() {
 
   useEffect(() => {
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-    if (isStandalone || localStorage.getItem("daftary_install_dismissed")) return;
+    if (isStandalone || isNativeApp() || localStorage.getItem("daftary_install_dismissed")) return;
 
     const isIOS = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
     if (isIOS) {
@@ -621,6 +628,7 @@ function Onboarding({ onDone }) {
             متابعة
           </button>
         </div>
+        <SubscribeNotice />
       </div>
       <div style={{ textAlign: "center", flexShrink: 0, width: "100%", maxWidth: 380, margin: "0 auto" }}>
         <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
@@ -628,6 +636,29 @@ function Onboarding({ onDone }) {
         </a>
         <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
       </div>
+    </div>
+  );
+}
+
+function SubscribeNotice() {
+  const [native, setNative] = useState(false);
+  useEffect(() => setNative(isNativeApp()), []);
+
+  return (
+    <div style={{ marginTop: 14, background: "white", borderRadius: 16, padding: "14px 16px", boxShadow: "0 1px 3px rgba(0,0,0,.06)", textAlign: "center" }}>
+      {native ? (
+        <>
+          <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "#5C4B8C" }}>لتفعيل حسابك</p>
+          <p style={{ margin: "6px 0 0", fontSize: 12.5, lineHeight: 1.8, color: "#6B7280" }}>
+            سجّلي بيانات الطالب/ة وأكملي الاشتراك عبر موقعنا، وبعدها سجّلي دخولك هنا بنفس رقم الجوال لتستفيدي من كل مزايا التطبيق.
+          </p>
+          <p style={{ margin: "10px 0 0", fontSize: 12.5, fontWeight: 700, color: "#B7A6E8", direction: "ltr" }}>daftary.reemora.app</p>
+        </>
+      ) : (
+        <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.8, color: "#6B7280" }}>
+          يمكنكم الاشتراك وتحميل التطبيق للحصول على تجربة أفضل 💜
+        </p>
+      )}
     </div>
   );
 }
