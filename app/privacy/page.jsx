@@ -33,7 +33,7 @@ export default function PrivacyPage() {
             <li style={li}><strong>البيانات الدراسية:</strong> الواجبات والاختبارات والمشاريع، المتطلبات المدرسية، جدول الحصص، مطلوبات الحفظ، ودرجات الاختبارات التي تدخلينها.</li>
             <li style={li}><strong>الصور:</strong> صور جداول الواجبات أو صفحات الواجب التي تصوّرينها أو ترفعينها للتحليل.</li>
             <li style={li}><strong>محادثات المعلم الذكي:</strong> أسئلتك والإجابات المقدَّمة لك.</li>
-            <li style={li}><strong>بيانات الإشعارات:</strong> معرّف الإشعارات الخاص بجهازك، ومعرّف تيليجرام إذا فعّلتِ التذكيرات عبره.</li>
+            <li style={li}><strong>بيانات الإشعارات:</strong> معرّف الإشعارات الخاص بجهازك، لإرسال تذكيرات الواجبات والاختبارات تلقائياً.</li>
           </ul>
           <p style={{ ...p, background: "#F1EFFA", padding: "12px 14px", borderRadius: 12, color: "#5C4B8C", fontSize: 14 }}>
             <strong>لا نجمع:</strong> موقعك الجغرافي، جهات اتصالك، سجل تصفحك، أي معرّفات إعلانية، أو بيانات بطاقتك البنكية.
@@ -70,8 +70,7 @@ export default function PrivacyPage() {
             <li style={li}><strong>Supabase</strong> — تخزين قاعدة البيانات.</li>
             <li style={li}><strong>Vercel</strong> — استضافة التطبيق والموقع.</li>
             <li style={li}><strong>Anthropic</strong> — خدمة الذكاء الاصطناعي.</li>
-            <li style={li}><strong>Telegram</strong> — إرسال التذكيرات (اختياري، فقط إذا فعّلتِه).</li>
-            <li style={li}><strong>Apple</strong> — إيصال الإشعارات الفورية لجهازك.</li>
+            <li style={li}><strong>Apple</strong> — إيصال الإشعارات الفورية والمحلية لجهازك.</li>
           </ul>
           <p style={p}>
             قد تُخزَّن البيانات على خوادم خارج الكويت لدى هؤلاء المزوّدين. كما قد نفصح عن البيانات إذا فرض علينا القانون ذلك.

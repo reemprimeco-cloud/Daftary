@@ -3,14 +3,6 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { kuwaitTodayStr, kuwaitNow } from "@/lib/kuwaitDate";
 import webpush from "web-push";
 
-async function sendTelegram(chatId, text) {
-  await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  });
-}
-
 function vapidConfigured() {
   return !!(process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_SUBJECT);
 }
@@ -103,11 +95,6 @@ export async function GET(req) {
 
       const text = textFn(t);
       let delivered = false;
-
-      if (mother.telegram_chat_id) {
-        await sendTelegram(mother.telegram_chat_id, text);
-        delivered = true;
-      }
 
       if (vapidConfigured()) {
         const { data: subs } = await sb.from("push_subscriptions").select("*").eq("mother_id", mother.id);

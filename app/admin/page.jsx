@@ -12,11 +12,10 @@ function isAuthed() {
 
 async function getStats() {
   const sb = supabaseAdmin();
-  const [mothersRes, childrenRes, activeTasksRes, telegramRes, scheduleRes, recentMothersRes, allChildrenRes] = await Promise.all([
+  const [mothersRes, childrenRes, activeTasksRes, scheduleRes, recentMothersRes, allChildrenRes] = await Promise.all([
     sb.from("mothers").select("*", { count: "exact", head: true }),
     sb.from("children").select("*", { count: "exact", head: true }),
     sb.from("tasks").select("*", { count: "exact", head: true }).eq("status", "active"),
-    sb.from("mothers").select("*", { count: "exact", head: true }).not("telegram_chat_id", "is", null),
     sb.from("class_schedule").select("child_id"),
     sb.from("mothers").select("id,name,phone,created_at").order("created_at", { ascending: false }).limit(25),
     sb.from("children").select("mother_id"),
@@ -32,7 +31,6 @@ async function getStats() {
     mothersCount: mothersRes.count || 0,
     childrenCount: childrenRes.count || 0,
     activeTasks: activeTasksRes.count || 0,
-    telegramLinked: telegramRes.count || 0,
     withSchedule,
     recentMothers: (recentMothersRes.data || []).map((m) => ({ ...m, childrenCount: childrenByMother[m.id] || 0 })),
   };
@@ -73,7 +71,6 @@ function AdminDashboard({ stats }) {
           <StatCard label="أولياء الأمور المسجّلين" value={stats.mothersCount} color={{ bg: "#F1EFFA", text: "#5C4B8C" }} />
           <StatCard label="الطلاب المسجّلين" value={stats.childrenCount} color={{ bg: "#EBF7F1", text: "#2F6E56" }} />
           <StatCard label="واجبات نشطة" value={stats.activeTasks} color={{ bg: "#FDF3E7", text: "#8C6027" }} />
-          <StatCard label="مرتبطين بتيليجرام" value={stats.telegramLinked} color={{ bg: "#FDEFF3", text: "#8C4E62" }} />
           <StatCard label="عندهم جدول حصص" value={stats.withSchedule} color={{ bg: "#EBF4FA", text: "#31607C" }} />
         </div>
 

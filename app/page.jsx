@@ -151,8 +151,6 @@ export default function Home() {
   const [showUploadSchedule, setShowUploadSchedule] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [openTask, setOpenTask] = useState(null);
-  const [telegramLink, setTelegramLink] = useState(null);
-  const [telegramLinked, setTelegramLinked] = useState(false);
 
   useEffect(() => {
     fetch("/schools.json").then((r) => r.json()).then(setSchools);
@@ -178,12 +176,8 @@ export default function Home() {
     setUpcomingTasks(data.upcomingTasks || []);
     setRequirements(data.requirements || []);
     setClassSchedule(data.classSchedule || []);
-    // تذكيرات على الجهاز نفسه — تشتغل حتى بدون إنترنت داخل تطبيق آبل
+    // تذكيرات على الجهاز نفسه — تشتغل تلقائياً وحتى بدون إنترنت داخل تطبيق آبل
     syncTaskReminders([...(data.tasks || []), ...(data.upcomingTasks || [])]);
-    const tRes = await fetch(`/api/telegram/link?motherId=${motherId}`);
-    const tData = await tRes.json();
-    setTelegramLink(tData.link);
-    setTelegramLinked(tData.linked);
   }
 
   function handleLogout() {
@@ -196,8 +190,6 @@ export default function Home() {
     setUpcomingTasks([]);
     setRequirements([]);
     setClassSchedule([]);
-    setTelegramLink(null);
-    setTelegramLinked(false);
     setView("dashboard");
   }
 
@@ -210,8 +202,6 @@ export default function Home() {
     setUpcomingTasks([]);
     setRequirements([]);
     setClassSchedule([]);
-    setTelegramLink(null);
-    setTelegramLinked(false);
     setView("dashboard");
     alert("تم حذف حسابك وكل بياناتك نهائياً.");
   }
@@ -355,15 +345,6 @@ export default function Home() {
         </div>
       </div>
 
-      {!telegramLinked && (
-        <div style={{ flexShrink: 0, padding: "10px 16px 0" }}>
-          <a href={telegramLink || "#"} target="_blank" rel="noreferrer" style={{ display: "block", padding: 14, borderRadius: 14, background: "#F1EFFA", color: "#5C4B8C", fontSize: 13, fontWeight: 700, textAlign: "center", textDecoration: "none" }}>
-            فعّلي تذكيرات تيليجرام الآن ⬅️
-          </a>
-        </div>
-      )}
-      <PushPrompt motherId={mother.id} />
-
       <div className="app-scroll" style={{ flex: 1 }}>
         {view === "dashboard" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -482,109 +463,6 @@ export default function Home() {
         />
       )}
       <InstallPrompt />
-    </div>
-  );
-}
-
-// مفتاح VAPID العام مو سر (لازم يكون معروف للمتصفح) — نثبّته هنا مباشرة بدل الاعتماد
-// على متغير بيئة بـ Vercel، لأن نسخه ولصقه هناك سبب تلف متكرر (محارف غير مرئية
-// انلصقت بالقيمة). المفتاح الخاص يبقى سر بمتغيرات البيئة بالسيرفر فقط.
-const VAPID_PUBLIC_KEY = "BJy0YY9i1499cdXWvcK84tItXQ4bZ3vzoi6YvwldfQwHBDta1LWut5vqebBKuIFlNCie4FLYZcuTukqI9p1APNY";
-
-function urlBase64ToUint8Array(base64String) {
-  // ننظّف أي محارف مو من أبجدية base64url — مسافات، أسطر جديدة، أو محارف
-  // اتجاه غير مرئية (زي ‏RLM) ممكن تنلصق بالقيمة عند نسخها من مكان لثاني.
-  const cleaned = (base64String || "").trim().replace(/[^A-Za-z0-9\-_]/g, "");
-  const padding = "=".repeat((4 - (cleaned.length % 4)) % 4);
-  const base64 = (cleaned + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
-}
-
-function PushPrompt({ motherId }) {
-  const [visible, setVisible] = useState(false);
-  const [needsInstall, setNeedsInstall] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
-    if (localStorage.getItem("daftary_push_dismissed")) return;
-
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-    const isIOS = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
-
-    // إشعارات Web Push على آيفون ما تشتغل إلا لو الموقع مضاف للشاشة الرئيسية
-    // (وضع standalone) — بدون هذا الشرط، زر "تفعيل" يفشل بصمت بمتصفح سفاري العادي.
-    if (isIOS && !isStandalone) {
-      setNeedsInstall(true);
-      setVisible(true);
-      return;
-    }
-
-    if (!("PushManager" in window)) return;
-    if (Notification.permission === "denied") return;
-
-    navigator.serviceWorker.ready
-      .then((reg) => reg.pushManager.getSubscription())
-      .then((sub) => setVisible(!sub))
-      .catch(() => {});
-  }, []);
-
-  async function enable() {
-    setLoading(true);
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        alert("ما تم منح إذن الإشعارات (الحالة: " + permission + "). تأكدي من إعدادات الإشعارات بالجوال لتطبيق دفتري.");
-        setVisible(false);
-        localStorage.setItem("daftary_push_dismissed", "1");
-        return;
-      }
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
-      const res = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ motherId, subscription: sub.toJSON() }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error("فشل حفظ الاشتراك بالسيرفر: " + (data.error || res.status));
-      }
-      setVisible(false);
-    } catch (e) {
-      console.error("push subscribe failed:", e);
-      alert("تعذّر تفعيل الإشعارات: " + (e?.message || e?.name || "خطأ غير معروف"));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function dismiss() {
-    setVisible(false);
-    localStorage.setItem("daftary_push_dismissed", "1");
-  }
-
-  if (!visible) return null;
-
-  return (
-    <div style={{ flexShrink: 0, padding: "10px 16px 0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, background: "#EBF7F1" }}>
-        <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#2F6E56" }}>
-          {needsInstall ? "🔔 ضيفي دفتري للشاشة الرئيسية عشان توصلك الإشعارات (اضغطي زر المشاركة ⬆️ ثم \"إضافة إلى الشاشة الرئيسية\")" : "🔔 فعّلي إشعارات المتصفح لتذكيرات الواجبات والاختبارات"}
-        </span>
-        {!needsInstall && (
-          <button onClick={enable} disabled={loading} style={{ background: "#68C29E", color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0, opacity: loading ? 0.6 : 1 }}>
-            {loading ? "..." : "تفعيل"}
-          </button>
-        )}
-        <button onClick={dismiss} style={{ background: "none", color: "#2F6E56", opacity: 0.6, fontSize: 16, width: 24, height: 24, flexShrink: 0 }}>×</button>
-      </div>
     </div>
   );
 }
