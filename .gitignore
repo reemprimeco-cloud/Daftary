@@ -1,10 +1,11 @@
-node_modules/
-.next/
-.vercel/
-.env*.local
 
 # Capacitor / iOS build artifacts
+.DS_Store
+.env*.local
+.next/
+.vercel/
 ios/App/App/public/
 ios/App/Pods/
 ios/App/build/
 ios/DerivedData/
+node_modules/
