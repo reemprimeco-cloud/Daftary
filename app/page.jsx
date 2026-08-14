@@ -213,12 +213,18 @@ export default function Home() {
   }
 
   async function handleRegister(name, phone) {
-    const res = await fetch("/api/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, phone }) });
-    const data = await res.json();
-    if (data.mother) {
+    // نعرض سبب الفشل بدل ما نسكت — قبل كذا كان الزر ما يسوي شي بدون أي رسالة
+    try {
+      const res = await fetch("/api/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, phone }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.mother) throw new Error(data.error || "تعذّر تسجيل الدخول، حاولي مرة ثانية.");
       setMother(data.mother);
       localStorage.setItem("daftary_mother", JSON.stringify(data.mother));
       loadAll(data.mother.id);
+    } catch (err) {
+      alert(String(err.message).includes("Failed to fetch")
+        ? "تعذّر الاتصال بالإنترنت، تأكدي من الشبكة وحاولي مرة ثانية."
+        : err.message);
     }
   }
 
@@ -641,11 +647,11 @@ function Onboarding({ onDone }) {
         </div>
         <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>ولي الأمر</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: ريم الفرج" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14, marginBottom: 12 }} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: ريم الفرج" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 12 }} />
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>رقم الجوال</label>
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
             <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="XXXXXXXX" maxLength={8} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14 }} />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="XXXXXXXX" maxLength={8} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16 }} />
           </div>
           <button disabled={!canSubmit} onClick={() => onDone(name.trim(), "+965" + phone.trim())} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
             متابعة
@@ -998,7 +1004,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>تاريخ الاستحقاق</label>
           <div style={{ display: "flex", gap: 8 }}>
-            <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 14 }} />
+            <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 16 }} />
             <button onClick={saveDate} disabled={saving || !dateChanged} style={{ padding: "9px 16px", borderRadius: 12, background: color.solid, color: "white", fontWeight: 700, fontSize: 13, opacity: (saving || !dateChanged) ? 0.5 : 1, flexShrink: 0 }}>
               {saving ? "..." : "حفظ التاريخ"}
             </button>
@@ -1571,13 +1577,13 @@ function GradesSection({ child, motherId }) {
 
       {showAdd && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 12, background: "#FAFAF8", border: "1px solid #EEEDE8" }}>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="المادة (مثال: الرياضيات)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 14 }} />
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="المادة (مثال: الرياضيات)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
           <div style={{ display: "flex", gap: 8 }}>
-            <input value={score} onChange={(e) => setScore(e.target.value)} placeholder="الدرجة" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 14 }} />
+            <input value={score} onChange={(e) => setScore(e.target.value)} placeholder="الدرجة" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
             <span style={{ alignSelf: "center", color: "#9CA3AF" }}>من</span>
-            <input value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="الدرجة الكلية" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 14 }} />
+            <input value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="الدرجة الكلية" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
           </div>
-          <input value={examName} onChange={(e) => setExamName(e.target.value)} placeholder="اسم الاختبار (اختياري)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 14 }} />
+          <input value={examName} onChange={(e) => setExamName(e.target.value)} placeholder="اسم الاختبار (اختياري)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
           <button disabled={saving || !subject.trim() || !score || !maxScore} onClick={handleAdd} style={{ padding: 10, borderRadius: 10, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13, opacity: saving || !subject.trim() || !score || !maxScore ? 0.5 : 1 }}>
             {saving ? "جاري الحفظ..." : "حفظ الدرجة"}
           </button>
