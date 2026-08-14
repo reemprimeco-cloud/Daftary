@@ -97,6 +97,9 @@ const ICONS = {
     "M12 2.25c.83 0 1.5.67 1.5 1.5v.42A6.26 6.26 0 0 1 18.25 10.4v3.35l1.4 2.4a1.25 1.25 0 0 1-1.08 1.88H15.6a3.6 3.6 0 0 1-7.2 0H5.43a1.25 1.25 0 0 1-1.08-1.88l1.4-2.4V10.4A6.26 6.26 0 0 1 10.5 4.17v-.42c0-.83.67-1.5 1.5-1.5m0 3.35a4.76 4.76 0 0 0-4.75 4.8v3.55c0 .26-.07.52-.2.75l-1.1 1.88h12.1l-1.1-1.88a1.5 1.5 0 0 1-.2-.75V10.4A4.76 4.76 0 0 0 12 5.6m-2.1 12.03a2.1 2.1 0 0 0 4.2 0z",
   wave:
     "M11 2.6a1.6 1.6 0 0 1 3.2 0v5.2h.4V4.2a1.6 1.6 0 0 1 3.2 0v6.9h.4V7.6a1.6 1.6 0 0 1 3.2 0v6.15c0 4.3-3.1 7.65-7.4 7.65-2.35 0-4.3-.85-5.75-2.5L3.1 14.4a1.65 1.65 0 0 1 .2-2.4 1.7 1.7 0 0 1 2.3.25l2.2 2.4V4.2a1.6 1.6 0 0 1 3.2 0z",
+  // square.and.arrow.up — أيقونة المشاركة الرسمية بنظام آبل
+  share:
+    "M12 1.9c.2 0 .39.08.53.22l3.3 3.3a.75.75 0 0 1-1.06 1.06l-2.02-2.02V14a.75.75 0 0 1-1.5 0V4.46L9.23 6.48a.75.75 0 0 1-1.06-1.06l3.3-3.3A.75.75 0 0 1 12 1.9M6.5 9h2v1.5h-2a1 1 0 0 0-1 1v7.5a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-7.5a1 1 0 0 0-1-1h-2V9h2a2.5 2.5 0 0 1 2.5 2.5V19a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19v-7.5A2.5 2.5 0 0 1 6.5 9",
 };
 
 function Icon({ name, size = 17, style }) {
@@ -479,7 +482,7 @@ export default function Home() {
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
               children.map((c) => (
-                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onEdit={() => setEditingChild(c)} onDeleteReq={handleDeleteReq} />
+                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onDeleteReq={handleDeleteReq} />
               ))
             )}
           </div>
@@ -790,7 +793,7 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
   );
 }
 
-function RequirementsCard({ child, items, onToggle, onEdit, onDeleteReq }) {
+function RequirementsCard({ child, items, onToggle, onDeleteReq }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   return (
     <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
@@ -800,7 +803,6 @@ function RequirementsCard({ child, items, onToggle, onEdit, onDeleteReq }) {
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{items.length} طلب</p>
         </div>
-        <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>✏️ تعديل</button>
       </div>
       <div style={{ background: "white", padding: 12 }}>
         {items.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا توجد طلبات حالياً</p>}
@@ -1415,9 +1417,10 @@ function TeacherView({ children, motherId }) {
                 {native && m.role === "assistant" && (
                   <button
                     onClick={() => nativeShare({ title: "شرح من المعلم الذكي — دفتري", text: m.content })}
-                    style={{ display: "block", marginTop: 8, background: "none", color: "#8C7FBF", fontSize: 11.5, fontWeight: 700, padding: 0 }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 10, background: "rgba(123,104,196,.1)", color: "#7B68C4", fontSize: 12.5, fontWeight: 600, padding: "7px 12px", borderRadius: 999 }}
                   >
-                    مشاركة الشرح ↗
+                    <Icon name="share" size={14} />
+                    مشاركة
                   </button>
                 )}
               </div>
