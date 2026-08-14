@@ -1287,7 +1287,7 @@ function TeacherView({ children, motherId }) {
                 {native && m.role === "assistant" && (
                   <button
                     onClick={() => nativeShare({ title: "شرح من المعلم الذكي — دفتري", text: m.content })}
-                    style={{ marginTop: 8, background: "none", color: "#8C7FBF", fontSize: 11.5, fontWeight: 700, padding: 0 }}
+                    style={{ display: "block", marginTop: 8, background: "none", color: "#8C7FBF", fontSize: 11.5, fontWeight: 700, padding: 0 }}
                   >
                     مشاركة الشرح ↗
                   </button>
