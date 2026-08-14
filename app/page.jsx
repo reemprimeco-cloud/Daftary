@@ -21,6 +21,9 @@ const PALETTE = [
   { bg: "#F7F0F8", ring: "#CCA3D8", solid: "#BF8ACD", soft: "#EDD8F0", text: "#71427C" },
   { bg: "#EBF4FA", ring: "#93C6E2", solid: "#79B7DA", soft: "#D2E9F4", text: "#31607C" },
 ];
+// يُعرض بصفحة الحساب — حدّثيه مع كل إصدار جديد بالتوازي مع
+// MARKETING_VERSION بمشروع Xcode و version بملف package.json.
+const APP_VERSION = "1.0.0";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
@@ -146,6 +149,7 @@ export default function Home() {
   const [editingChild, setEditingChild] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showUploadSchedule, setShowUploadSchedule] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [openTask, setOpenTask] = useState(null);
   const [telegramLink, setTelegramLink] = useState(null);
   const [telegramLinked, setTelegramLinked] = useState(false);
@@ -345,8 +349,8 @@ export default function Home() {
           <button onClick={() => setShowUpload(true)} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
             رفع جدول
           </button>
-          <button onClick={handleLogout} title="تسجيل خروج" style={{ background: "#F3F4F6", color: "#6B7280", fontWeight: 700, fontSize: 12, padding: "10px 12px", borderRadius: 12, minHeight: 40 }}>
-            خروج
+          <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", color: "#6B7280", fontSize: 18, padding: "10px 12px", borderRadius: 12, minHeight: 40, lineHeight: 1 }}>
+            ⚙️
           </button>
         </div>
       </div>
@@ -408,7 +412,7 @@ export default function Home() {
             {children.length === 0 ? (
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
-              <ProgressView children={children} mother={mother} motherId={mother.id} onDataCleared={() => loadAll(mother.id)} onAccountDeleted={handleAccountDeleted} />
+              <ProgressView children={children} motherId={mother.id} onDataCleared={() => loadAll(mother.id)} />
             )}
           </div>
         ) : (
@@ -468,6 +472,15 @@ export default function Home() {
         />
       )}
       {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateDate={handleUpdateTaskDate} />}
+      {showProfile && (
+        <ProfileView
+          mother={mother}
+          childrenCount={children.length}
+          onClose={() => setShowProfile(false)}
+          onLogout={handleLogout}
+          onAccountDeleted={handleAccountDeleted}
+        />
+      )}
       <InstallPrompt />
     </div>
   );
@@ -1446,7 +1459,7 @@ function TeacherView({ children, motherId }) {
   );
 }
 
-function ProgressView({ children, mother, motherId, onDataCleared, onAccountDeleted }) {
+function ProgressView({ children, motherId, onDataCleared }) {
   const [section, setSection] = useState("memorization");
   const [childId, setChildId] = useState(children[0]?.id || "");
   const child = children.find((c) => c.id === childId) || children[0];
@@ -1476,7 +1489,6 @@ function ProgressView({ children, mother, motherId, onDataCleared, onAccountDele
       ))}
 
       <ResetYearButton motherId={motherId} onDone={onDataCleared} />
-      <DeleteAccountButton mother={mother} onDeleted={onAccountDeleted} />
     </div>
   );
 }
@@ -1644,6 +1656,58 @@ function ResetYearButton({ motherId, onDone }) {
 }
 
 // حذف الحساب نهائياً — مطلوب من آبل لأي تطبيق فيه إنشاء حساب.
+function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted }) {
+  const phone = (mother.phone || "").replace(/^\+965/, "");
+
+  return (
+    <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#FAF7F2", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 14px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={onClose} style={{ background: "none", fontSize: 20, width: 36, height: 36 }}>←</button>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>حسابي</p>
+      </div>
+
+      <div className="app-scroll" style={{ flex: 1, padding: "16px 16px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ background: "white", borderRadius: 18, padding: "22px 18px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#F1EFFA", border: "3px solid #DFD8F5", color: "#5C4B8C", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, margin: "0 auto 12px" }}>
+            {mother.name?.[0] || "؟"}
+          </div>
+          <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#374151" }}>{mother.name}</p>
+          <p style={{ margin: "4px 0 0", fontSize: 13.5, color: "#9CA3AF", direction: "ltr" }}>+965 {phone}</p>
+          <p style={{ margin: "10px 0 0", fontSize: 12.5, color: "#B7A6E8", fontWeight: 700 }}>
+            {childrenCount === 0 ? "ما فيه طلاب مسجّلين" : childrenCount === 1 ? "طالب/ة واحد مسجّل" : `${childrenCount} طلاب مسجّلين`}
+          </p>
+        </div>
+
+        <div style={{ background: "white", borderRadius: 18, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
+          <a href="/privacy" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700 }}>🔒 سياسة الخصوصية</span>
+            <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
+          </a>
+          <a href="mailto:reemprimeco@gmail.com" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700 }}>✉️ تواصلي معنا</span>
+            <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
+          </a>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: "#374151" }}>الإصدار</span>
+            <span style={{ fontSize: 13.5, color: "#9CA3AF", direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>
+          </div>
+        </div>
+
+        <button onClick={onLogout} style={{ background: "white", borderRadius: 18, padding: "15px 18px", textAlign: "right", fontSize: 14.5, fontWeight: 700, color: "#374151", boxShadow: "0 1px 3px rgba(0,0,0,.05)", width: "100%" }}>
+          ↩︎ تسجيل الخروج
+        </button>
+
+        <div style={{ marginTop: 6 }}>
+          <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800, color: "#B91C1C", paddingInlineStart: 4 }}>منطقة الحذف</p>
+          <DeleteAccountButton mother={mother} onDeleted={onAccountDeleted} />
+        </div>
+
+        <p style={{ textAlign: "center", color: "#B7B2C4", fontSize: 11.5, margin: "14px 0 0" }}>Copyright © Reemora.app 2026</p>
+      </div>
+    </div>
+  );
+}
+
 function DeleteAccountButton({ mother, onDeleted }) {
   const [step, setStep] = useState("idle");
   const [confirmPhone, setConfirmPhone] = useState("");
