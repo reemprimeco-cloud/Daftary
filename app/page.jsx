@@ -1,6 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import {
+  isNativeApp,
+  initNative,
+  nativePickImage,
+  hapticSuccess,
+  hapticLight,
+  nativeShare,
+  syncTaskReminders,
+} from "@/lib/native";
 
 const PALETTE = [
   { bg: "#FDEFF3", ring: "#E8A0B4", solid: "#E39CB2", soft: "#F9D9E2", text: "#8C4E62" },
@@ -68,12 +77,6 @@ function fmtDate(dateStr) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" });
 }
 
-// نميّز نسخة التطبيق (Capacitor) عن الويب عشان نخفي دعوة "أضيفي للشاشة الرئيسية"
-// ونعرض رسالة تسجيل مختلفة تناسب كل واحدة.
-function isNativeApp() {
-  if (typeof window === "undefined") return false;
-  return !!window.Capacitor?.isNativePlatform?.();
-}
 
 async function resizeToDataUrl(file, maxSize = 900, square = false) {
   return new Promise((resolve, reject) => {
@@ -159,6 +162,7 @@ export default function Home() {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
+    initNative();
   }, []);
 
   async function loadAll(motherId) {
@@ -170,6 +174,8 @@ export default function Home() {
     setUpcomingTasks(data.upcomingTasks || []);
     setRequirements(data.requirements || []);
     setClassSchedule(data.classSchedule || []);
+    // تذكيرات على الجهاز نفسه — تشتغل حتى بدون إنترنت داخل تطبيق آبل
+    syncTaskReminders([...(data.tasks || []), ...(data.upcomingTasks || [])]);
     const tRes = await fetch(`/api/telegram/link?motherId=${motherId}`);
     const tData = await tRes.json();
     setTelegramLink(tData.link);
@@ -239,6 +245,7 @@ export default function Home() {
   async function handleMarkDone(taskId) {
     const res = await fetch(`/api/tasks/${taskId}/done`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
     if (!res.ok) { alert("تعذّر تحديث الواجب، حاولي مرة ثانية."); return; }
+    hapticSuccess();
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUpcomingTasks((prev) => prev.filter((t) => t.id !== taskId));
@@ -268,6 +275,7 @@ export default function Home() {
   async function handleToggleReq(id) {
     const res = await fetch(`/api/requirements/${id}/toggle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
     if (!res.ok) { alert("تعذّر تحديث الطلب، حاولي مرة ثانية."); return; }
+    hapticLight();
     setRequirements((prev) => prev.map((r) => (r.id === id ? { ...r, bought: !r.bought } : r)));
   }
 
@@ -1127,7 +1135,9 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   const [status, setStatus] = useState("idle");
   const [summary, setSummary] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [native, setNative] = useState(false);
   const fileRef = useRef();
+  useEffect(() => setNative(isNativeApp()), []);
   const schoolsOfChildren = [...new Set(children.map((c) => c.school))];
   const childrenOfSchool = school ? children.filter((c) => c.school === school) : [];
   const autoChild = childrenOfSchool.length === 1 ? childrenOfSchool[0] : null;
@@ -1139,6 +1149,15 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
     const files = Array.from(e.target.files || []);
     const urls = await Promise.all(files.map((f) => resizeToDataUrl(f)));
     setImages((prev) => [...prev, ...urls]);
+  }
+
+  // داخل تطبيق آبل نفتح الكاميرا/الألبوم الأصلي بدل منتقي الملفات
+  async function addFromNative(source) {
+    const url = await nativePickImage(source);
+    if (url) {
+      hapticLight();
+      setImages((prev) => [...prev, url]);
+    }
   }
 
   async function run() {
@@ -1199,11 +1218,24 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             </div>
           </div>
         )}
-        <div onClick={() => fileRef.current?.click()} style={{ border: "2px dashed #D1D5DB", borderRadius: 16, padding: 30, textAlign: "center", background: "#FAFAFA", cursor: "pointer" }}>
-          <p style={{ margin: 0, fontWeight: 700 }}>اضغطي لاختيار الصور</p>
-          <p style={{ margin: "4px 0 0", fontSize: 12, color: "#9CA3AF" }}>يمكنك اختيار أكثر من صورة دفعة وحدة</p>
-          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
-        </div>
+        {native ? (
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => addFromNative("camera")} style={{ flex: 1, border: "2px dashed #D1D5DB", borderRadius: 16, padding: "22px 12px", textAlign: "center", background: "#FAFAFA" }}>
+              <span style={{ fontSize: 26, display: "block", marginBottom: 6 }}>📷</span>
+              <span style={{ fontWeight: 700, fontSize: 13.5 }}>تصوير الجدول</span>
+            </button>
+            <button onClick={() => addFromNative("photos")} style={{ flex: 1, border: "2px dashed #D1D5DB", borderRadius: 16, padding: "22px 12px", textAlign: "center", background: "#FAFAFA" }}>
+              <span style={{ fontSize: 26, display: "block", marginBottom: 6 }}>🖼️</span>
+              <span style={{ fontWeight: 700, fontSize: 13.5 }}>من الصور</span>
+            </button>
+          </div>
+        ) : (
+          <div onClick={() => fileRef.current?.click()} style={{ border: "2px dashed #D1D5DB", borderRadius: 16, padding: 30, textAlign: "center", background: "#FAFAFA", cursor: "pointer" }}>
+            <p style={{ margin: 0, fontWeight: 700 }}>اضغطي لاختيار الصور</p>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#9CA3AF" }}>يمكنك اختيار أكثر من صورة دفعة وحدة</p>
+            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
+          </div>
+        )}
         {images.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
             {images.map((img, i) => (
@@ -1247,8 +1279,10 @@ function TeacherView({ children, motherId }) {
   const [image, setImage] = useState(null);
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [native, setNative] = useState(false);
   const fileRef = useRef();
   const bottomRef = useRef();
+  useEffect(() => setNative(isNativeApp()), []);
   const child = children.find((c) => c.id === childId);
 
   useEffect(() => {
@@ -1269,6 +1303,15 @@ function TeacherView({ children, motherId }) {
     if (!file) return;
     const url = await resizeToDataUrl(file, 1400, false);
     setImage(url);
+  }
+
+  // بتطبيق آبل نصوّر الواجب مباشرة بالكاميرا الأصلية بدل منتقي الملفات
+  async function pickImageNative() {
+    const url = await nativePickImage("camera");
+    if (url) {
+      hapticLight();
+      setImage(url);
+    }
   }
 
   async function send() {
@@ -1334,6 +1377,14 @@ function TeacherView({ children, motherId }) {
               }}>
                 {m.content}
                 {m.had_image && <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>📷 مع صورة</div>}
+                {native && m.role === "assistant" && (
+                  <button
+                    onClick={() => nativeShare({ title: "شرح من المعلم الذكي — دفتري", text: m.content })}
+                    style={{ marginTop: 8, background: "none", color: "#8C7FBF", fontSize: 11.5, fontWeight: 700, padding: 0 }}
+                  >
+                    مشاركة الشرح ↗
+                  </button>
+                )}
               </div>
             </div>
           ))
@@ -1357,7 +1408,7 @@ function TeacherView({ children, motherId }) {
           </div>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <button onClick={() => fileRef.current?.click()} style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0 }}>📷</button>
+          <button onClick={() => (native ? pickImageNative() : fileRef.current?.click())} style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0 }}>📷</button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePickImage} />
           <textarea
             value={input}

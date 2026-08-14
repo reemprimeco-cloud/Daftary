@@ -24,6 +24,16 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>يستخدم دفتري الكاميرا لتصوير جدول الواجبات أو صفحة الواجب وتحليلها تلقائياً.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>يستخدم دفتري صور جهازك لاختيار صورة جدول الواجبات أو الواجب المراد تحليله.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>يحفظ دفتري صور الجداول التي تنشئينها في ألبوم الصور عند طلبك.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
