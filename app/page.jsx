@@ -565,21 +565,15 @@ function SubscribeNotice() {
   const [native, setNative] = useState(false);
   useEffect(() => setNative(isNativeApp()), []);
 
+  // داخل تطبيق آبل ما نعرض أي كلام عن الاشتراك أو رابط الموقع — آبل ترفض
+  // توجيه المستخدم للدفع خارج التطبيق (قاعدة 3.1.1)، والتطبيق مجاني بالكامل.
+  if (native) return null;
+
   return (
     <div style={{ marginTop: 14, background: "white", borderRadius: 16, padding: "14px 16px", boxShadow: "0 1px 3px rgba(0,0,0,.06)", textAlign: "center" }}>
-      {native ? (
-        <>
-          <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "#5C4B8C" }}>لتفعيل حسابك</p>
-          <p style={{ margin: "6px 0 0", fontSize: 12.5, lineHeight: 1.8, color: "#6B7280" }}>
-            سجّلي بيانات الطالب/ة وأكملي الاشتراك عبر موقعنا، وبعدها سجّلي دخولك هنا بنفس رقم الجوال لتستفيدي من كل مزايا التطبيق.
-          </p>
-          <p style={{ margin: "10px 0 0", fontSize: 12.5, fontWeight: 700, color: "#B7A6E8", direction: "ltr" }}>daftary.reemora.app</p>
-        </>
-      ) : (
-        <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.8, color: "#6B7280" }}>
-          يمكنكم الاشتراك وتحميل التطبيق للحصول على تجربة أفضل 💜
-        </p>
-      )}
+      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.8, color: "#6B7280" }}>
+        يمكنكم الاشتراك وتحميل التطبيق للحصول على تجربة أفضل 💜
+      </p>
     </div>
   );
 }
