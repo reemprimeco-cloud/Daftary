@@ -393,7 +393,7 @@ export default function Home() {
             {children.length === 0 ? (
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
-              <ProgressView children={children} motherId={mother.id} onDataCleared={() => loadAll(mother.id)} />
+              <ProgressView children={children} motherId={mother.id} />
             )}
           </div>
         ) : (
@@ -460,6 +460,7 @@ export default function Home() {
           onClose={() => setShowProfile(false)}
           onLogout={handleLogout}
           onAccountDeleted={handleAccountDeleted}
+          onDataCleared={() => loadAll(mother.id)}
         />
       )}
       <InstallPrompt />
@@ -1337,7 +1338,7 @@ function TeacherView({ children, motherId }) {
   );
 }
 
-function ProgressView({ children, motherId, onDataCleared }) {
+function ProgressView({ children, motherId }) {
   const [section, setSection] = useState("memorization");
   const [childId, setChildId] = useState(children[0]?.id || "");
   const child = children.find((c) => c.id === childId) || children[0];
@@ -1365,8 +1366,6 @@ function ProgressView({ children, motherId, onDataCleared }) {
       ) : (
         <GradesSection child={child} motherId={motherId} />
       ))}
-
-      <ResetYearButton motherId={motherId} onDone={onDataCleared} />
     </div>
   );
 }
@@ -1534,7 +1533,7 @@ function ResetYearButton({ motherId, onDone }) {
 }
 
 // حذف الحساب نهائياً — مطلوب من آبل لأي تطبيق فيه إنشاء حساب.
-function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted }) {
+function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared }) {
   const phone = (mother.phone || "").replace(/^\+965/, "");
 
   return (
@@ -1577,6 +1576,8 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
 
         <div style={{ marginTop: 6 }}>
           <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800, color: "#B91C1C", paddingInlineStart: 4 }}>منطقة الحذف</p>
+          <ResetYearButton motherId={mother.id} onDone={onDataCleared} />
+          <div style={{ height: 10 }} />
           <DeleteAccountButton mother={mother} onDeleted={onAccountDeleted} />
         </div>
 
