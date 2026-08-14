@@ -197,6 +197,21 @@ export default function Home() {
     setView("dashboard");
   }
 
+  function handleAccountDeleted() {
+    localStorage.removeItem("daftary_mother");
+    setMother(null);
+    setChildren([]);
+    setTasks([]);
+    setUndatedTasks([]);
+    setUpcomingTasks([]);
+    setRequirements([]);
+    setClassSchedule([]);
+    setTelegramLink(null);
+    setTelegramLinked(false);
+    setView("dashboard");
+    alert("تم حذف حسابك وكل بياناتك نهائياً.");
+  }
+
   async function handleRegister(name, phone) {
     const res = await fetch("/api/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, phone }) });
     const data = await res.json();
@@ -387,7 +402,7 @@ export default function Home() {
             {children.length === 0 ? (
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
-              <ProgressView children={children} motherId={mother.id} onDataCleared={() => loadAll(mother.id)} />
+              <ProgressView children={children} mother={mother} motherId={mother.id} onDataCleared={() => loadAll(mother.id)} onAccountDeleted={handleAccountDeleted} />
             )}
           </div>
         ) : (
@@ -1425,7 +1440,7 @@ function TeacherView({ children, motherId }) {
   );
 }
 
-function ProgressView({ children, motherId, onDataCleared }) {
+function ProgressView({ children, mother, motherId, onDataCleared, onAccountDeleted }) {
   const [section, setSection] = useState("memorization");
   const [childId, setChildId] = useState(children[0]?.id || "");
   const child = children.find((c) => c.id === childId) || children[0];
@@ -1455,6 +1470,7 @@ function ProgressView({ children, motherId, onDataCleared }) {
       ))}
 
       <ResetYearButton motherId={motherId} onDone={onDataCleared} />
+      <DeleteAccountButton mother={mother} onDeleted={onAccountDeleted} />
     </div>
   );
 }
@@ -1618,5 +1634,73 @@ function ResetYearButton({ motherId, onDone }) {
     <button onClick={handleReset} disabled={busy} style={{ marginTop: 8, padding: 10, borderRadius: 12, background: "none", color: "#B91C1C", fontWeight: 700, fontSize: 12.5, border: "1px solid #FECACA", opacity: busy ? 0.6 : 1 }}>
       🗑️ مسح بيانات العام الدراسي (نهاية السنة)
     </button>
+  );
+}
+
+// حذف الحساب نهائياً — مطلوب من آبل لأي تطبيق فيه إنشاء حساب.
+function DeleteAccountButton({ mother, onDeleted }) {
+  const [step, setStep] = useState("idle");
+  const [confirmPhone, setConfirmPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const lastEight = (mother.phone || "").replace(/[^0-9]/g, "").slice(-8);
+  const canDelete = confirmPhone.replace(/[^0-9]/g, "") === lastEight;
+
+  async function handleDelete() {
+    setBusy(true);
+    setErrorMsg("");
+    try {
+      const res = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motherId: mother.id, phone: confirmPhone }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "تعذّر حذف الحساب");
+      onDeleted();
+    } catch (err) {
+      setErrorMsg(err.message);
+      setBusy(false);
+    }
+  }
+
+  if (step === "idle") {
+    return (
+      <button onClick={() => setStep("confirm")} style={{ marginTop: 4, padding: 10, borderRadius: 12, background: "none", color: "#9CA3AF", fontWeight: 700, fontSize: 12.5 }}>
+        حذف الحساب نهائياً
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 4, padding: 14, borderRadius: 12, border: "1px solid #FECACA", background: "#FEF2F2" }}>
+      <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "#B91C1C" }}>حذف الحساب نهائياً</p>
+      <p style={{ margin: "6px 0 10px", fontSize: 12.5, lineHeight: 1.75, color: "#7F1D1D" }}>
+        سيُحذف حسابك وكل بيانات أبنائك (الواجبات، المتطلبات، الجدول، الحفظ، الدرجات، ومحادثات المعلم الذكي) نهائياً
+        وبدون إمكانية استرجاع. لتأكيد الحذف، اكتبي رقم جوالك ({lastEight}):
+      </p>
+      <input
+        value={confirmPhone}
+        onChange={(e) => setConfirmPhone(e.target.value)}
+        placeholder="XXXXXXXX"
+        inputMode="numeric"
+        maxLength={8}
+        style={{ width: "100%", border: "1px solid #FCA5A5", borderRadius: 10, padding: "10px 12px", fontSize: 16, marginBottom: 10, background: "white" }}
+      />
+      {errorMsg && <p style={{ margin: "0 0 8px", fontSize: 12, color: "#B91C1C" }}>{errorMsg}</p>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          disabled={!canDelete || busy}
+          onClick={handleDelete}
+          style={{ flex: 1, padding: 11, borderRadius: 10, background: "#B91C1C", color: "white", fontWeight: 800, fontSize: 13, opacity: !canDelete || busy ? 0.45 : 1 }}
+        >
+          {busy ? "جاري الحذف..." : "تأكيد الحذف النهائي"}
+        </button>
+        <button onClick={() => { setStep("idle"); setConfirmPhone(""); setErrorMsg(""); }} style={{ flex: 1, padding: 11, borderRadius: 10, background: "white", color: "#6B7280", fontWeight: 700, fontSize: 13, border: "1px solid #E5E7EB" }}>
+          إلغاء
+        </button>
+      </div>
+    </div>
   );
 }
