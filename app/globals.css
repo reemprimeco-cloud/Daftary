@@ -62,3 +62,201 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   outline: none;
 }
+
+/* ==========================================================================
+   مظهر آبل الأصلي — يُفعَّل بإضافة .ios-native على <html> من initNative().
+   نسخة الويب ما تتأثر بأي قاعدة هنا.
+   ========================================================================== */
+
+.ios-native,
+.ios-native body {
+  /* SF Arabic هو خط آبل العربي الأصلي، ييجي تلقائياً مع -apple-system */
+  font-family: -apple-system, "SF Pro Text", "SF Arabic", system-ui, sans-serif;
+  background: #F2F2F7; /* systemGroupedBackground */
+}
+
+/* آبل تعتمد على وزن أخف من Tajawal — نخفّف العناوين شوي عشان ما تطلع ثقيلة */
+.ios-native h1, .ios-native h2, .ios-native h3 { letter-spacing: -0.02em; }
+
+/* الضغط: آبل تعتمد التلاشي بدل التصغير */
+.ios-native button:active { transform: none; opacity: 0.45; }
+.ios-native button { transition: opacity .12s ease; }
+.ios-native a:active { opacity: 0.45; }
+
+/* ————— شريط التبويبات ————— */
+.ios-tabbar {
+  flex-shrink: 0;
+  z-index: 10;
+  display: flex;
+  background: rgba(249,249,249,.94);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-top: 0.5px solid rgba(0,0,0,.2);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.ios-tabbar button {
+  flex: 1;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 0 2px;
+  min-height: 49px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #8E8E93; /* systemGray */
+}
+.ios-tabbar button[data-active="true"] { color: #7B68C4; }
+.ios-tabbar svg { width: 26px; height: 26px; display: block; }
+
+/* ————— شريط التنقّل العلوي ————— */
+.ios-navbar {
+  flex-shrink: 0;
+  background: rgba(249,249,249,.94);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid rgba(0,0,0,.18);
+}
+.ios-navbar-back {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  color: #7B68C4;
+  font-size: 17px;
+  font-weight: 400;
+  padding: 0;
+  min-height: 44px;
+}
+.ios-large-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0;
+  line-height: 1.15;
+}
+
+/* ————— القوائم المجمّعة (شكل الإعدادات) ————— */
+.ios-group {
+  background: #FFFFFF;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ios-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 16px;
+  background: none;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: #000;
+  text-align: start;
+  text-decoration: none;
+}
+/* الفاصل يبدأ بعد الحشو الأمامي — نفس سلوك UITableView */
+.ios-row + .ios-row { box-shadow: inset 0 0.5px 0 rgba(0,0,0,.14); }
+.ios-row-value { color: #8E8E93; font-size: 17px; }
+.ios-chevron { color: #C7C7CC; font-size: 17px; flex-shrink: 0; }
+.ios-group-header {
+  font-size: 13px;
+  font-weight: 400;
+  color: #6D6D72;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 0 0 7px;
+  padding-inline-start: 16px;
+}
+
+/* ————— الأزرار ————— */
+.ios-btn-filled {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 12px;
+  background: #7B68C4;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ios-btn-filled:disabled { background: #D1D1D6; color: #fff; opacity: 1; }
+.ios-btn-plain {
+  background: none;
+  color: #7B68C4;
+  font-size: 17px;
+  font-weight: 400;
+  min-height: 44px;
+}
+.ios-btn-destructive { color: #FF3B30; }
+
+/* ————— المُقسّم (Segmented Control) ————— */
+.ios-segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(118,118,128,.12);
+  border-radius: 9px;
+}
+.ios-segmented button {
+  flex: 1;
+  min-height: 28px;
+  border-radius: 7px;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #000;
+}
+.ios-segmented button[data-active="true"] {
+  background: #fff;
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 1px 1px rgba(0,0,0,.04);
+}
+.ios-segmented button:active { opacity: 1; }
+
+/* ————— حقول الإدخال ————— */
+.ios-native input,
+.ios-native select,
+.ios-native textarea {
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+
+/* ————— النوافذ المنبثقة (Sheet) ————— */
+.ios-sheet {
+  border-radius: 12px 12px 0 0 !important;
+  overflow: hidden;
+}
+.ios-grabber {
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(60,60,67,.3);
+  margin: 6px auto 0;
+  flex-shrink: 0;
+}
+
+/* ————— مؤشّر السحب للتحديث ————— */
+.ios-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #8E8E93;
+  transition: height .22s ease;
+}
+.ios-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(123,104,196,.25);
+  border-top-color: #7B68C4;
+  border-radius: 50%;
+  animation: ios-spin .7s linear infinite;
+}
+@keyframes ios-spin { to { transform: rotate(360deg); } }

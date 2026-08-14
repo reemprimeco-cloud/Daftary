@@ -9,6 +9,7 @@ import {
   hapticLight,
   nativeShare,
   syncTaskReminders,
+  attachPullToRefresh,
 } from "@/lib/native";
 
 const PALETTE = [
@@ -39,6 +40,84 @@ const TABS = [
   { key: "progress", label: "الحفظ والدرجات", icon: "📖" },
   { key: "teacher", label: "المعلم الذكي", icon: "🎓" },
 ];
+
+// أيقونات شريط التبويبات بنمط SF Symbols لتطبيق آبل — الإيموجي يبقى للويب.
+// كل أيقونة ترسم نسختين: ممتلئة عند التحديد ومفرّغة عند عدم التحديد.
+const TAB_ICONS = {
+  dashboard: (on) =>
+    on
+      ? "M12 3.1 3 10.05V21h6v-6.4h6V21h6V10.05z"
+      : "M12 4.37 4.5 10.16V19.5h3.75v-6.4h7.5v6.4h3.75v-9.34zM12 3.1 3 10.05V21h6v-6.4h6V21h6V10.05z",
+  requirements: (on) =>
+    on
+      ? "M9 2h6a2 2 0 0 1 2 2v1h1.5A2.5 2.5 0 0 1 21 7.5v11A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-11A2.5 2.5 0 0 1 5.5 5H7V4a2 2 0 0 1 2-2m.5 3h5V4.5h-5z"
+      : "M9 2h6a2 2 0 0 1 2 2v1h1.5A2.5 2.5 0 0 1 21 7.5v11A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-11A2.5 2.5 0 0 1 5.5 5H7V4a2 2 0 0 1 2-2m0 1.5a.5.5 0 0 0-.5.5v1h7V4a.5.5 0 0 0-.5-.5zm-3.5 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-11a1 1 0 0 0-1-1z",
+  schedule: (on) =>
+    on
+      ? "M7 1.75a.75.75 0 0 1 .75.75V4h8.5V2.5a.75.75 0 0 1 1.5 0V4h.75A2.5 2.5 0 0 1 21 6.5v12a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4h.75V2.5A.75.75 0 0 1 7 1.75M4.5 9.5v9a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-9z"
+      : "M7 1.75a.75.75 0 0 1 .75.75V4h8.5V2.5a.75.75 0 0 1 1.5 0V4h.75A2.5 2.5 0 0 1 21 6.5v12a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4h.75V2.5A.75.75 0 0 1 7 1.75M5.5 5.5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-12a1 1 0 0 0-1-1zM4.5 9h15v1.5h-15z",
+  progress: (on) =>
+    on
+      ? "M12 5.6C10.3 4.2 8.1 3.5 5.5 3.5c-.9 0-1.8.1-2.6.3-.5.1-.9.6-.9 1.1v12.4c0 .7.6 1.2 1.3 1.1.7-.1 1.4-.2 2.2-.2 2.3 0 4.3.6 5.7 1.7.5.4 1.1.4 1.6 0 1.4-1.1 3.4-1.7 5.7-1.7.8 0 1.5.1 2.2.2.7.1 1.3-.4 1.3-1.1V4.9c0-.5-.4-1-.9-1.1-.8-.2-1.7-.3-2.6-.3-2.6 0-4.8.7-6.5 2.1"
+      : "M12 5.6C10.3 4.2 8.1 3.5 5.5 3.5c-.9 0-1.8.1-2.6.3-.5.1-.9.6-.9 1.1v12.4c0 .7.6 1.2 1.3 1.1.7-.1 1.4-.2 2.2-.2 2.3 0 4.3.6 5.7 1.7.5.4 1.1.4 1.6 0 1.4-1.1 3.4-1.7 5.7-1.7.8 0 1.5.1 2.2.2.7.1 1.3-.4 1.3-1.1V4.9c0-.5-.4-1-.9-1.1-.8-.2-1.7-.3-2.6-.3-2.6 0-4.8.7-6.5 2.1m-.75 12.8c-1.6-.9-3.5-1.4-5.75-1.4-.6 0-1.2 0-1.75.1V5.2c.55-.1 1.15-.2 1.75-.2 2.4 0 4.3.7 5.75 1.9zm1.5 0V6.9C14.2 5.7 16.1 5 18.5 5c.6 0 1.2.1 1.75.2v11.9c-.55-.1-1.15-.1-1.75-.1-2.25 0-4.15.5-5.75 1.4",
+  teacher: (on) =>
+    on
+      ? "M11.6 2.2a1 1 0 0 1 .8 0l9.1 4a1 1 0 0 1 0 1.83l-2 .88V14a.75.75 0 0 1-1.5 0V9.57l-2 .88V14c0 .38-.2.72-.5.9-1.1.66-2.32.98-3.5.98s-2.4-.32-3.5-.98a1.05 1.05 0 0 1-.5-.9v-3.55L2.5 8.03a1 1 0 0 1 0-1.83z"
+      : "M11.6 2.2a1 1 0 0 1 .8 0l9.1 4a1 1 0 0 1 0 1.83l-2 .88V14a.75.75 0 0 1-1.5 0V9.57l-2 .88V14c0 .38-.2.72-.5.9-1.1.66-2.32.98-3.5.98s-2.4-.32-3.5-.98a1.05 1.05 0 0 1-.5-.9v-3.55L2.5 8.03a1 1 0 0 1 0-1.83zM12 3.72 4.72 7.11 12 10.3l7.28-3.19zm-2.6 7.4v2.42c.8.4 1.68.6 2.6.6s1.8-.2 2.6-.6v-2.42l-2.2.96a1 1 0 0 1-.8 0z",
+};
+
+function TabIcon({ tab, active }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d={TAB_ICONS[tab](active)} />
+    </svg>
+  );
+}
+
+// أيقونات متجهية بنمط SF Symbols تحلّ محل الإيموجي داخل تطبيق آبل.
+// الإيموجي يبقى بنسخة الويب لأن طابعها أدفأ وأقرب لهوية الموقع.
+const ICONS = {
+  homework:
+    "M6 2h7.5L19 7.5V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m0 1.5a.5.5 0 0 0-.5.5v16a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5V8.5h-4A1.5 1.5 0 0 1 12 7V3.5zm1.75 7h8.5V12h-8.5zm0 3.5h8.5v1.5h-8.5zm0 3.5h5.5V18h-5.5z",
+  memorize:
+    "M12 5.6C10.3 4.2 8.1 3.5 5.5 3.5c-.9 0-1.8.1-2.6.3-.5.1-.9.6-.9 1.1v12.4c0 .7.6 1.2 1.3 1.1.7-.1 1.4-.2 2.2-.2 2.3 0 4.3.6 5.7 1.7.5.4 1.1.4 1.6 0 1.4-1.1 3.4-1.7 5.7-1.7.8 0 1.5.1 2.2.2.7.1 1.3-.4 1.3-1.1V4.9c0-.5-.4-1-.9-1.1-.8-.2-1.7-.3-2.6-.3-2.6 0-4.8.7-6.5 2.1m-.75 12.8c-1.6-.9-3.5-1.4-5.75-1.4-.6 0-1.2 0-1.75.1V5.2c.55-.1 1.15-.2 1.75-.2 2.4 0 4.3.7 5.75 1.9zm1.5 0V6.9C14.2 5.7 16.1 5 18.5 5c.6 0 1.2.1 1.75.2v11.9c-.55-.1-1.15-.1-1.75-.1-2.25 0-4.15.5-5.75 1.4",
+  exam:
+    "M11.6 2.2a1 1 0 0 1 .8 0l9.1 4a1 1 0 0 1 0 1.83l-2 .88V14a.75.75 0 0 1-1.5 0V9.57l-2 .88V14c0 .38-.2.72-.5.9-1.1.66-2.32.98-3.5.98s-2.4-.32-3.5-.98a1.05 1.05 0 0 1-.5-.9v-3.55L2.5 8.03a1 1 0 0 1 0-1.83zM12 3.72 4.72 7.11 12 10.3l7.28-3.19zm-2.6 7.4v2.42c.8.4 1.68.6 2.6.6s1.8-.2 2.6-.6v-2.42l-2.2.96a1 1 0 0 1-.8 0z",
+  project:
+    "M12 2c5.5 0 10 4 10 8.9 0 2.7-2.2 4.9-4.9 4.9h-1.8c-.8 0-1.5.7-1.5 1.5 0 .4.15.7.4 1 .25.3.4.65.4 1.05 0 .9-.75 1.65-1.7 1.65C6.9 21 2 16.7 2 11.4 2 6.2 6.5 2 12 2m-5.25 9.4a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8m3.5-3.9a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8m3.5 0a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8m3.5 3.9a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8",
+  camera:
+    "M9.4 3h5.2c.6 0 1.15.32 1.44.85L16.7 5h1.8A2.5 2.5 0 0 1 21 7.5v10A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-10A2.5 2.5 0 0 1 5.5 5h1.8l.66-1.15A1.65 1.65 0 0 1 9.4 3m.3 1.5-.66 1.15A1.65 1.65 0 0 1 7.6 6.5H5.5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-10a1 1 0 0 0-1-1h-2.1c-.6 0-1.15-.32-1.44-.85L14.3 4.5zM12 8.25a4.25 4.25 0 1 1 0 8.5 4.25 4.25 0 0 1 0-8.5m0 1.5a2.75 2.75 0 1 0 0 5.5 2.75 2.75 0 0 0 0-5.5",
+  photo:
+    "M5.5 4h13A2.5 2.5 0 0 1 21 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-11A2.5 2.5 0 0 1 5.5 4m0 1.5a1 1 0 0 0-1 1v11c0 .12.02.23.06.33l5.3-5.3a2 2 0 0 1 2.83 0l1.4 1.4 2.26-2.26a2 2 0 0 1 2.83 0l1.32 1.32V6.5a1 1 0 0 0-1-1zm3.4 3a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2",
+  warning:
+    "M12 2.9c.62 0 1.2.33 1.51.87l8.2 14.2A1.75 1.75 0 0 1 20.2 20.6H3.8a1.75 1.75 0 0 1-1.51-2.63l8.2-14.2c.31-.54.89-.87 1.51-.87m0 1.85L4.16 19.1h15.68zM12 9a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0v-4A.75.75 0 0 1 12 9m0 6.4a1 1 0 1 1 0 2 1 1 0 0 1 0-2",
+  calendar:
+    "M7 1.75a.75.75 0 0 1 .75.75V4h8.5V2.5a.75.75 0 0 1 1.5 0V4h.75A2.5 2.5 0 0 1 21 6.5v12a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4h.75V2.5A.75.75 0 0 1 7 1.75M5.5 5.5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-12a1 1 0 0 0-1-1zM4.5 9h15v1.5h-15z",
+  bell:
+    "M12 2.25c.83 0 1.5.67 1.5 1.5v.42A6.26 6.26 0 0 1 18.25 10.4v3.35l1.4 2.4a1.25 1.25 0 0 1-1.08 1.88H15.6a3.6 3.6 0 0 1-7.2 0H5.43a1.25 1.25 0 0 1-1.08-1.88l1.4-2.4V10.4A6.26 6.26 0 0 1 10.5 4.17v-.42c0-.83.67-1.5 1.5-1.5m0 3.35a4.76 4.76 0 0 0-4.75 4.8v3.55c0 .26-.07.52-.2.75l-1.1 1.88h12.1l-1.1-1.88a1.5 1.5 0 0 1-.2-.75V10.4A4.76 4.76 0 0 0 12 5.6m-2.1 12.03a2.1 2.1 0 0 0 4.2 0z",
+  wave:
+    "M11 2.6a1.6 1.6 0 0 1 3.2 0v5.2h.4V4.2a1.6 1.6 0 0 1 3.2 0v6.9h.4V7.6a1.6 1.6 0 0 1 3.2 0v6.15c0 4.3-3.1 7.65-7.4 7.65-2.35 0-4.3-.85-5.75-2.5L3.1 14.4a1.65 1.65 0 0 1 .2-2.4 1.7 1.7 0 0 1 2.3.25l2.2 2.4V4.2a1.6 1.6 0 0 1 3.2 0z",
+};
+
+function Icon({ name, size = 17, style }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      style={{ width: size, height: size, display: "inline-block", verticalAlign: "-0.15em", flexShrink: 0, ...style }}
+    >
+      <path d={ICONS[name]} />
+    </svg>
+  );
+}
+
+// يرجّع أيقونة متجهية بتطبيق آبل وإيموجي بالويب.
+function TypeGlyph({ type, native, size = 15 }) {
+  const map = { "واجب": "homework", "حفظ": "memorize", "اختبار": "exam", "مشروع": "project" };
+  if (!native) return <>{TYPE_META[type]?.icon || "📝"}</>;
+  return <Icon name={map[type] || "homework"} size={size} />;
+}
 const SUBJECT_ICON_MAP = [
   { file: "islamic", keywords: ["اسلام", "قرآن", "تجويد", "فقه", "حديث"] },
   { file: "arabic", keywords: ["عربي"] },
@@ -151,8 +230,12 @@ export default function Home() {
   const [showUploadSchedule, setShowUploadSchedule] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [openTask, setOpenTask] = useState(null);
+  const [native, setNative] = useState(false);
+  const [pull, setPull] = useState(0);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
+    setNative(isNativeApp());
     fetch("/schools.json").then((r) => r.json()).then(setSchools);
     const saved = typeof window !== "undefined" ? localStorage.getItem("daftary_mother") : null;
     if (saved) {
@@ -166,6 +249,12 @@ export default function Home() {
     }
     initNative();
   }, []);
+
+  // السحب للتحديث — داخل تطبيق آبل فقط
+  useEffect(() => {
+    if (!native || !mother) return;
+    return attachPullToRefresh(scrollRef.current, () => loadAll(mother.id), setPull);
+  }, [native, mother]);
 
   async function loadAll(motherId) {
     const res = await fetch(`/api/dashboard?motherId=${motherId}`);
@@ -327,25 +416,47 @@ export default function Home() {
 
   return (
     <div dir="rtl" className="app-root" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(6px)", padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0EEE8" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <img src="/logo.png" alt="دفتري" style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0 }} />
-          <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً {mother.name}</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
+      {native ? (
+        <div className="ios-navbar" style={{ padding: "calc(env(safe-area-inset-top) + 4px) 16px 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+            <button onClick={() => setShowProfile(true)} aria-label="حسابي" style={{ background: "none", padding: 0, minHeight: 44, display: "flex", alignItems: "center" }}>
+              <img src="/logo.png" alt="" style={{ width: 32, height: 32, borderRadius: 8 }} />
+            </button>
+            <button onClick={() => setShowUpload(true)} className="ios-btn-plain" style={{ fontWeight: 600 }}>
+              رفع جدول
+            </button>
+          </div>
+          <h1 className="ios-large-title">{TABS.find((t) => t.key === view)?.label}</h1>
+          <p style={{ margin: "2px 0 0", fontSize: 15, color: "#8E8E93", letterSpacing: "-0.01em" }}>
+            {new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}
+          </p>
+        </div>
+      ) : (
+        <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(6px)", padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0EEE8" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <img src="/logo.png" alt="دفتري" style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً {mother.name}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <button onClick={() => setShowUpload(true)} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
+              رفع جدول
+            </button>
+            <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", color: "#6B7280", fontSize: 18, padding: "10px 12px", borderRadius: 12, minHeight: 40, lineHeight: 1 }}>
+              ⚙️
+            </button>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <button onClick={() => setShowUpload(true)} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
-            رفع جدول
-          </button>
-          <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", color: "#6B7280", fontSize: 18, padding: "10px 12px", borderRadius: 12, minHeight: 40, lineHeight: 1 }}>
-            ⚙️
-          </button>
-        </div>
-      </div>
+      )}
 
-      <div className="app-scroll" style={{ flex: 1 }}>
+      <div className="app-scroll" style={{ flex: 1 }} ref={scrollRef}>
+        {native && (
+          <div className="ios-refresh" style={{ height: pull }}>
+            {pull > 8 && <div className="ios-spinner" />}
+          </div>
+        )}
         {view === "dashboard" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
             {children.length === 0 ? (
@@ -406,14 +517,25 @@ export default function Home() {
         <div style={{ height: 8 }} />
       </div>
 
-      <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderTop: "1px solid #F0EEE8", display: "flex", paddingBottom: "env(safe-area-inset-bottom)" }}>
-        {TABS.map((t) => (
-          <button key={t.key} onClick={() => setView(t.key)} style={{ flex: 1, padding: "8px 0 6px", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: view === t.key ? "#B7A6E8" : "#9CA3AF", fontWeight: 700, fontSize: 11, minHeight: 52 }}>
-            <span style={{ fontSize: 21, lineHeight: 1 }}>{t.icon}</span>
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </div>
+      {native ? (
+        <div className="ios-tabbar">
+          {TABS.map((t) => (
+            <button key={t.key} onClick={() => setView(t.key)} data-active={view === t.key}>
+              <TabIcon tab={t.key} active={view === t.key} />
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderTop: "1px solid #F0EEE8", display: "flex", paddingBottom: "env(safe-area-inset-bottom)" }}>
+          {TABS.map((t) => (
+            <button key={t.key} onClick={() => setView(t.key)} style={{ flex: 1, padding: "8px 0 6px", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: view === t.key ? "#B7A6E8" : "#9CA3AF", fontWeight: 700, fontSize: 11, minHeight: 52 }}>
+              <span style={{ fontSize: 21, lineHeight: 1 }}>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {showAddChild && <AddChildModal schools={schools} nextColorIdx={children.length} onClose={() => setShowAddChild(false)} onSave={handleAddChild} />}
       {editingChild && (
@@ -590,6 +712,8 @@ function EmptyState({ onAdd }) {
 
 function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOpenTask, onEdit }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
+  const [native, setNative] = useState(false);
+  useEffect(() => setNative(isNativeApp()), []);
   // معظم المهام تقع الأحد-الخميس (أيام الدراسة)، لكن تاريخ صريح مستخرج من صورة
   // (ميزة التواريخ البعيدة) ممكن نادراً يصادف جمعة/سبت — نعرضها بدل ما تختفي.
   const byDay = FULL_DAY_NAMES.map((day) => ({
@@ -624,8 +748,8 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
             <p style={{ fontSize: 12, fontWeight: 800, color: "#9CA3AF", margin: "0 0 4px" }}>{day}</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {items.map((t) => (
-                <button key={t.id} onClick={() => onOpenTask(t)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: color.soft, color: color.text }}>
-                  {TYPE_META[t.type]?.icon} {t.subject}
+                <button key={t.id} onClick={() => onOpenTask(t)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: color.soft, color: color.text, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <TypeGlyph type={t.type} native={native} /> {t.subject}
                 </button>
               ))}
             </div>
@@ -633,11 +757,13 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
         ))}
         {undatedTasks.length > 0 && (
           <div style={{ marginBottom: upcomingTasks.length > 0 ? 8 : 0 }}>
-            <p style={{ fontSize: 12, fontWeight: 800, color: "#B45309", margin: "0 0 4px" }}>⚠️ مهام بدون تاريخ محدد</p>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#B45309", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
+              {native ? <Icon name="warning" size={13} /> : "⚠️"} مهام بدون تاريخ محدد
+            </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {undatedTasks.map((t) => (
-                <button key={t.id} onClick={() => onOpenTask(t)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: "#FEF3C7", color: "#92400E" }}>
-                  {TYPE_META[t.type]?.icon} {t.subject}
+                <button key={t.id} onClick={() => onOpenTask(t)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: "#FEF3C7", color: "#92400E", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <TypeGlyph type={t.type} native={native} /> {t.subject}
                 </button>
               ))}
             </div>
@@ -645,11 +771,13 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
         )}
         {upcomingTasks.length > 0 && (
           <div>
-            <p style={{ fontSize: 12, fontWeight: 800, color: "#31607C", margin: "0 0 4px" }}>📅 مهام قادمة (بعد هذا الأسبوع)</p>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#31607C", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
+              {native ? <Icon name="calendar" size={13} /> : "📅"} مهام قادمة (بعد هذا الأسبوع)
+            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {upcomingTasks.map((t) => (
                 <button key={t.id} onClick={() => onOpenTask(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "8px 10px", borderRadius: 10, fontWeight: 700, background: "#EBF4FA", color: "#31607C", textAlign: "right" }}>
-                  <span>{TYPE_META[t.type]?.icon} {t.subject}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><TypeGlyph type={t.type} native={native} /> {t.subject}</span>
                   <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 700 }}>{fmtDate(t.due_date)}</span>
                 </button>
               ))}
@@ -879,7 +1007,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, borderRadius: "24px 24px 0 0", padding: "22px 22px calc(env(safe-area-inset-bottom) + 22px)", maxHeight: "85vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
           <div>
-            <span style={{ fontSize: 22 }}>{meta.icon}</span>
+            <span style={{ fontSize: 22, color: color.text }}><TypeGlyph type={task.type} native={typeof window !== "undefined" && isNativeApp()} size={22} /></span>
             <h3 style={{ margin: "4px 0 2px", color: color.text, fontSize: 18 }}>{task.subject}</h3>
             <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>{task.type} · {task.due_date ? fmtDate(task.due_date) : "بدون تاريخ محدد"}</p>
           </div>
@@ -900,7 +1028,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
 
         {task.due_date && !dateChanged && (
           <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
-            🔔 إضافة تذكير (قبل يوم)
+            {typeof window !== "undefined" && isNativeApp() ? <Icon name="bell" size={15} /> : "🔔"} إضافة تذكير (قبل يوم)
           </a>
         )}
         <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
@@ -1127,13 +1255,13 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         )}
         {native ? (
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => addFromNative("camera")} style={{ flex: 1, border: "2px dashed #D1D5DB", borderRadius: 16, padding: "22px 12px", textAlign: "center", background: "#FAFAFA" }}>
-              <span style={{ fontSize: 26, display: "block", marginBottom: 6 }}>📷</span>
-              <span style={{ fontWeight: 700, fontSize: 13.5 }}>تصوير الجدول</span>
+            <button onClick={() => addFromNative("camera")} style={{ flex: 1, border: "2px dashed #D1D5DB", borderRadius: 16, padding: "22px 12px", textAlign: "center", background: "#FAFAFA", color: "#7B68C4" }}>
+              <Icon name="camera" size={28} style={{ display: "block", margin: "0 auto 6px" }} />
+              <span style={{ fontWeight: 700, fontSize: 13.5, color: "#1F2937" }}>تصوير الجدول</span>
             </button>
-            <button onClick={() => addFromNative("photos")} style={{ flex: 1, border: "2px dashed #D1D5DB", borderRadius: 16, padding: "22px 12px", textAlign: "center", background: "#FAFAFA" }}>
-              <span style={{ fontSize: 26, display: "block", marginBottom: 6 }}>🖼️</span>
-              <span style={{ fontWeight: 700, fontSize: 13.5 }}>من الصور</span>
+            <button onClick={() => addFromNative("photos")} style={{ flex: 1, border: "2px dashed #D1D5DB", borderRadius: 16, padding: "22px 12px", textAlign: "center", background: "#FAFAFA", color: "#7B68C4" }}>
+              <Icon name="photo" size={28} style={{ display: "block", margin: "0 auto 6px" }} />
+              <span style={{ fontWeight: 700, fontSize: 13.5, color: "#1F2937" }}>من الصور</span>
             </button>
           </div>
         ) : (
@@ -1315,7 +1443,9 @@ function TeacherView({ children, motherId }) {
           </div>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <button onClick={() => (native ? pickImageNative() : fileRef.current?.click())} style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0 }}>📷</button>
+          <button onClick={() => (native ? pickImageNative() : fileRef.current?.click())} aria-label="إرفاق صورة" style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0, color: "#7B68C4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {native ? <Icon name="camera" size={22} /> : "📷"}
+          </button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePickImage} />
           <textarea
             value={input}
@@ -1335,7 +1465,10 @@ function TeacherView({ children, motherId }) {
 function ProgressView({ children, motherId }) {
   const [section, setSection] = useState("memorization");
   const [childId, setChildId] = useState(children[0]?.id || "");
+  const [native, setNative] = useState(false);
   const child = children.find((c) => c.id === childId) || children[0];
+
+  useEffect(() => setNative(isNativeApp()), []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1350,10 +1483,17 @@ function ProgressView({ children, motherId }) {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => setSection("memorization")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "memorization" ? "#B7A6E8" : "#F3F4F6", color: section === "memorization" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>🕌 الحفظ</button>
-        <button onClick={() => setSection("grades")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "grades" ? "#B7A6E8" : "#F3F4F6", color: section === "grades" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>📊 الدرجات</button>
-      </div>
+      {native ? (
+        <div className="ios-segmented">
+          <button onClick={() => setSection("memorization")} data-active={section === "memorization"}>الحفظ</button>
+          <button onClick={() => setSection("grades")} data-active={section === "grades"}>الدرجات</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setSection("memorization")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "memorization" ? "#B7A6E8" : "#F3F4F6", color: section === "memorization" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>🕌 الحفظ</button>
+          <button onClick={() => setSection("grades")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "grades" ? "#B7A6E8" : "#F3F4F6", color: section === "grades" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>📊 الدرجات</button>
+        </div>
+      )}
 
       {child && (section === "memorization" ? (
         <MemorizationSection child={child} motherId={motherId} />
@@ -1393,8 +1533,8 @@ function MemorizationSection({ child, motherId }) {
         <label key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: it.done ? "#F7F7F5" : "white", border: "1px solid #EEEDE8", cursor: "pointer" }}>
           <input type="checkbox" checked={it.done} onChange={() => handleToggle(it.id)} style={{ marginTop: 3, width: 18, height: 18, accentColor: "#B7A6E8", flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: it.done ? "#9CA3AF" : "#374151", textDecoration: it.done ? "line-through" : "none" }}>
-              {it.kind === "حديث" ? "📗" : "📖"} {it.reference}
+            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: it.done ? "#9CA3AF" : "#374151", textDecoration: it.done ? "line-through" : "none", display: "flex", alignItems: "center", gap: 5 }}>
+              {typeof window !== "undefined" && isNativeApp() ? <Icon name="memorize" size={14} style={{ color: "#7B68C4" }} /> : it.kind === "حديث" ? "📗" : "📖"} {it.reference}
             </p>
             {it.details && <p style={{ margin: "3px 0 0", fontSize: 12, color: "#9CA3AF" }}>{it.details}</p>}
           </div>
@@ -1502,7 +1642,7 @@ function GradesSection({ child, motherId }) {
   );
 }
 
-function ResetYearButton({ motherId, onDone }) {
+function ResetYearButton({ motherId, onDone, ios }) {
   const [busy, setBusy] = useState(false);
 
   async function handleReset() {
@@ -1519,6 +1659,14 @@ function ResetYearButton({ motherId, onDone }) {
     }
   }
 
+  if (ios) {
+    return (
+      <button onClick={handleReset} disabled={busy} className="ios-row ios-btn-destructive" style={{ opacity: busy ? 0.5 : 1 }}>
+        مسح بيانات العام الدراسي
+      </button>
+    );
+  }
+
   return (
     <button onClick={handleReset} disabled={busy} style={{ marginTop: 8, padding: 10, borderRadius: 12, background: "none", color: "#B91C1C", fontWeight: 700, fontSize: 12.5, border: "1px solid #FECACA", opacity: busy ? 0.6 : 1 }}>
       🗑️ مسح بيانات العام الدراسي (نهاية السنة)
@@ -1529,6 +1677,66 @@ function ResetYearButton({ motherId, onDone }) {
 // حذف الحساب نهائياً — مطلوب من آبل لأي تطبيق فيه إنشاء حساب.
 function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared }) {
   const phone = (mother.phone || "").replace(/^\+965/, "");
+  const [native, setNative] = useState(false);
+  useEffect(() => setNative(isNativeApp()), []);
+
+  const childrenLabel =
+    childrenCount === 0 ? "ما فيه طلاب مسجّلين" : childrenCount === 1 ? "طالب/ة واحد مسجّل" : `${childrenCount} طلاب مسجّلين`;
+
+  if (native) {
+    return (
+      <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#F2F2F7", display: "flex", flexDirection: "column" }}>
+        <div className="ios-navbar" style={{ padding: "calc(env(safe-area-inset-top) + 4px) 16px 8px" }}>
+          <button onClick={onClose} className="ios-navbar-back">
+            <span style={{ fontSize: 22, lineHeight: 1 }}>›</span>
+            <span>رجوع</span>
+          </button>
+          <h1 className="ios-large-title">حسابي</h1>
+        </div>
+
+        <div className="app-scroll" style={{ flex: 1, padding: "18px 16px calc(env(safe-area-inset-bottom) + 24px)", display: "flex", flexDirection: "column", gap: 22 }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: 76, height: 76, borderRadius: "50%", background: "#E5E1F5", color: "#7B68C4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 500, margin: "0 auto 10px" }}>
+              {mother.name?.[0] || "؟"}
+            </div>
+            <p style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em" }}>{mother.name}</p>
+            <p style={{ margin: "2px 0 0", fontSize: 15, color: "#8E8E93", direction: "ltr" }}>+965 {phone}</p>
+            <p style={{ margin: "2px 0 0", fontSize: 15, color: "#8E8E93" }}>{childrenLabel}</p>
+          </div>
+
+          <div className="ios-group">
+            <a href="/privacy" target="_blank" rel="noreferrer" className="ios-row">
+              <span>سياسة الخصوصية</span>
+              <span className="ios-chevron">›</span>
+            </a>
+            <a href="mailto:reemprimeco@gmail.com" className="ios-row">
+              <span>تواصلي معنا</span>
+              <span className="ios-chevron">›</span>
+            </a>
+            <div className="ios-row">
+              <span>الإصدار</span>
+              <span className="ios-row-value" style={{ direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>
+            </div>
+          </div>
+
+          <div className="ios-group">
+            <button onClick={onLogout} className="ios-row" style={{ color: "#7B68C4" }}>تسجيل الخروج</button>
+          </div>
+
+          <div>
+            <p className="ios-group-header">منطقة الحذف</p>
+            <div className="ios-group">
+              <ResetYearButton motherId={mother.id} onDone={onDataCleared} ios />
+            </div>
+            <div style={{ height: 22 }} />
+            <DeleteAccountButton mother={mother} onDeleted={onAccountDeleted} ios />
+          </div>
+
+          <p style={{ textAlign: "center", color: "#8E8E93", fontSize: 13, margin: 0 }}>Copyright © Reemora.app 2026</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#FAF7F2", display: "flex", flexDirection: "column" }}>
@@ -1544,9 +1752,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
           </div>
           <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#374151" }}>{mother.name}</p>
           <p style={{ margin: "4px 0 0", fontSize: 13.5, color: "#9CA3AF", direction: "ltr" }}>+965 {phone}</p>
-          <p style={{ margin: "10px 0 0", fontSize: 12.5, color: "#B7A6E8", fontWeight: 700 }}>
-            {childrenCount === 0 ? "ما فيه طلاب مسجّلين" : childrenCount === 1 ? "طالب/ة واحد مسجّل" : `${childrenCount} طلاب مسجّلين`}
-          </p>
+          <p style={{ margin: "10px 0 0", fontSize: 12.5, color: "#B7A6E8", fontWeight: 700 }}>{childrenLabel}</p>
         </div>
 
         <div style={{ background: "white", borderRadius: 18, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
@@ -1581,7 +1787,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
   );
 }
 
-function DeleteAccountButton({ mother, onDeleted }) {
+function DeleteAccountButton({ mother, onDeleted, ios }) {
   const [step, setStep] = useState("idle");
   const [confirmPhone, setConfirmPhone] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1609,6 +1815,13 @@ function DeleteAccountButton({ mother, onDeleted }) {
   }
 
   if (step === "idle") {
+    if (ios) {
+      return (
+        <div className="ios-group">
+          <button onClick={() => setStep("confirm")} className="ios-row ios-btn-destructive">حذف الحساب نهائياً</button>
+        </div>
+      );
+    }
     return (
       <button onClick={() => setStep("confirm")} style={{ marginTop: 4, padding: 10, borderRadius: 12, background: "none", color: "#9CA3AF", fontWeight: 700, fontSize: 12.5 }}>
         حذف الحساب نهائياً
