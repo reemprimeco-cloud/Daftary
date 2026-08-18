@@ -22,7 +22,8 @@ export async function GET(req) {
 
 export async function POST(req) {
   const body = await req.json();
-  const { motherId, childId, subject, score, maxScore, examName } = body;
+  const { childId, subject, score, maxScore, examName } = body;
+  const motherId = req.headers.get("x-mother-id");
   if (!motherId || !childId || !subject?.trim() || score == null || !maxScore) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }

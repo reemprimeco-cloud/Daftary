@@ -73,7 +73,7 @@ export async function POST(req) {
 
   let token;
   try {
-    token = createSessionToken(mother.id);
+    token = await createSessionToken(mother.id);
   } catch (e) {
     console.error(e.message);
     return NextResponse.json({ error: "إعدادات الجلسة ناقصة بالسيرفر" }, { status: 500 });

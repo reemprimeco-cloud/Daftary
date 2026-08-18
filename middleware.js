@@ -7,9 +7,11 @@ import { readSessionToken } from "@/lib/session";
 //
 // المسارات العامة: الدخول (ما عنده جلسة بعد)، لوحة التحكم (لها كوكي خاص)،
 // المهام المجدولة (لها CRON_SECRET)، والمنهج (بيانات وزارة عامة بلا خصوصية).
-const PUBLIC_PREFIXES = ["/api/auth/", "/api/admin/", "/api/cron/", "/api/curriculum/"];
+// /api/register ملغى ويرجّع 410 برسالة «حدّثي التطبيق» — نتركه عام عشان
+// النسخ القديمة تشوف الرسالة بدل «الجلسة منتهية» المضلّلة.
+const PUBLIC_PREFIXES = ["/api/auth/", "/api/admin/", "/api/cron/", "/api/curriculum/", "/api/register"];
 
-export function middleware(req) {
+export async function middleware(req) {
   const { pathname, searchParams } = req.nextUrl;
 
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
@@ -17,7 +19,7 @@ export function middleware(req) {
   }
 
   const header = req.headers.get("authorization") || "";
-  const sessionMotherId = header.startsWith("Bearer ") ? readSessionToken(header.slice(7)) : null;
+  const sessionMotherId = header.startsWith("Bearer ") ? await readSessionToken(header.slice(7)) : null;
 
   if (!sessionMotherId) {
     return NextResponse.json({ error: "الجلسة منتهية، سجّلي دخول مرة ثانية." }, { status: 401 });

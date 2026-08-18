@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 // لكل أطفال ولي الأمر — يبقي ملفات الأطفال أنفسهم (الاسم، المدرسة...) لتحديثها يدوياً بالصف الجديد.
 export async function POST(req) {
   const body = await req.json().catch(() => ({}));
-  const { motherId } = body;
+  const motherId = req.headers.get("x-mother-id");
   if (!motherId) return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
 
   const sb = supabaseAdmin();

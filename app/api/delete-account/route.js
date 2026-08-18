@@ -6,7 +6,9 @@ import { supabaseAdmin } from "@/lib/supabase";
 // نمسح الأبناء وكل بياناتهم أولاً، ثم اشتراكات الإشعارات وسجل التذكيرات، وأخيراً حساب ولي الأمر.
 export async function POST(req) {
   const body = await req.json().catch(() => ({}));
-  const { motherId, phone } = body;
+  const { phone } = body;
+  // المعرّف من الجلسة الموثوقة، مو من العميل — أخطر مسار بالتطبيق
+  const motherId = req.headers.get("x-mother-id");
   if (!motherId || !phone) return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
 
   const sb = supabaseAdmin();
