@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export async function POST(req) {
-  const { motherId, subscription } = await req.json();
+  const { subscription } = await req.json();
+  const motherId = req.headers.get("x-mother-id");
   if (!motherId || !subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }

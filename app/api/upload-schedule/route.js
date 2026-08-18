@@ -12,7 +12,8 @@ export async function POST(req) {
 }
 
 async function handleUpload(req) {
-  const { motherId, childId, images } = await req.json();
+  const { childId, images } = await req.json();
+  const motherId = req.headers.get("x-mother-id");
   if (!motherId || !childId || !images?.length) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }

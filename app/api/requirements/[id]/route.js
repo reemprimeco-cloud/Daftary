@@ -6,7 +6,7 @@ export async function DELETE(req, { params }) {
   const sb = supabaseAdmin();
 
   const { data: existing } = await sb.from("requirements").select("id, children(mother_id)").eq("id", params.id).single();
-  if (!existing || existing.children?.mother_id !== body.motherId) {
+  if (!existing || existing.children?.mother_id !== req.headers.get("x-mother-id")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 

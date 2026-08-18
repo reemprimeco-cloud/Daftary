@@ -10,7 +10,7 @@ export async function POST(req, { params }) {
     .eq("id", params.id)
     .single();
   if (e1) return NextResponse.json({ error: e1.message }, { status: 400 });
-  if (existing.children?.mother_id !== body.motherId) {
+  if (existing.children?.mother_id !== req.headers.get("x-mother-id")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 

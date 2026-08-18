@@ -7,7 +7,8 @@ async function verifyOwnership(sb, taskId, motherId) {
 }
 
 export async function PATCH(req, { params }) {
-  const { dueDate, motherId } = await req.json();
+  const { dueDate } = await req.json();
+  const motherId = req.headers.get("x-mother-id");
   const sb = supabaseAdmin();
 
   if (!(await verifyOwnership(sb, params.id, motherId))) {
@@ -23,7 +24,7 @@ export async function DELETE(req, { params }) {
   const body = await req.json().catch(() => ({}));
   const sb = supabaseAdmin();
 
-  if (!(await verifyOwnership(sb, params.id, body.motherId))) {
+  if (!(await verifyOwnership(sb, params.id, req.headers.get("x-mother-id")))) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 

@@ -19,14 +19,14 @@ export async function POST(req) {
     const { count } = await sb
       .from("children")
       .select("*", { count: "exact", head: true })
-      .eq("mother_id", body.motherId);
+      .eq("mother_id", req.headers.get("x-mother-id"));
     colorIdx = count ?? 0;
   }
 
   const { data, error } = await sb
     .from("children")
     .insert({
-      mother_id: body.motherId,
+      mother_id: req.headers.get("x-mother-id"),
       name: body.name,
       photo_url: body.photo || null,
       governorate: body.governorate,

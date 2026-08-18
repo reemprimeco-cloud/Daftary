@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
 
-export async function POST(req) {
-  const { name, phone } = await req.json();
-  if (!name || !phone) {
-    return NextResponse.json({ error: "الاسم والجوال مطلوبين" }, { status: 400 });
-  }
-  const sb = supabaseAdmin();
-
-  const { data: existing } = await sb.from("mothers").select("*").eq("phone", phone).maybeSingle();
-  if (existing) return NextResponse.json({ mother: existing });
-
-  const { data, error } = await sb.from("mothers").insert({ name, phone }).select().single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ mother: data });
+// أُلغي هذا المسار: كان يفتح الحساب برقم الجوال فقط بدون أي تحقق، يعني أي أحد
+// يكتب رقم جوال شخص ثاني يدخل حسابه ويشوف بيانات عياله. الدخول صار عبر
+// /api/auth/request-otp ثم /api/auth/verify-otp.
+//
+// نتركه يرجّع 410 بدل ما نحذفه، عشان أي نسخة قديمة شغالة عند مستخدمة تعطيها
+// رسالة واضحة بدل ما يطيح الزر بصمت.
+export async function POST() {
+  return NextResponse.json(
+    { error: "طريقة الدخول تحدّثت. أغلقي التطبيق وافتحيه مرة ثانية للتحديث." },
+    { status: 410 }
+  );
 }

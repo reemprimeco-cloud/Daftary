@@ -11,6 +11,7 @@ import {
   syncTaskReminders,
   attachPullToRefresh,
 } from "@/lib/native";
+import { installAuthFetch } from "@/lib/authFetch";
 
 const PALETTE = [
   { bg: "#FDEFF3", ring: "#E8A0B4", solid: "#E39CB2", soft: "#F9D9E2", text: "#8C4E62" },
@@ -238,13 +239,19 @@ export default function Home() {
   const scrollRef = useRef(null);
 
   useEffect(() => {
+    installAuthFetch();
     setNative(isNativeApp());
     fetch("/schools.json").then((r) => r.json()).then(setSchools);
+    // جلسة محفوظة من قبل — تبقى شغالة لين تسجّل خروج. الجلسات القديمة (قبل
+    // إضافة التحقق) ما عندها توكن، فنطلع المستخدمة عشان تتحقق من رقمها مرة وحدة.
     const saved = typeof window !== "undefined" ? localStorage.getItem("daftary_mother") : null;
-    if (saved) {
+    const token = typeof window !== "undefined" ? localStorage.getItem("daftary_token") : null;
+    if (saved && token) {
       const m = JSON.parse(saved);
       setMother(m);
       loadAll(m.id);
+    } else if (saved) {
+      localStorage.removeItem("daftary_mother");
     }
     setLoading(false);
     if ("serviceWorker" in navigator) {
@@ -275,6 +282,7 @@ export default function Home() {
   function handleLogout() {
     if (!confirm("تسجيل الخروج من دفتري؟")) return;
     localStorage.removeItem("daftary_mother");
+    localStorage.removeItem("daftary_token");
     setMother(null);
     setChildren([]);
     setTasks([]);
@@ -287,6 +295,7 @@ export default function Home() {
 
   function handleAccountDeleted() {
     localStorage.removeItem("daftary_mother");
+    localStorage.removeItem("daftary_token");
     setMother(null);
     setChildren([]);
     setTasks([]);
@@ -298,20 +307,12 @@ export default function Home() {
     alert("تم حذف حسابك وكل بياناتك نهائياً.");
   }
 
-  async function handleRegister(name, phone) {
-    // نعرض سبب الفشل بدل ما نسكت — قبل كذا كان الزر ما يسوي شي بدون أي رسالة
-    try {
-      const res = await fetch("/api/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, phone }) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.mother) throw new Error(data.error || "تعذّر تسجيل الدخول، حاولي مرة ثانية.");
-      setMother(data.mother);
-      localStorage.setItem("daftary_mother", JSON.stringify(data.mother));
-      loadAll(data.mother.id);
-    } catch (err) {
-      alert(String(err.message).includes("Failed to fetch")
-        ? "تعذّر الاتصال بالإنترنت، تأكدي من الشبكة وحاولي مرة ثانية."
-        : err.message);
-    }
+  // تُستدعى بعد ما يتأكد الكود بنجاح — شاشة الدخول تتكفّل بعرض الأخطاء.
+  function handleAuthenticated(m, token) {
+    localStorage.setItem("daftary_mother", JSON.stringify(m));
+    localStorage.setItem("daftary_token", token);
+    setMother(m);
+    loadAll(m.id);
   }
 
   async function handleAddChild(child) {
@@ -405,7 +406,7 @@ export default function Home() {
   if (!mother) {
     return (
       <>
-        <Onboarding onDone={handleRegister} />
+        <Onboarding onDone={handleAuthenticated} />
         <InstallPrompt />
       </>
     );
@@ -653,7 +654,86 @@ function InstallPrompt() {
 function Onboarding({ onDone }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  // step: "phone" = إدخال الاسم والرقم، "code" = إدخال كود التحقق
+  const [step, setStep] = useState("phone");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [resendIn, setResendIn] = useState(0);
   const canSubmit = name.trim().length > 1 && /^[0-9]{8}$/.test(phone.trim());
+
+  // عدّاد تنازلي قبل ما نسمح بإعادة الإرسال — Twilio يحدّها بـ٥ مرات كل ١٠ دقائق،
+  // فنمنع المستخدمة من حرق محاولاتها بالضغط المتكرر.
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  async function post(url, body) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "صار خطأ، حاولي مرة ثانية.");
+    return data;
+  }
+
+  function friendly(err) {
+    return String(err.message).includes("Failed to fetch")
+      ? "تعذّر الاتصال بالإنترنت، تأكدي من الشبكة وحاولي مرة ثانية."
+      : err.message;
+  }
+
+  async function sendCode() {
+    setBusy(true);
+    setError("");
+    try {
+      await post("/api/auth/request-otp", { phone: phone.trim() });
+      setStep("code");
+      setCode("");
+      setResendIn(30);
+    } catch (err) {
+      setError(friendly(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitCode() {
+    setBusy(true);
+    setError("");
+    try {
+      const data = await post("/api/auth/verify-otp", {
+        name: name.trim(),
+        phone: phone.trim(),
+        code: code.trim(),
+      });
+      onDone(data.mother, data.token);
+    } catch (err) {
+      setError(friendly(err));
+      setBusy(false);
+    }
+  }
+
+  if (step === "code") {
+    return (
+      <VerifyCodeScreen
+        phone={phone.trim()}
+        code={code}
+        setCode={setCode}
+        busy={busy}
+        error={error}
+        resendIn={resendIn}
+        onSubmit={submitCode}
+        onResend={sendCode}
+        onBack={() => { setStep("phone"); setError(""); }}
+      />
+    );
+  }
+
   return (
     <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 40 }}>
@@ -670,9 +750,13 @@ function Onboarding({ onDone }) {
             <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="XXXXXXXX" maxLength={8} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16 }} />
           </div>
-          <button disabled={!canSubmit} onClick={() => onDone(name.trim(), "+965" + phone.trim())} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
-            متابعة
+          <button disabled={!canSubmit || busy} onClick={sendCode} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit && !busy ? 1 : 0.4 }}>
+            {busy ? "جاري الإرسال..." : "متابعة"}
           </button>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 }}>{error}</p>}
+          <p style={{ color: "#9CA3AF", fontSize: 11.5, margin: "10px 0 0", lineHeight: 1.7, textAlign: "center" }}>
+            بنرسل لك كود تحقق على واتساب للتأكد أن الرقم رقمك
+          </p>
         </div>
       </div>
       <div style={{ textAlign: "center", flexShrink: 0, width: "100%", maxWidth: 380, margin: "0 auto" }}>
@@ -680,6 +764,53 @@ function Onboarding({ onDone }) {
           تواصل معنا
         </a>
         <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
+      </div>
+    </div>
+  );
+}
+
+function VerifyCodeScreen({ phone, code, setCode, busy, error, resendIn, onSubmit, onResend, onBack }) {
+  const canSubmit = /^[0-9]{4,10}$/.test(code.trim()) && !busy;
+  return (
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 40 }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <img src="/logo.png" alt="دفتري" style={{ width: 100, height: 100, borderRadius: 24, margin: "0 auto 14px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
+          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 21, fontWeight: 800 }}>أدخلي كود التحقق</h1>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>
+            أرسلنا كود على واتساب للرقم<br />
+            <span style={{ direction: "ltr", display: "inline-block", fontWeight: 700, color: "#5C4B8C" }}>+965 {phone}</span>
+          </p>
+        </div>
+
+        <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, ""))}
+            placeholder="------"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={10}
+            style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "12px", fontSize: 24, fontWeight: 700, textAlign: "center", letterSpacing: 8, direction: "ltr", marginBottom: 14 }}
+          />
+          <button disabled={!canSubmit} onClick={onSubmit} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
+            {busy ? "جاري التحقق..." : "دخول"}
+          </button>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 }}>{error}</p>}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, gap: 8 }}>
+            <button onClick={onBack} disabled={busy} style={{ background: "none", color: "#6B7280", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
+              تغيير الرقم
+            </button>
+            <button onClick={onResend} disabled={busy || resendIn > 0} style={{ background: "none", color: resendIn > 0 ? "#B7B2C4" : "#7B68C4", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
+              {resendIn > 0 ? `إعادة الإرسال بعد ${resendIn}` : "إعادة إرسال الكود"}
+            </button>
+          </div>
+        </div>
+
+        <p style={{ color: "#9CA3AF", fontSize: 11.5, margin: "14px 0 0", lineHeight: 1.7, textAlign: "center" }}>
+          ما وصلك واتساب؟ بنرسله رسالة نصية تلقائياً خلال ثواني
+        </p>
       </div>
     </div>
   );

@@ -10,7 +10,7 @@ export async function PATCH(req, { params }) {
   const body = await req.json();
   const sb = supabaseAdmin();
 
-  if (!(await verifyOwnership(sb, params.id, body.motherId))) {
+  if (!(await verifyOwnership(sb, params.id, req.headers.get("x-mother-id")))) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
@@ -38,7 +38,7 @@ export async function DELETE(req, { params }) {
   const body = await req.json().catch(() => ({}));
   const sb = supabaseAdmin();
 
-  if (!(await verifyOwnership(sb, params.id, body.motherId))) {
+  if (!(await verifyOwnership(sb, params.id, req.headers.get("x-mother-id")))) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 

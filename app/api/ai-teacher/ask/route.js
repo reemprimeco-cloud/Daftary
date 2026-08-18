@@ -22,7 +22,8 @@ export async function POST(req) {
 }
 
 async function handleAsk(req) {
-  const { motherId, childId, question, image } = await req.json();
+  const { childId, question, image } = await req.json();
+  const motherId = req.headers.get("x-mother-id");
   if (!motherId || !childId || (!question?.trim() && !image)) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }
