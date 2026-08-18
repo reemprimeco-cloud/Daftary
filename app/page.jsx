@@ -674,7 +674,6 @@ function Onboarding({ onDone }) {
             متابعة
           </button>
         </div>
-        <SubscribeNotice />
       </div>
       <div style={{ textAlign: "center", flexShrink: 0, width: "100%", maxWidth: 380, margin: "0 auto" }}>
         <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
@@ -682,23 +681,6 @@ function Onboarding({ onDone }) {
         </a>
         <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
       </div>
-    </div>
-  );
-}
-
-function SubscribeNotice() {
-  const [native, setNative] = useState(false);
-  useEffect(() => setNative(isNativeApp()), []);
-
-  // داخل تطبيق آبل ما نعرض أي كلام عن الاشتراك أو رابط الموقع — آبل ترفض
-  // توجيه المستخدم للدفع خارج التطبيق (قاعدة 3.1.1)، والتطبيق مجاني بالكامل.
-  if (native) return null;
-
-  return (
-    <div style={{ marginTop: 14, background: "white", borderRadius: 16, padding: "14px 16px", boxShadow: "0 1px 3px rgba(0,0,0,.06)", textAlign: "center" }}>
-      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.8, color: "#6B7280" }}>
-        يمكنكم الاشتراك وتحميل التطبيق للحصول على تجربة أفضل 💜
-      </p>
     </div>
   );
 }
@@ -831,6 +813,10 @@ function ScheduleCard({ child, schedule, onUpload }) {
   const periods = Array.from({ length: maxPeriod }, (_, i) => i + 1);
   const printRef = useRef();
   const [exporting, setExporting] = useState(false);
+  // تصدير PDF يعتمد على تنزيل ملف من المتصفح، وهذا ما يشتغل داخل WebView تطبيق
+  // آبل — الزر يصير بلا فايدة. نخفيه بالتطبيق ونخليه بنسخة الويب بس.
+  const [native, setNative] = useState(false);
+  useEffect(() => setNative(isNativeApp()), []);
 
   async function exportPdf() {
     setExporting(true);
@@ -881,11 +867,13 @@ function ScheduleCard({ child, schedule, onUpload }) {
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا يوجد جدول حصص مضاف بعد</p>
         ) : (
           <>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-            <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
-              {exporting ? "جاري التصدير..." : "📄 تصدير PDF"}
-            </button>
-          </div>
+          {!native && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
+                {exporting ? "جاري التصدير..." : "📄 تصدير PDF"}
+              </button>
+            </div>
+          )}
           <table style={{ borderCollapse: "separate", borderSpacing: 5, fontSize: 11 }}>
             <thead>
               <tr>
@@ -992,6 +980,10 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
   const [saving, setSaving] = useState(false);
   const [dateError, setDateError] = useState("");
   const dateChanged = dateValue !== (task.due_date || "");
+  // داخل التطبيق التذكيرات تُجدول تلقائياً على الجهاز (syncTaskReminders)، وملف
+  // الـ .ics ما ينفتح أصلاً داخل WebView — فنخفي الزر ونخليه بنسخة الويب بس.
+  const [native, setNative] = useState(false);
+  useEffect(() => setNative(isNativeApp()), []);
 
   async function saveDate() {
     setSaving(true);
@@ -1028,9 +1020,9 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
           {dateError && <p style={{ color: "#B91C1C", fontSize: 12, margin: "6px 0 0" }}>{dateError}</p>}
         </div>
 
-        {task.due_date && !dateChanged && (
+        {task.due_date && !dateChanged && !native && (
           <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
-            {typeof window !== "undefined" && isNativeApp() ? <Icon name="bell" size={15} /> : "🔔"} إضافة تذكير (قبل يوم)
+            🔔 إضافة تذكير (قبل يوم)
           </a>
         )}
         <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
@@ -1708,7 +1700,9 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
           </div>
 
           <div className="ios-group">
-            <a href="/privacy" target="_blank" rel="noreferrer" className="ios-row">
+            {/* داخل التطبيق نفتحها بنفس النافذة — target="_blank" ما يشتغل بـ WebView
+                وصفحة الخصوصية فيها رابط رجوع للتطبيق. */}
+            <a href="/privacy" target={native ? undefined : "_blank"} rel="noreferrer" className="ios-row">
               <span>سياسة الخصوصية</span>
               <span className="ios-chevron">›</span>
             </a>
@@ -1759,7 +1753,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
         </div>
 
         <div style={{ background: "white", borderRadius: 18, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
-          <a href="/privacy" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
+          <a href="/privacy" target={native ? undefined : "_blank"} rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700 }}>🔒 سياسة الخصوصية</span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>

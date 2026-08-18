@@ -4,7 +4,8 @@
   "webDir": "public",
   "server": {
     "url": "https://daftary.reemora.app",
-    "cleartext": false
+    "cleartext": false,
+    "errorPath": "error.html"
   },
   "ios": {
     "contentInset": "automatic"

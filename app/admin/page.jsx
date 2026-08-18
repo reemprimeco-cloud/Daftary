@@ -99,11 +99,6 @@ function AdminDashboard({ stats }) {
             </tbody>
           </table>
         </div>
-
-        <div style={{ background: "white", borderRadius: 16, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)", textAlign: "center" }}>
-          <p style={{ margin: 0, fontWeight: 700, color: "#374151" }}>💳 التحكم بالمدفوعات</p>
-          <p style={{ margin: "6px 0 0", fontSize: 12, color: "#9CA3AF" }}>قريباً — لسا ما فيه نظام دفع مربوط بالتطبيق</p>
-        </div>
       </div>
     </div>
   );
