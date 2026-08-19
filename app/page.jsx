@@ -1034,8 +1034,10 @@ function ScheduleCard({ child, schedule, onUpload }) {
                               </div>
                               <span style={{ fontSize: 10, fontWeight: 800, color: dayPal.text }}>{entry.subject}</span>
                               {entry.teacher && <span style={{ fontSize: 9, color: dayPal.text, opacity: 0.75 }}>{entry.teacher}</span>}
+                              {/* dir="ltr" إجباري — بدونه يعكس RTL ترتيب الوقتين فتبان
+                                  الحصة كأنها تنتهي قبل ما تبدأ (08:15 - 07:30). */}
                               {(entry.start_time || entry.end_time) && (
-                                <span style={{ fontSize: 8, color: dayPal.text, opacity: 0.55 }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
+                                <span dir="ltr" style={{ fontSize: 8, color: dayPal.text, opacity: 0.55, direction: "ltr" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
                               )}
                             </div>
                           ) : (
