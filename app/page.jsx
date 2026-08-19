@@ -695,11 +695,11 @@ function Onboarding({ onDone }) {
       : err.message;
   }
 
-  async function sendCode() {
+  async function sendCode(isResend = false) {
     setBusy(true);
     setError("");
     try {
-      await post("/api/auth/request-otp", { phone: phone.trim() });
+      await post("/api/auth/request-otp", { phone: phone.trim(), resend: isResend === true });
       setStep("code");
       setCode("");
       setResendIn(30);
@@ -736,7 +736,7 @@ function Onboarding({ onDone }) {
         error={error}
         resendIn={resendIn}
         onSubmit={submitCode}
-        onResend={sendCode}
+        onResend={() => sendCode(true)}
         onBack={() => { setStep("phone"); setError(""); }}
       />
     );

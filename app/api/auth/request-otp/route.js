@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { isReviewPhone, normalizeKuwaitPhone, twilioVerify } from "@/lib/otp";
+import { cancelPendingVerification, isReviewPhone, normalizeKuwaitPhone, twilioVerify } from "@/lib/otp";
 
 // إرسال كود التحقق على واتساب، مع تحويل تلقائي لرسالة نصية لو ما وصل واتساب
 // (المستخدمة ما عندها واتساب، أو التسليم فشل). Twilio Verify يتكفّل بتوليد
 // الكود وانتهاء صلاحيته وحد المحاولات — ما نخزّن أي كود عندنا.
 export async function POST(req) {
-  let phone;
+  let phone, resend;
   try {
-    ({ phone } = await req.json());
+    ({ phone, resend } = await req.json());
   } catch {
     return NextResponse.json({ error: "طلب غير صالح" }, { status: 400 });
   }
@@ -22,6 +22,9 @@ export async function POST(req) {
   if (isReviewPhone(to)) {
     return NextResponse.json({ ok: true, channel: "review" });
   }
+
+  // عند إعادة الإرسال نلغي المعلّق عشان يتولّد كود جديد بدل تكرار القديم
+  if (resend) await cancelPendingVerification(to);
 
   try {
     const verification = await twilioVerify("Verifications", {
