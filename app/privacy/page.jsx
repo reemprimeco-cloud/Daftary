@@ -7,7 +7,12 @@ const UPDATED = "١٤ أغسطس ٢٠٢٦";
 
 export default function PrivacyPage() {
   return (
-    <div dir="rtl" style={{ minHeight: "100%", overflowY: "auto", background: "#FAF7F2", padding: "40px 20px 60px" }}>
+    <div dir="rtl" className="app-scroll" style={{ background: "#FAF7F2", padding: "20px 20px 60px" }}>
+      <div style={{ maxWidth: 680, margin: "0 auto 16px" }}>
+        <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#5C4B8C", fontWeight: 700, fontSize: 14, textDecoration: "none", padding: "8px 4px" }}>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>→</span> رجوع لدفتري
+        </a>
+      </div>
       <main style={{ maxWidth: 680, margin: "0 auto", background: "white", borderRadius: 20, padding: "32px 26px", boxShadow: "0 1px 3px rgba(0,0,0,.06)", lineHeight: 1.9, color: "#374151", fontSize: 15 }}>
         <header style={{ textAlign: "center", marginBottom: 30, paddingBottom: 22, borderBottom: "1px solid #F0EEE8" }}>
           <img src="/logo.png" alt="دفتري" style={{ width: 72, height: 72, borderRadius: 18, margin: "0 auto 14px", display: "block" }} />
