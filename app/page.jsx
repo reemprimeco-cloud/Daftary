@@ -1183,6 +1183,9 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
   const fileRef = useRef();
   const stage = stageForGrade(grade);
   const options = gov ? schools?.[gov]?.[stage]?.[gender] || [] : [];
+  // مدارس جديدة ممكن ما تكون انضافت بموقع الوزارة بعد — نسمح للأم تكتب
+  // اسم المدرسة يدوياً إذا مو موجودة بالقائمة.
+  const [otherSchool, setOtherSchool] = useState(() => !!child?.school && !options.includes(child.school));
   const canSave = name.trim().length > 1 && gov && school;
   const word = gender === "بنات" ? "طالبة" : "طالب";
 
@@ -1219,7 +1222,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: 13, fontWeight: 700 }}>الصف</label>
-              <select value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setSchool(""); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
+              <select value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setSchool(""); setOtherSchool(false); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => <option key={g} value={g}>الصف {g} — {stageForGrade(g)}</option>)}
               </select>
             </div>
@@ -1235,7 +1238,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
             <label style={{ fontSize: 13, fontWeight: 700 }}>الجنس / نوع المدرسة</label>
             <div style={{ display: "flex", gap: 8, marginTop: 5 }}>
               {["بنين", "بنات"].map((g) => (
-                <button key={g} onClick={() => { setGender(g); setSchool(""); }} style={{ flex: 1, padding: 9, borderRadius: 12, border: `1px solid ${gender === g ? "#B7A6E8" : "#E5E7EB"}`, background: gender === g ? "#F1EFFA" : "white", color: gender === g ? "#5C4B8C" : "#6B7280", fontWeight: 700 }}>{g}</button>
+                <button key={g} onClick={() => { setGender(g); setSchool(""); setOtherSchool(false); }} style={{ flex: 1, padding: 9, borderRadius: 12, border: `1px solid ${gender === g ? "#B7A6E8" : "#E5E7EB"}`, background: gender === g ? "#F1EFFA" : "white", color: gender === g ? "#5C4B8C" : "#6B7280", fontWeight: 700 }}>{g}</button>
               ))}
             </div>
           </div>
@@ -1260,7 +1263,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
 
           <div>
             <label style={{ fontSize: 13, fontWeight: 700 }}>المحافظة</label>
-            <select value={gov} onChange={(e) => { setGov(e.target.value); setSchool(""); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
+            <select value={gov} onChange={(e) => { setGov(e.target.value); setSchool(""); setOtherSchool(false); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
               <option value="">— اختاري —</option>
               {schools && Object.keys(schools).map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
@@ -1269,10 +1272,27 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
           {gov && (
             <div>
               <label style={{ fontSize: 13, fontWeight: 700 }}>المدرسة ({stage} - {gender})</label>
-              <select value={school} onChange={(e) => setSchool(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
+              <select
+                value={otherSchool ? "__other__" : school}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "__other__") { setOtherSchool(true); setSchool(""); }
+                  else { setOtherSchool(false); setSchool(v); }
+                }}
+                style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}
+              >
                 <option value="">— اختاري —</option>
                 {options.map((s) => <option key={s} value={s}>{s}</option>)}
+                <option value="__other__">أخرى (مدرسة جديدة غير مدرجة)</option>
               </select>
+              {otherSchool && (
+                <input
+                  value={school}
+                  onChange={(e) => setSchool(e.target.value)}
+                  placeholder="اكتبي اسم المدرسة"
+                  style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 8 }}
+                />
+              )}
             </div>
           )}
 
