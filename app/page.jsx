@@ -8,6 +8,7 @@ import {
   hapticSuccess,
   hapticLight,
   nativeShare,
+  nativeSharePdf,
   syncTaskReminders,
   attachPullToRefresh,
 } from "@/lib/native";
@@ -944,8 +945,6 @@ function ScheduleCard({ child, schedule, onUpload }) {
   const periods = Array.from({ length: maxPeriod }, (_, i) => i + 1);
   const printRef = useRef();
   const [exporting, setExporting] = useState(false);
-  // تصدير PDF يعتمد على تنزيل ملف من المتصفح، وهذا ما يشتغل داخل WebView تطبيق
-  // آبل — الزر يصير بلا فايدة. نخفيه بالتطبيق ونخليه بنسخة الويب بس.
   const [native, setNative] = useState(false);
   useEffect(() => setNative(isNativeApp()), []);
 
@@ -974,7 +973,18 @@ function ScheduleCard({ child, schedule, onUpload }) {
       const x = (pageWidth - w) / 2;
       const y = (pageHeight - h) / 2;
       pdf.addImage(imgData, "PNG", x, y, w, h);
-      pdf.save(`جدول-حصص-${child.name}.pdf`);
+
+      const fileName = `جدول-حصص-${child.name}.pdf`;
+      if (native) {
+        // ما فيه تنزيل ملفات داخل WebView — نفتح قائمة المشاركة الأصلية
+        // بدلاً من ذلك (فيها حفظ بالملفات، إرسال، أو طباعة عبر AirPrint).
+        const dataUri = pdf.output("datauristring");
+        const base64 = dataUri.slice(dataUri.indexOf(",") + 1);
+        const shared = await nativeSharePdf(base64, fileName, fileName);
+        if (!shared) throw new Error("native share failed");
+      } else {
+        pdf.save(fileName);
+      }
     } catch (e) {
       console.error("PDF export failed:", e);
       alert("تعذّر تصدير PDF، حاولي مرة ثانية.");
@@ -998,13 +1008,11 @@ function ScheduleCard({ child, schedule, onUpload }) {
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا يوجد جدول حصص مضاف بعد</p>
         ) : (
           <>
-          {!native && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-              <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
-                {exporting ? "جاري التصدير..." : "📄 تصدير PDF"}
-              </button>
-            </div>
-          )}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
+              {exporting ? "جاري التصدير..." : native ? "📄 تصدير / طباعة" : "📄 تصدير PDF"}
+            </button>
+          </div>
           <table style={{ borderCollapse: "separate", borderSpacing: 5, fontSize: 11 }}>
             <thead>
               <tr>
