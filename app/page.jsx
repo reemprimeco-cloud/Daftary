@@ -1020,50 +1020,55 @@ function ScheduleCard({ child, schedule, onUpload }) {
               {exporting ? "جاري التصدير..." : native ? "📄 تصدير / طباعة" : "📄 تصدير PDF"}
             </button>
           </div>
-          <table style={{ borderCollapse: "separate", borderSpacing: 5, fontSize: 11 }}>
+          <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 4, fontSize: 11 }}>
+            <colgroup>
+              <col style={{ width: "16%" }} />
+              {DAYS.map((d) => <col key={d} style={{ width: `${84 / DAYS.length}%` }} />)}
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ padding: 4, width: 58 }}></th>
-                {Array.from({ length: maxPeriod }, (_, i) => i + 1).map((p) => (
-                  <th key={p} style={{ padding: 4, color: "#9CA3AF", fontWeight: 800, minWidth: 86 }}>الحصة {p}</th>
-                ))}
+                <th style={{ padding: 4 }}></th>
+                {DAYS.map((d, di) => {
+                  const dayPal = PALETTE[di % PALETTE.length];
+                  return (
+                    <th key={d} style={{ padding: "8px 3px", background: dayPal.soft, color: dayPal.text, borderRadius: 8, fontWeight: 800 }}>{d}</th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
-              {DAYS.map((d, di) => {
-                const dayPal = PALETTE[di % PALETTE.length];
-                return (
-                  <tr key={d}>
-                    <td style={{ padding: "8px 6px", textAlign: "center", background: dayPal.soft, color: dayPal.text, borderRadius: 8, fontWeight: 800, whiteSpace: "nowrap" }}>{d}</td>
-                    {Array.from({ length: maxPeriod }, (_, i) => i + 1).map((p) => {
-                      const entry = grid[`${d}-${p}`];
-                      return (
-                        <td key={p} style={{ padding: "6px 4px", textAlign: "center", background: dayPal.bg, borderRadius: 8, verticalAlign: entry ? "top" : "middle" }}>
-                          {entry ? (
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                              <div style={{ position: "relative" }}>
-                                <SubjectIcon subject={entry.subject} size={26} />
-                                {getSubjectIconFile(entry.subject) === "pe" && child.pe_uniform_color && (
-                                  <span style={{ position: "absolute", bottom: -2, left: -2, width: 10, height: 10, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
-                                )}
-                              </div>
-                              <span style={{ fontSize: 10, fontWeight: 800, color: dayPal.text }}>{entry.subject}</span>
-                              {entry.teacher && <span style={{ fontSize: 9, color: dayPal.text, opacity: 0.75 }}>{entry.teacher}</span>}
-                              {/* dir="ltr" إجباري — بدونه يعكس RTL ترتيب الوقتين فتبان
-                                  الحصة كأنها تنتهي قبل ما تبدأ (08:15 - 07:30). */}
-                              {(entry.start_time || entry.end_time) && (
-                                <span dir="ltr" style={{ fontSize: 8, color: dayPal.text, opacity: 0.55, direction: "ltr" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
+              {periods.map((p) => (
+                <tr key={p}>
+                  <td style={{ padding: 4, textAlign: "center", color: "#9CA3AF", fontWeight: 800, fontSize: 10 }}>الحصة {p}</td>
+                  {DAYS.map((d, di) => {
+                    const dayPal = PALETTE[di % PALETTE.length];
+                    const entry = grid[`${d}-${p}`];
+                    return (
+                      <td key={d} style={{ padding: "6px 3px", textAlign: "center", background: dayPal.bg, borderRadius: 8, verticalAlign: entry ? "top" : "middle" }}>
+                        {entry ? (
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                            <div style={{ position: "relative" }}>
+                              <SubjectIcon subject={entry.subject} size={22} />
+                              {getSubjectIconFile(entry.subject) === "pe" && child.pe_uniform_color && (
+                                <span style={{ position: "absolute", bottom: -2, left: -2, width: 9, height: 9, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
                               )}
                             </div>
-                          ) : (
-                            <span style={{ color: dayPal.text, opacity: 0.4 }}>—</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
+                            <span style={{ fontSize: 9, fontWeight: 800, color: dayPal.text, lineHeight: 1.25 }}>{entry.subject}</span>
+                            {entry.teacher && <span style={{ fontSize: 8, color: dayPal.text, opacity: 0.75, lineHeight: 1.2 }}>{entry.teacher}</span>}
+                            {/* dir="ltr" إجباري — بدونه يعكس RTL ترتيب الوقتين فتبان
+                                الحصة كأنها تنتهي قبل ما تبدأ (08:15 - 07:30). */}
+                            {(entry.start_time || entry.end_time) && (
+                              <span dir="ltr" style={{ fontSize: 7, color: dayPal.text, opacity: 0.55, direction: "ltr" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ color: dayPal.text, opacity: 0.4 }}>—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
             </tbody>
           </table>
           </>
