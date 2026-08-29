@@ -8,11 +8,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        // UIWindow خلفيتها سوداء افتراضياً. contentInset:"automatic" بإعدادات
-        // Capacitor يبعّد محتوى الويب عن حواف الشاشة (الشريط العلوي وخط الهوم)،
-        // فتنكشف هذي الخلفية السوداء بدل لون التطبيق — نطابقها بلون الأشرطة
-        // العلوية/السفلية (rgba(249,249,249)) عشان ما تبين كخط أو شريط أسود.
-        window?.backgroundColor = UIColor(red: 249/255, green: 249/255, blue: 249/255, alpha: 1)
         window?.rootViewController = CAPBridgeViewController()
         window?.makeKeyAndVisible()
 

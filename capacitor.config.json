@@ -8,6 +8,7 @@
     "errorPath": "error.html"
   },
   "ios": {
-    "contentInset": "automatic"
+    "contentInset": "automatic",
+    "backgroundColor": "#F9F9F9"
   }
 }
