@@ -1076,9 +1076,12 @@ function ScheduleCard({ child, schedule, onUpload }) {
       </div>
       {schedule.length > 0 && (
         <div style={{ position: "fixed", top: 0, left: -9999, width: 1100 }}>
-          <div ref={printRef} style={{ background: "white", padding: 24, direction: "rtl" }}>
+          {/* letterSpacing: "normal" إجباري هنا — قاعدة .ios-native h2 تضبط
+              letter-spacing داخل تطبيق آبل، وhtml2canvas عندها يرسم كل حرف
+              لحاله بدل الكلمة كاملة، فينكسر تشكيل الحروف العربية المتصلة. */}
+          <div ref={printRef} style={{ background: "white", padding: 24, direction: "rtl", letterSpacing: "normal" }}>
             <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #111", paddingBottom: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 22, color: "#111" }}>جدول حصص {child.name}</h2>
+              <h2 style={{ margin: 0, fontSize: 22, color: "#111", letterSpacing: "normal" }}>جدول حصص {child.name}</h2>
               <p style={{ margin: "6px 0 0", fontSize: 13, color: "#333" }}>{child.school} — الصف {child.grade}/{child.section}</p>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
