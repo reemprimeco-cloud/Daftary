@@ -987,14 +987,14 @@ function ScheduleCard({ child, schedule, onUpload }) {
         // بدلاً من ذلك (فيها حفظ بالملفات، إرسال، أو طباعة عبر AirPrint).
         const dataUri = pdf.output("datauristring");
         const base64 = dataUri.slice(dataUri.indexOf(",") + 1);
-        const shared = await nativeSharePdf(base64, fileName, fileName);
-        if (!shared) throw new Error("native share failed");
+        const failure = await nativeSharePdf(base64, fileName, fileName);
+        if (failure) throw new Error(failure);
       } else {
         pdf.save(fileName);
       }
     } catch (e) {
       console.error("PDF export failed:", e);
-      alert("تعذّر تصدير PDF، حاولي مرة ثانية.");
+      alert("تعذّر تصدير PDF.\n\nالسبب: " + (e?.message || e));
     } finally {
       setExporting(false);
     }

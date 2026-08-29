@@ -74,5 +74,10 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- تصميم دفتري فاتح بالكامل وما فيه دعم للوضع الداكن. بدون تثبيت المظهر
+	     الفاتح، الأسطح النظامية (أعلى الشاشة وأسفلها) تصير سوداء بالوضع الداكن،
+	     ونص شريط الحالة اللي نضبطه داكن يختفي عليها. -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 </dict>
 </plist>

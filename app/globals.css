@@ -4,6 +4,9 @@ html, body {
   margin: 0;
   padding: 0;
   font-family: "Tajawal", sans-serif;
+  /* التصميم فاتح بالكامل — بدون هذا، متصفح/WebView بالوضع الداكن يقلب ألوان
+     عناصر النماذج والخلفيات الافتراضية ويطلع مناطق سوداء. */
+  color-scheme: light;
   background: #FAF7F2;
   color: #1F2937;
   overscroll-behavior-y: none;
