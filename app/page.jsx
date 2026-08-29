@@ -424,12 +424,17 @@ export default function Home() {
       {native ? (
         <div className="ios-navbar" style={{ padding: "calc(env(safe-area-inset-top) + 4px) 16px 10px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
-            <button onClick={() => setShowProfile(true)} aria-label="حسابي" style={{ background: "none", padding: 0, minHeight: 44, display: "flex", alignItems: "center" }}>
-              <img src="/logo.png" alt="" style={{ width: 32, height: 32, borderRadius: 8 }} />
-            </button>
-            <button onClick={() => setShowUpload(true)} className="ios-btn-plain" style={{ fontWeight: 600 }}>
-              رفع جدول
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <button onClick={() => setShowProfile(true)} aria-label="حسابي" style={{ background: "none", padding: 0, minHeight: 44, display: "flex", alignItems: "center", flexShrink: 0 }}>
+                <img src="/logo.png" alt="" style={{ width: 32, height: 32, borderRadius: 8 }} />
+              </button>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً، {mother.name}</span>
+            </div>
+            {view === "dashboard" && (
+              <button onClick={() => setShowUpload(true)} className="ios-btn-plain" style={{ fontWeight: 600, flexShrink: 0 }}>
+                رفع جدول
+              </button>
+            )}
           </div>
           <h1 className="ios-large-title">{TABS.find((t) => t.key === view)?.label}</h1>
           <p style={{ margin: "2px 0 0", fontSize: 15, color: "#8E8E93", letterSpacing: "-0.01em" }}>
@@ -441,14 +446,16 @@ export default function Home() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <img src="/logo.png" alt="دفتري" style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً {mother.name}</p>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً، {mother.name}</p>
               <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            <button onClick={() => setShowUpload(true)} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
-              رفع جدول
-            </button>
+            {view === "dashboard" && (
+              <button onClick={() => setShowUpload(true)} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
+                رفع جدول
+              </button>
+            )}
             <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", color: "#6B7280", fontSize: 18, padding: "10px 12px", borderRadius: 12, minHeight: 40, lineHeight: 1 }}>
               ⚙️
             </button>
