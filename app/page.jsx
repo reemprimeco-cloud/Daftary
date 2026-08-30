@@ -1754,18 +1754,13 @@ function TeacherView({ children, motherId }) {
     setBuying(true);
     try {
       const { nativePurchase } = await import("@/lib/native");
-      const transactionId = await nativePurchase(productId, {
+      const ref = await nativePurchase(productId, {
         subscription: productId !== CREDIT_PRODUCT_ID,
         accountToken: motherId,
       });
-      if (!transactionId) throw new Error("تم إلغاء الشراء.");
-      const res = await fetch("/api/subscription/apple", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactionId, childId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "تعذّر تفعيل الاشتراك.");
+      if (!ref) throw new Error("تم إلغاء الشراء.");
+      const data = await verifyPurchase(ref, productId);
+      if (!data.ok) throw new Error(data.error || "تعذّر تفعيل الاشتراك.");
       await refreshQuota();
       setPaywallOpen(false);
       setTrialAccepted(true);
@@ -1774,6 +1769,23 @@ function TeacherView({ children, motherId }) {
       setBuyError(err.message || "تعذّر إتمام الشراء، حاول مرة ثانية.");
     }
     setBuying(false);
+  }
+
+  // لكل متجر مسار تحقق مختلف: آبل تعرّف الشراء بـtransactionId وجوجل
+  // بـpurchaseToken، والتحقق نفسه يمر على واجهة برمجية مختلفة تماماً.
+  async function verifyPurchase(ref, productId) {
+    const isGoogle = ref.platform === "android";
+    const res = await fetch(isGoogle ? "/api/subscription/google" : "/api/subscription/apple", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        isGoogle
+          ? { purchaseToken: ref.token, productId: ref.productId || productId, childId }
+          : { transactionId: ref.token, childId }
+      ),
+    });
+    const data = await res.json().catch(() => ({}));
+    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
   }
 
   async function restore() {
@@ -1785,17 +1797,13 @@ function TeacherView({ children, motherId }) {
     setBuying(true);
     try {
       const { nativeRestorePurchases } = await import("@/lib/native");
-      const ids = await nativeRestorePurchases(motherId);
-      if (!ids.length) throw new Error("ما لقينا مشتريات سابقة على حساب آبل هذا.");
-      for (const transactionId of ids) {
-        await fetch("/api/subscription/apple", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transactionId, childId }),
-        });
+      const refs = await nativeRestorePurchases(motherId);
+      if (!refs.length) throw new Error("ما لقينا مشتريات سابقة على حسابك بالمتجر.");
+      for (const ref of refs) {
+        await verifyPurchase(ref, ref.productId);
       }
       const fresh = await refreshQuota();
-      if ((fresh?.remainingTotal || 0) <= 0) throw new Error("ما فيه اشتراك ساري على حساب آبل هذا.");
+      if ((fresh?.remainingTotal || 0) <= 0) throw new Error("ما فيه اشتراك ساري على حسابك بالمتجر.");
       setPaywallOpen(false);
       setTrialAccepted(true);
     } catch (err) {

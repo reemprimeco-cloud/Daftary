@@ -10,5 +10,8 @@
   "ios": {
     "contentInset": "automatic",
     "backgroundColor": "#F9F9F9"
+  },
+  "android": {
+    "backgroundColor": "#F9F9F9"
   }
 }
