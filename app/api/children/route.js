@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { redistributePool } from "@/lib/entitlements";
 
 export async function GET(req) {
   const motherId = req.nextUrl.searchParams.get("motherId");
@@ -41,5 +42,11 @@ export async function POST(req) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  // الرصيد عائلي وينقسم على الأبناء وقت الشراء، فالطالب/ة المضاف بعده يطلع
+  // بلا رصيد ما لم نعِد التوزيع. فشل التوزيع ما يبطّل الإضافة نفسها.
+  const redistributed = await redistributePool(req.headers.get("x-mother-id"));
+  if (!redistributed.ok) console.error("redistributePool failed:", redistributed.error);
+
   return NextResponse.json({ child: data });
 }
