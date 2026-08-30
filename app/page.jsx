@@ -13,6 +13,7 @@ import {
   attachPullToRefresh,
 } from "@/lib/native";
 import { installAuthFetch } from "@/lib/authFetch";
+import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
 
 const PALETTE = [
   { bg: "#FDEFF3", ring: "#E8A0B4", solid: "#E39CB2", soft: "#F9D9E2", text: "#8C4E62" },
@@ -1476,6 +1477,115 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   );
 }
 
+// شاشة الاشتراك — مدخل تاب المعلم الذكي لمن ما عنده رصيد.
+// نعرض زر التجربة المجانية بجانب الاشتراك: بدونه يشوف ولي الأمر طلب دفع
+// قبل ما يجرب أي شي، وهذا يطلّعه — وآبل نفسها تعترض على جدار دفع بلا قيمة
+// ظاهرة قبله (بند 3.1.2).
+function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying, error }) {
+  const canTrial = (quota?.remainingTrial || 0) > 0;
+  const subscribed = quota?.plan === "annual";
+
+  return (
+    <div className="app-scroll" style={{ height: "100%", padding: "18px 16px calc(env(safe-area-inset-bottom) + 20px)" }}>
+      <div style={{ maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 13 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ width: 54, height: 54, borderRadius: 18, background: "#F1EFFA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
+            👩‍🏫
+          </div>
+          {onClose && (
+            <button onClick={onClose} aria-label="إغلاق" style={{ background: "#F3F4F6", color: "#6B7280", borderRadius: "50%", width: 30, height: 30, fontSize: 17, lineHeight: 1 }}>
+              ×
+            </button>
+          )}
+        </div>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 21, fontWeight: 800, color: "#1F2937", lineHeight: 1.4 }}>
+            معلّم خاص لأبنائك
+          </h2>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.75, color: "#6B7280" }}>
+            يشرح الدروس ويجاوب على أسئلتك — من منهج وزارة التربية.
+          </p>
+        </div>
+
+        {subscribed ? (
+          <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.7 }}>
+            خلص رصيد هذا الطالب/ة. أضف رصيد إضافي، أو انتظر تجديد الاشتراك.
+          </div>
+        ) : (
+          SUBSCRIPTION_TIERS.map((t) => (
+            <button
+              key={t.productId}
+              onClick={() => onBuy(t.productId)}
+              disabled={buying}
+              style={{
+                background: "white", border: "1.5px solid #EDE9F4", borderRadius: 18, padding: "15px 16px",
+                display: "flex", flexDirection: "column", gap: 3, textAlign: "start", opacity: buying ? 0.6 : 1,
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ fontSize: 18, fontWeight: 800, color: "#1F2937" }}>{t.label}</span>
+                <span style={{ fontSize: 18, fontWeight: 800, color: "#5C4B8C", whiteSpace: "nowrap" }}>
+                  {t.priceKwd} د.ك / سنة
+                </span>
+              </span>
+              <span style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 500 }}>١٠ فلوس للسؤال</span>
+            </button>
+          ))
+        )}
+
+        <button
+          onClick={() => onBuy(CREDIT_PRODUCT_ID)}
+          disabled={buying}
+          style={{
+            background: "white", border: "1.5px solid #EDE9F4", borderRadius: 18, padding: "15px 16px",
+            display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10,
+            opacity: buying ? 0.6 : 1,
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 800, color: "#1F2937" }}>
+            رصيد إضافي {PLAN.CREDIT_PACK_QUESTIONS} سؤال
+          </span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: "#5C4B8C", whiteSpace: "nowrap" }}>
+            {PLAN.CREDIT_PACK_PRICE_KWD} د.ك
+          </span>
+        </button>
+
+        <div style={{ background: "#EBF7F1", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, color: "#2F6E56", lineHeight: 1.7, fontWeight: 500 }}>
+          الرصيد مقسّم بين الأبناء <strong>بالتساوي</strong>، وكل واحد له رصيده.
+        </div>
+
+        {error && (
+          <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 10, fontSize: 12.5 }}>{error}</div>
+        )}
+
+        {canTrial && (
+          <button onClick={onTrial} style={{ background: "transparent", color: "#5C4B8C", borderRadius: 15, padding: 11, fontSize: 14.5, fontWeight: 800 }}>
+            جرّب {quota.remainingTrial} أسئلة مجاناً
+          </button>
+        )}
+
+        <p style={{ margin: 0, fontSize: 10.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.9 }}>
+          يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك
+          <br />
+          <a href="/terms" style={termsLink}>شروط الاستخدام</a>
+          {" · "}
+          <a href="/privacy" style={termsLink}>سياسة الخصوصية</a>
+          {" · "}
+          <button onClick={onRestore} style={{ ...termsLink, background: "transparent", padding: 0, fontSize: 10.5, fontWeight: 400 }}>
+            استعادة المشتريات
+          </button>
+        </p>
+
+        <p style={{ margin: 0, paddingTop: 11, borderTop: "1px solid #F0EEE8", fontSize: 11.5, color: "#6B7280", textAlign: "center", lineHeight: 1.7 }}>
+          باقي التطبيق مجاني بالكامل.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const termsLink = { color: "#9CA3AF", textDecoration: "underline" };
+
 function TeacherView({ children, motherId }) {
   const [childId, setChildId] = useState(children[0]?.id || "");
   const [messages, setMessages] = useState([]);
@@ -1485,6 +1595,11 @@ function TeacherView({ children, motherId }) {
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [native, setNative] = useState(false);
+  const [quota, setQuota] = useState(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [trialAccepted, setTrialAccepted] = useState(false);
+  const [buying, setBuying] = useState(false);
+  const [buyError, setBuyError] = useState("");
   const fileRef = useRef();
   const bottomRef = useRef();
   useEffect(() => setNative(isNativeApp()), []);
@@ -1498,6 +1613,18 @@ function TeacherView({ children, motherId }) {
       .then((data) => setMessages(data.messages || []))
       .finally(() => setHistoryLoading(false));
   }, [childId, motherId]);
+
+  // رصيد الطالب/ة المختار. لو فشل الجلب نخلي quota = null ونسمح بالمحادثة —
+  // السيرفر يخصم ويمنع على أي حال، فما نقفل الميزة بسبب خلل عندنا بالعرض.
+  useEffect(() => {
+    if (!childId) return;
+    setPaywallOpen(false); setTrialAccepted(false);
+    setQuota(null);
+    fetch(`/api/subscription/status?childId=${childId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setQuota(data))
+      .catch(() => setQuota(null));
+  }, [childId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1535,12 +1662,101 @@ function TeacherView({ children, motherId }) {
         body: JSON.stringify({ motherId, childId, question: questionText, image: attachedImage || undefined }),
       });
       const data = await res.json();
+      // ٤٠٢ = خلص الرصيد. نرجّع شاشة الاشتراك بدل رسالة خطأ مبهمة.
+      if (res.status === 402) {
+        setQuota((q) => ({ ...(q || {}), remainingTotal: 0, remainingTrial: 0 }));
+        setPaywallOpen(true);
+        setMessages((prev) => prev.slice(0, -1));
+        setSending(false);
+        return;
+      }
       if (!res.ok) throw new Error(data.error || "");
       setMessages((prev) => [...prev, { role: "assistant", content: data.answer, had_image: false, id: `local-a-${Date.now()}` }]);
+      if (data.quota?.remaining !== undefined) {
+        setQuota((q) => ({ ...(q || {}), remainingTotal: data.quota.remaining }));
+      }
     } catch (err) {
       setErrorMsg(err.message || "تعذّر إرسال السؤال، حاولي مرة ثانية.");
     }
     setSending(false);
+  }
+
+  // الشراء يتم بـStoreKit داخل تطبيق آبل ثم نتحقق من الإيصال بالسيرفر.
+  // على الويب ما فيه شراء — نوجّه ولي الأمر للتطبيق.
+  async function buy(productId) {
+    setBuyError("");
+    if (!native) {
+      setBuyError("الاشتراك متاح من تطبيق دفتري على آيفون فقط.");
+      return;
+    }
+    setBuying(true);
+    try {
+      const { nativePurchase } = await import("@/lib/native");
+      const transactionId = await nativePurchase(productId);
+      if (!transactionId) throw new Error("تم إلغاء الشراء.");
+      const res = await fetch("/api/subscription/apple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactionId, childId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "تعذّر تفعيل الاشتراك.");
+      const fresh = await fetch(`/api/subscription/status?childId=${childId}`).then((r) => r.json());
+      setQuota(fresh);
+      setPaywallOpen(false);
+      hapticSuccess();
+    } catch (err) {
+      setBuyError(err.message || "تعذّر إتمام الشراء، حاول مرة ثانية.");
+    }
+    setBuying(false);
+  }
+
+  async function restore() {
+    setBuyError("");
+    if (!native) {
+      setBuyError("استعادة المشتريات متاحة من تطبيق دفتري على آيفون.");
+      return;
+    }
+    setBuying(true);
+    try {
+      const { nativeRestorePurchases } = await import("@/lib/native");
+      const txs = await nativeRestorePurchases();
+      if (!txs.length) throw new Error("ما لقينا مشتريات سابقة على هذا الحساب.");
+      for (const t of txs) {
+        await fetch("/api/subscription/apple", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactionId: t.transactionId || t.id || t, childId }),
+        });
+      }
+      const fresh = await fetch(`/api/subscription/status?childId=${childId}`).then((r) => r.json());
+      setQuota(fresh);
+      setPaywallOpen(false);
+    } catch (err) {
+      setBuyError(err.message || "تعذّرت استعادة المشتريات.");
+    }
+    setBuying(false);
+  }
+
+  // شاشة الاشتراك تظهر بثلاث حالات: خلص الرصيد (إجبارية، ما فيها إغلاق)،
+  // أو أول مرة قبل ما يبدأ التجربة، أو لما يفتحها بنفسه من شريط الرصيد.
+  const outOfQuota = quota !== null && (quota.remainingTotal || 0) <= 0;
+  const firstTime = quota !== null && quota.plan !== "annual"
+    && (quota.remainingCredits || 0) === 0
+    && (quota.remainingTrial || 0) === PLAN.TRIAL_QUESTIONS;
+
+  if (children.length && (outOfQuota || paywallOpen || (firstTime && !trialAccepted))) {
+    return (
+      <SubscriptionScreen
+        quota={quota}
+        buying={buying}
+        error={buyError}
+        onTrial={() => { setTrialAccepted(true); setPaywallOpen(false); }}
+        onBuy={buy}
+        onRestore={restore}
+        onClose={outOfQuota ? null : () => { setPaywallOpen(false); setTrialAccepted(true); }}
+      />
+    );
   }
 
   return (
@@ -1560,6 +1776,21 @@ function TeacherView({ children, motherId }) {
         <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 700, lineHeight: 1.6 }}>
           اسألي عن أي واجب أو درس بمنهج {child ? `الصف ${child.grade}` : "ابنك/ابنتك"} — تقدرين ترفقين صورة الواجب مباشرة، والمعلم الذكي يستعين بمواد وزارة التربية الرسمية لما تكون متوفرة.
         </div>
+
+        {quota && (quota.remainingTotal || 0) > 0 && (
+          <button
+            onClick={() => setPaywallOpen(true)}
+            style={{ background: "transparent", padding: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
+          >
+            <span style={{ fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>
+              متبقي {quota.remainingTotal} سؤال
+              {quota.plan !== "annual" && (quota.remainingTrial || 0) > 0 ? " (تجربة مجانية)" : ""}
+            </span>
+            <span style={{ fontSize: 11.5, color: "#5C4B8C", fontWeight: 800 }}>
+              {quota.plan === "annual" ? "شراء رصيد" : "الاشتراك"}
+            </span>
+          </button>
+        )}
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
