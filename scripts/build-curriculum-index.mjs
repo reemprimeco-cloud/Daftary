@@ -44,6 +44,11 @@ const PAGE_BUDGETS = [
   { head: 2, middle: 1, tail: 1 },
 ];
 
+// أقل عدد دروس نقبله. الأقل من كذا يعني الاقتطاع طاح على طرف الفهرس فما
+// التقط إلا سطراً أو سطرين — وفهرس ناقص أضر من لا فهرس، لأن المعلم الذكي
+// يعتمد عليه كأنه المنهج كامل.
+const MIN_LESSONS = 4;
+
 // كراسات التدريبات والخط ما فيها فهرس دروس — نأخّرها ونجرّب كتاب المنهج أول.
 const WORKBOOK_HINTS = ["كراسة", "تدريبات", "الخط", "نشاط", "أنشطة", "handwriting", "workbook", "activity"];
 
@@ -90,8 +95,9 @@ async function moeJson(path, body) {
 async function slicePages(src, { head, middle, tail }, total) {
   const wanted = new Set();
   for (let i = 0; i < Math.min(head, total); i++) wanted.add(i);
-  // عيّنة حول منتصف الملف — مكان فهرس القسم الثاني بالكتب المدموجة
-  const mid = Math.floor(total / 2);
+  // عيّنة حول منتصف الملف — مكان فهرس القسم الثاني بالكتب المدموجة. ناخذ
+  // نافذة تبدأ قبل المنتصف بشوي، لأن الفهرس عادةً يسبق أول درس بالقسم.
+  const mid = Math.max(0, Math.floor(total / 2) - Math.floor(middle / 3));
   for (let i = mid; i < Math.min(mid + middle, total); i++) wanted.add(i);
   for (let i = Math.max(0, total - tail); i < total; i++) wanted.add(i);
 
@@ -143,15 +149,17 @@ async function askClaudeForLessons(pdfBuffer, { grade, subjectName, term, bookTi
           },
           {
             type: "text",
-            text: `هذي صفحات من كتاب "${bookTitle}" — مادة ${subjectName}، الصف ${grade}، الفصل الدراسي ${term} (منهج الكويت).
+            text: `هذي صفحات مختارة من كتاب "${bookTitle}" — مادة ${subjectName}، الصف ${grade}، الفصل الدراسي ${term} (منهج الكويت).
 
-استخرجي فهرس الوحدات والدروس كما هو مكتوب بالكتاب حرفياً — بدون تغيير الصياغة ولا إضافة دروس من عندك.
+فتّشي كل الصفحات المرفقة عن صفحة الفهرس/المحتويات، واستخرجي **كل** الوحدات والدروس المذكورة فيها كما هي مكتوبة حرفياً — بدون تغيير الصياغة ولا إضافة دروس من عندك. كوني شاملة: لو الفهرس ممتد على أكثر من صفحة، أدرجي ما فيها كلها.
+
+لا تدرجي العناصر اللي مو دروساً، مثل: معايير المنهج، نواتج التعلم، المقدمة، دليل استخدام الكتاب، قائمة المراجع، Scope and Sequence، Learning Outcomes، Progress Test، Project.
 
 أرجعي JSON فقط بهذا الشكل، بدون أي نص قبله أو بعده:
 {"lessons":[{"unit":"اسم الوحدة أو الفصل","title":"عنوان الدرس"}]}
 
 - لو الدرس ما ينتمي لوحدة، خلي unit فاضية "".
-- لو ما لقيتِ فهرساً واضحاً بهذي الصفحات، أرجعي {"lessons":[]}.`,
+- لو ما لقيتِ صفحة فهرس واضحة بهذي الصفحات، أرجعي {"lessons":[]} — لا تخمّني دروساً من محتوى الصفحات.`,
           },
         ],
       }],
@@ -222,8 +230,14 @@ async function processBook({ grade, subject, term, books }) {
   for (const book of rankBooks(books)) {
     try {
       const found = await tryBook({ grade, subject, term, book });
-      if (found.length) { lessons = found; used = book; break; }
-      console.log(`   ⚠️  ما فيه فهرس بـ«${book.fileDescription.trim()}»`);
+      // فهرس بدرس أو درسين شبه أكيد إنه ناقص (الاقتطاع طاح على طرف الفهرس)،
+      // وتخزينه أضر من تركه: المعلم الذكي يبني عليه كأنه المنهج كامل.
+      if (found.length >= MIN_LESSONS) { lessons = found; used = book; break; }
+      if (found.length) {
+        console.log(`   ⚠️  فهرس ناقص (${found.length} درس فقط) بـ«${book.fileDescription.trim()}» — نتجاهله`);
+      } else {
+        console.log(`   ⚠️  ما فيه فهرس بـ«${book.fileDescription.trim()}»`);
+      }
     } catch (e) {
       problems.push(`«${book.fileDescription.trim()}»: ${e.message}`);
     }
