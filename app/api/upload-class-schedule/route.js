@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { logAiUsage } from "@/lib/aiUsage";
 
+const FEATURE = "upload_class_schedule";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 
 export async function POST(req) {
@@ -72,6 +74,10 @@ async function handleUpload(req) {
   }
 
   const aiData = await aiRes.json();
+  await logAiUsage({
+    motherId, childId, feature: FEATURE, model: "claude-sonnet-5",
+    usage: aiData.usage, hadImage: true, attachments: images.length,
+  });
   const textBlock = (aiData.content || []).find((b) => b.type === "text");
   if (!textBlock) {
     console.error("No text block in Anthropic response:", JSON.stringify(aiData));

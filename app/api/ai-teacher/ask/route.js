@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { logAiUsage } from "@/lib/aiUsage";
 import {
   moeGradeInfo,
   kuwaitTerm,
@@ -164,6 +165,10 @@ ${questionText}
   }
 
   const aiData = await aiRes.json();
+  await logAiUsage({
+    motherId, childId: child.id, feature: "ai_teacher", model: "claude-sonnet-5",
+    usage: aiData.usage, hadImage: !!image, attachments: attachments.length,
+  });
   const textBlock = (aiData.content || []).find((b) => b.type === "text");
   const answer = textBlock?.text?.trim() || "تعذّر توليد إجابة، حاولي مرة ثانية.";
 
