@@ -1489,10 +1489,11 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
   // داخل تطبيق آبل يعرض زر الدفع بالبطاقة للحظة — وهذا وحده سبب كافٍ لشطب
   // التطبيق. فما نعرض أي وسيلة دفع قبل ما نتأكد من المنصة.
   const [platform, setPlatform] = useState(null);
+  const webPayments = process.env.NEXT_PUBLIC_ENABLE_WEB_PAYMENTS === "true";
 
   useEffect(() => {
     const isNative = isNativeApp();
-    setPlatform(isNative ? "ios" : "web");
+    setPlatform(isNative ? "store" : "web");
     if (!isNative) return;
     // آبل تشترط عرض السعر اللي بينخصم فعلاً، وهو يختلف بحسب متجر البلد
     // والضريبة — فنجيبه من المتجر، وأرقامنا المكتوبة احتياط لو فشل الجلب.
@@ -1505,6 +1506,9 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
   }, []);
 
   const priceOf = (productId, fallbackKwd) => prices[productId] || `${fallbackKwd} د.ك`;
+  // بالتطبيق نشتري دايماً عبر المتجر. على الويب الشراء متاح فقط لو الدفع
+  // بالبطاقة مفعّل — وإلا نوجّه ولي الأمر للتطبيق.
+  const canBuy = platform === "store" || (platform === "web" && webPayments);
 
   return (
     <div className="app-scroll" style={{ height: "100%", padding: "18px 16px calc(env(safe-area-inset-bottom) + 20px)" }}>
@@ -1530,6 +1534,11 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
 
         {platform === null ? (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
+        ) : !canBuy ? (
+          <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
+            الاشتراك يتم من تطبيق دفتري على جوالك. نزّله وسجّل دخولك بنفس رقمك،
+            وبيوصلك رصيدك على نفس الحساب.
+          </div>
         ) : subscribed ? (
           <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.7 }}>
             خلص رصيد هذا الطالب/ة. أضف رصيد إضافي، أو انتظر تجديد الاشتراك.
@@ -1556,7 +1565,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
           ))
         )}
 
-        {platform !== null && (
+        {canBuy && (
           <button
             onClick={() => onBuy(CREDIT_PRODUCT_ID)}
             disabled={buying}
@@ -1590,14 +1599,14 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
         )}
 
         <p style={{ margin: 0, fontSize: 10.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.9 }}>
-          {platform === "ios"
+          {platform === "store"
             ? "يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك"
             : "شراء لسنة دراسية واحدة · بدون تجديد تلقائي"}
           <br />
           <a href="/terms" style={termsLink}>شروط الاستخدام</a>
           {" · "}
           <a href="/privacy" style={termsLink}>سياسة الخصوصية</a>
-          {platform === "ios" && (
+          {platform === "store" && (
             <>
               {" · "}
               <button onClick={onRestore} style={{ ...termsLink, background: "transparent", padding: 0, fontSize: 10.5, fontWeight: 400 }}>
