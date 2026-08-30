@@ -64,8 +64,10 @@ export async function POST(req) {
   const motherId = req.headers.get("x-mother-id");
   if (!motherId) return NextResponse.json({ error: "غير مصرّح" }, { status: 401 });
 
-  const { transactionId } = await req.json().catch(() => ({}));
+  // الشراء يُنسب لطالب/ة محدد — الاستحقاق لكل طالب/ة مو لولي الأمر.
+  const { transactionId, childId } = await req.json().catch(() => ({}));
   if (!transactionId) return NextResponse.json({ error: "معرّف المعاملة مطلوب" }, { status: 400 });
+  if (!childId) return NextResponse.json({ error: "لازم تختارين الطالب/ة قبل الشراء" }, { status: 400 });
 
   // نجرّب الإنتاج أولاً ثم الاختبار — نفس ما توصي به آبل، لأن بناء
   // TestFlight يعطي معاملات بيئة الاختبار.
@@ -86,6 +88,7 @@ export async function POST(req) {
   }
 
   const granted = await grantPurchase({
+    childId,
     motherId,
     platform: "apple",
     productId: info.productId,

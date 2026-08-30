@@ -54,11 +54,13 @@ async function handleAsk(req) {
 
   // نخصم السؤال قبل استدعاء الذكاء الاصطناعي — الخصم بعده يعني إن الفشل
   // بالخصم يمرّ استدعاءً مدفوعاً بلا مقابل.
-  const quota = await consumeQuestion(motherId);
+  // الرصيد لكل طالب/ة على حدة، فنمرّر معرّفه مع معرّف ولي الأمر.
+  const quota = await consumeQuestion(child.id, motherId);
   if (!quota.allowed) {
     return NextResponse.json({
-      error: "انتهت أسئلتك المتاحة",
+      error: `انتهت أسئلة ${child.name} المتاحة`,
       quotaExhausted: true,
+      childId: child.id,
     }, { status: 402 });
   }
 
