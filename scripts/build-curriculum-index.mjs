@@ -16,6 +16,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { PDFDocument } from "pdf-lib";
+import { pathToFileURL } from "url";
 
 const MOE_BASE = "https://elibrary.moe.edu.kw";
 const EDUCATION_TYPE_GENERAL = 8;
@@ -31,9 +32,13 @@ const GRADE_TO_MOE = {
 };
 
 // الفهرس عادةً بأول الكتاب، وبعض الكتب تحطه بالآخر — فنرسل الطرفين.
-const HEAD_PAGES = 12;
-const TAIL_PAGES = 6;
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // هامش تحت حد ٣٢ ميجا للطلب
+// صفحات كتب الوزارة صور ممسوحة عالية الدقة، فبعض الكتب تطلع صفحاتها ضخمة.
+// نبدأ بأوسع نطاق وننزل تدريجياً لين الحجم يدخل تحت الحد.
+const PAGE_BUDGETS = [[12, 6], [8, 4], [5, 3], [3, 2], [2, 1]];
+
+// حد الطلب ٣٢ ميجا، وترميز base64 يضخّم الحجم ~٣٣٪ — فالحد الفعلي للملف
+// الخام أقل بكثير. نترك هامشاً للنص والترويسات.
+const MAX_PDF_BYTES = Number(process.env.MAX_PDF_MB || 18) * 1024 * 1024;
 
 const args = process.argv.slice(2);
 const argValue = (name) => {
@@ -43,16 +48,19 @@ const argValue = (name) => {
 const onlyGrade = argValue("--grade") ? Number(argValue("--grade")) : null;
 const dryRun = args.includes("--dry-run");
 
-for (const key of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "ANTHROPIC_API_KEY"]) {
-  if (!process.env[key]) {
-    console.error(`✗ متغير البيئة ${key} غير معرّف`);
-    process.exit(1);
+function requireEnv() {
+  for (const key of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "ANTHROPIC_API_KEY"]) {
+    if (!process.env[key]) {
+      console.error(`✗ متغير البيئة ${key} غير معرّف`);
+      process.exit(1);
+    }
   }
 }
 
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+let sb = null;
+const db = () => (sb ??= createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
-});
+}));
 
 async function moeJson(path, body) {
   const res = await fetch(`${MOE_BASE}${path}`, {
@@ -66,27 +74,46 @@ async function moeJson(path, body) {
 
 // نقتطع صفحات الفهرس من الكتاب بدل ما نرسله كامل — الكتاب الكامل يتجاوز حد
 // حجم الطلب، وتكلفة قراءته بالكامل عالية بلا داعي.
-async function extractIndexPages(pdfBytes) {
-  const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-  const total = src.getPageCount();
+async function sliceePages(src, head, tail, total) {
   const wanted = new Set();
-  for (let i = 0; i < Math.min(HEAD_PAGES, total); i++) wanted.add(i);
-  for (let i = Math.max(0, total - TAIL_PAGES); i < total; i++) wanted.add(i);
+  for (let i = 0; i < Math.min(head, total); i++) wanted.add(i);
+  for (let i = Math.max(0, total - tail); i < total; i++) wanted.add(i);
 
   const out = await PDFDocument.create();
   const pages = await out.copyPages(src, [...wanted].sort((a, b) => a - b));
   pages.forEach((p) => out.addPage(p));
-  return { bytes: Buffer.from(await out.save()), totalPages: total };
+  return { bytes: Buffer.from(await out.save()), count: wanted.size };
+}
+
+async function extractIndexPages(pdfBytes) {
+  const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const total = src.getPageCount();
+
+  let last = null;
+  for (const [head, tail] of PAGE_BUDGETS) {
+    const slice = await sliceePages(src, head, tail, total);
+    last = { ...slice, head, tail };
+    if (slice.bytes.byteLength <= MAX_PDF_BYTES) {
+      return { ...last, totalPages: total, fits: true };
+    }
+  }
+  return { ...last, totalPages: total, fits: false };
 }
 
 async function askClaudeForLessons(pdfBuffer, { grade, subjectName, term, bookTitle }) {
+  // مفاتيح Anthropic المرتبطة بالهوية تتطلب تحديد مساحة العمل بكل طلب.
+  const headers = {
+    "Content-Type": "application/json",
+    "x-api-key": process.env.ANTHROPIC_API_KEY,
+    "anthropic-version": "2023-06-01",
+  };
+  if (process.env.ANTHROPIC_WORKSPACE_ID) {
+    headers["anthropic-workspace-id"] = process.env.ANTHROPIC_WORKSPACE_ID;
+  }
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
+    headers,
     body: JSON.stringify({
       model: "claude-sonnet-5",
       max_tokens: 4000,
@@ -114,7 +141,17 @@ async function askClaudeForLessons(pdfBuffer, { grade, subjectName, term, bookTi
       }],
     }),
   });
-  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) {
+    const body = await res.text();
+    if (body.includes("anthropic-workspace-id") && !process.env.ANTHROPIC_WORKSPACE_ID) {
+      throw new Error(
+        "المفتاح مرتبط بالهوية ويحتاج معرّف مساحة العمل. حدّدي المتغير ثم أعيدي التشغيل:\n" +
+        "        export ANTHROPIC_WORKSPACE_ID=\"wrkspc_...\"\n" +
+        "        (من console.anthropic.com ← Settings ← Workspaces)"
+      );
+    }
+    throw new Error(`Anthropic HTTP ${res.status}: ${body.slice(0, 200)}`);
+  }
   const data = await res.json();
   const text = (data.content || []).find((b) => b.type === "text")?.text || "";
   const match = text.match(/\{[\s\S]*\}/);
@@ -129,11 +166,15 @@ async function processBook({ grade, gradeInfo, subject, term, book }) {
   if (!pdfRes.ok) throw new Error(`تحميل الكتاب فشل: HTTP ${pdfRes.status}`);
   const full = Buffer.from(await pdfRes.arrayBuffer());
 
-  const { bytes, totalPages } = await extractIndexPages(full);
-  if (bytes.byteLength > MAX_UPLOAD_BYTES) {
-    throw new Error(`صفحات الفهرس كبيرة (${(bytes.byteLength / 1048576).toFixed(1)}MB)`);
+  const { bytes, totalPages, count, head, tail, fits } = await extractIndexPages(full);
+  if (!fits) {
+    throw new Error(
+      `صفحات الفهرس كبيرة حتى بأقل نطاق (${(bytes.byteLength / 1048576).toFixed(1)}MB لـ${count} صفحات) — صفحات هذا الكتاب صور عالية الدقة`
+    );
   }
-  console.log(`   الكتاب ${(full.byteLength / 1048576).toFixed(1)}MB / ${totalPages} صفحة → أرسلنا ${(bytes.byteLength / 1048576).toFixed(1)}MB`);
+  console.log(
+    `   الكتاب ${(full.byteLength / 1048576).toFixed(1)}MB / ${totalPages} صفحة → أرسلنا ${count} صفحة (${head}+${tail}) بحجم ${(bytes.byteLength / 1048576).toFixed(1)}MB`
+  );
 
   const lessons = await askClaudeForLessons(bytes, {
     grade, subjectName: subject.name, term, bookTitle: book.fileDescription,
@@ -144,7 +185,7 @@ async function processBook({ grade, gradeInfo, subject, term, book }) {
   }
 
   if (!dryRun) {
-    const { error } = await sb.from("curriculum_index").upsert({
+    const { error } = await db().from("curriculum_index").upsert({
       grade,
       subject_id: subject.id,
       subject_name: subject.name,
@@ -161,6 +202,7 @@ async function processBook({ grade, gradeInfo, subject, term, book }) {
 }
 
 async function main() {
+  requireEnv();
   const grades = onlyGrade ? [onlyGrade] : Object.keys(GRADE_TO_MOE).map(Number);
   let totalLessons = 0;
   const failures = [];
@@ -212,4 +254,9 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error("خطأ غير متوقع:", e); process.exit(1); });
+// نشغّل main فقط عند التنفيذ المباشر، عشان الدوال تبقى قابلة للاستيراد بالاختبار.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((e) => { console.error("خطأ غير متوقع:", e); process.exit(1); });
+}
+
+export { extractIndexPages, MAX_PDF_BYTES, PAGE_BUDGETS };
