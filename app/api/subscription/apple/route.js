@@ -87,6 +87,25 @@ export async function POST(req) {
     return NextResponse.json({ error: "منتج غير معروف" }, { status: 400 });
   }
 
+  // معاملة مستردّة أو ملغاة ما تمنح رصيداً — بدون هالفحص يقدر أحد يشتري،
+  // يطلب استرجاع من آبل، ويحتفظ برصيده.
+  if (info.revocationDate) {
+    return NextResponse.json({ error: "هذه المعاملة مستردّة" }, { status: 400 });
+  }
+
+  // اشتراك منتهي ما يُمنح (يصير مهماً بالاستعادة، لأنها ترجّع معاملات قديمة).
+  if (PRODUCTS[info.productId].kind === "subscription" && info.expiresDate && info.expiresDate < Date.now()) {
+    return NextResponse.json({ error: "هذا الاشتراك منتهي" }, { status: 400 });
+  }
+
+  // التطبيق يمرر معرّف ولي الأمر كـappAccountToken وقت الشراء، فنتأكد إن
+  // المعاملة تخص صاحب الجلسة — بدونه يقدر أحد يطالب بمعاملة غيره لو حصل
+  // معرّفها. المعاملات القديمة بلا توكن نقبلها للتوافق.
+  const token = info.appAccountToken;
+  if (token && token.toLowerCase() !== String(motherId).toLowerCase()) {
+    return NextResponse.json({ error: "هذه المعاملة تخص حساباً آخر" }, { status: 403 });
+  }
+
   const granted = await grantPurchase({
     childId,
     motherId,

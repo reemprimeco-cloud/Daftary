@@ -1484,6 +1484,21 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
 function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying, error }) {
   const canTrial = (quota?.remainingTrial || 0) > 0;
   const subscribed = quota?.plan === "annual";
+  const [prices, setPrices] = useState({});
+
+  // آبل تشترط عرض السعر اللي بينخصم فعلاً، وهو يختلف بحسب متجر البلد
+  // والضريبة — فنجيبه من المتجر، وأرقامنا المكتوبة احتياط لو فشل الجلب.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    import("@/lib/native")
+      .then(({ nativeProductPrices }) =>
+        nativeProductPrices([...SUBSCRIPTION_TIERS.map((t) => t.productId), CREDIT_PRODUCT_ID])
+      )
+      .then(setPrices)
+      .catch(() => {});
+  }, []);
+
+  const priceOf = (productId, fallbackKwd) => prices[productId] || `${fallbackKwd} د.ك`;
 
   return (
     <div className="app-scroll" style={{ height: "100%", padding: "18px 16px calc(env(safe-area-inset-bottom) + 20px)" }}>
@@ -1525,7 +1540,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
               <span style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
                 <span style={{ fontSize: 18, fontWeight: 800, color: "#1F2937" }}>{t.label}</span>
                 <span style={{ fontSize: 18, fontWeight: 800, color: "#5C4B8C", whiteSpace: "nowrap" }}>
-                  {t.priceKwd} د.ك / سنة
+                  {priceOf(t.productId, t.priceKwd)} / سنة
                 </span>
               </span>
               <span style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 500 }}>١٠ فلوس للسؤال</span>
@@ -1546,7 +1561,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
             رصيد إضافي {PLAN.CREDIT_PACK_QUESTIONS} سؤال
           </span>
           <span style={{ fontSize: 15, fontWeight: 800, color: "#5C4B8C", whiteSpace: "nowrap" }}>
-            {PLAN.CREDIT_PACK_PRICE_KWD} د.ك
+            {priceOf(CREDIT_PRODUCT_ID, PLAN.CREDIT_PACK_PRICE_KWD)}
           </span>
         </button>
 
@@ -1681,18 +1696,27 @@ function TeacherView({ children, motherId }) {
     setSending(false);
   }
 
+  async function refreshQuota() {
+    const fresh = await fetch(`/api/subscription/status?childId=${childId}`).then((r) => r.json());
+    setQuota(fresh);
+    return fresh;
+  }
+
   // الشراء يتم بـStoreKit داخل تطبيق آبل ثم نتحقق من الإيصال بالسيرفر.
-  // على الويب ما فيه شراء — نوجّه ولي الأمر للتطبيق.
+  // على الويب ما فيه شراء بعد — نوجّه ولي الأمر للتطبيق.
   async function buy(productId) {
     setBuyError("");
     if (!native) {
-      setBuyError("الاشتراك متاح من تطبيق دفتري على آيفون فقط.");
+      setBuyError("الاشتراك متاح من تطبيق دفتري على آيفون حالياً.");
       return;
     }
     setBuying(true);
     try {
       const { nativePurchase } = await import("@/lib/native");
-      const transactionId = await nativePurchase(productId);
+      const transactionId = await nativePurchase(productId, {
+        subscription: productId !== CREDIT_PRODUCT_ID,
+        accountToken: motherId,
+      });
       if (!transactionId) throw new Error("تم إلغاء الشراء.");
       const res = await fetch("/api/subscription/apple", {
         method: "POST",
@@ -1701,9 +1725,9 @@ function TeacherView({ children, motherId }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "تعذّر تفعيل الاشتراك.");
-      const fresh = await fetch(`/api/subscription/status?childId=${childId}`).then((r) => r.json());
-      setQuota(fresh);
+      await refreshQuota();
       setPaywallOpen(false);
+      setTrialAccepted(true);
       hapticSuccess();
     } catch (err) {
       setBuyError(err.message || "تعذّر إتمام الشراء، حاول مرة ثانية.");
@@ -1720,18 +1744,19 @@ function TeacherView({ children, motherId }) {
     setBuying(true);
     try {
       const { nativeRestorePurchases } = await import("@/lib/native");
-      const txs = await nativeRestorePurchases();
-      if (!txs.length) throw new Error("ما لقينا مشتريات سابقة على هذا الحساب.");
-      for (const t of txs) {
+      const ids = await nativeRestorePurchases(motherId);
+      if (!ids.length) throw new Error("ما لقينا مشتريات سابقة على حساب آبل هذا.");
+      for (const transactionId of ids) {
         await fetch("/api/subscription/apple", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transactionId: t.transactionId || t.id || t, childId }),
+          body: JSON.stringify({ transactionId, childId }),
         });
       }
-      const fresh = await fetch(`/api/subscription/status?childId=${childId}`).then((r) => r.json());
-      setQuota(fresh);
+      const fresh = await refreshQuota();
+      if ((fresh?.remainingTotal || 0) <= 0) throw new Error("ما فيه اشتراك ساري على حساب آبل هذا.");
       setPaywallOpen(false);
+      setTrialAccepted(true);
     } catch (err) {
       setBuyError(err.message || "تعذّرت استعادة المشتريات.");
     }
