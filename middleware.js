@@ -9,7 +9,12 @@ import { readSessionToken } from "@/lib/session";
 // المهام المجدولة (لها CRON_SECRET)، والمنهج (بيانات وزارة عامة بلا خصوصية).
 // /api/register ملغى ويرجّع 410 برسالة «حدّثي التطبيق» — نتركه عام عشان
 // النسخ القديمة تشوف الرسالة بدل «الجلسة منتهية» المضلّلة.
-const PUBLIC_PREFIXES = ["/api/auth/", "/api/admin/", "/api/cron/", "/api/curriculum/", "/api/register"];
+// ويبهوك Tap ينادينا من خوادمهم بلا جلسة، فلازم يكون عاماً. وهو آمن: ما
+// يثق بجسم الطلب أبداً، بل يستعلم عن الشحنة من Tap بمفتاحنا السري.
+const PUBLIC_PREFIXES = [
+  "/api/auth/", "/api/admin/", "/api/cron/", "/api/curriculum/", "/api/register",
+  "/api/payments/webhook",
+];
 
 export async function middleware(req) {
   const { pathname, searchParams } = req.nextUrl;

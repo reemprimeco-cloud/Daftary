@@ -1485,11 +1485,17 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
   const canTrial = (quota?.remainingTrial || 0) > 0;
   const subscribed = quota?.plan === "annual";
   const [prices, setPrices] = useState({});
+  // ثلاث حالات لا اثنتان: null = ما نعرف بعد. لو بدأنا بـfalse، أول رسم
+  // داخل تطبيق آبل يعرض زر الدفع بالبطاقة للحظة — وهذا وحده سبب كافٍ لشطب
+  // التطبيق. فما نعرض أي وسيلة دفع قبل ما نتأكد من المنصة.
+  const [platform, setPlatform] = useState(null);
 
-  // آبل تشترط عرض السعر اللي بينخصم فعلاً، وهو يختلف بحسب متجر البلد
-  // والضريبة — فنجيبه من المتجر، وأرقامنا المكتوبة احتياط لو فشل الجلب.
   useEffect(() => {
-    if (!isNativeApp()) return;
+    const isNative = isNativeApp();
+    setPlatform(isNative ? "ios" : "web");
+    if (!isNative) return;
+    // آبل تشترط عرض السعر اللي بينخصم فعلاً، وهو يختلف بحسب متجر البلد
+    // والضريبة — فنجيبه من المتجر، وأرقامنا المكتوبة احتياط لو فشل الجلب.
     import("@/lib/native")
       .then(({ nativeProductPrices }) =>
         nativeProductPrices([...SUBSCRIPTION_TIERS.map((t) => t.productId), CREDIT_PRODUCT_ID])
@@ -1522,7 +1528,9 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
           </p>
         </div>
 
-        {subscribed ? (
+        {platform === null ? (
+          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
+        ) : subscribed ? (
           <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.7 }}>
             خلص رصيد هذا الطالب/ة. أضف رصيد إضافي، أو انتظر تجديد الاشتراك.
           </div>
@@ -1548,22 +1556,24 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
           ))
         )}
 
-        <button
-          onClick={() => onBuy(CREDIT_PRODUCT_ID)}
-          disabled={buying}
-          style={{
-            background: "white", border: "1.5px solid #EDE9F4", borderRadius: 18, padding: "15px 16px",
-            display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10,
-            opacity: buying ? 0.6 : 1,
-          }}
-        >
-          <span style={{ fontSize: 15, fontWeight: 800, color: "#1F2937" }}>
-            رصيد إضافي {PLAN.CREDIT_PACK_QUESTIONS} سؤال
-          </span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: "#5C4B8C", whiteSpace: "nowrap" }}>
-            {priceOf(CREDIT_PRODUCT_ID, PLAN.CREDIT_PACK_PRICE_KWD)}
-          </span>
-        </button>
+        {platform !== null && (
+          <button
+            onClick={() => onBuy(CREDIT_PRODUCT_ID)}
+            disabled={buying}
+            style={{
+              background: "white", border: "1.5px solid #EDE9F4", borderRadius: 18, padding: "15px 16px",
+              display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10,
+              opacity: buying ? 0.6 : 1,
+            }}
+          >
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#1F2937" }}>
+              رصيد إضافي {PLAN.CREDIT_PACK_QUESTIONS} سؤال
+            </span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#5C4B8C", whiteSpace: "nowrap" }}>
+              {priceOf(CREDIT_PRODUCT_ID, PLAN.CREDIT_PACK_PRICE_KWD)}
+            </span>
+          </button>
+        )}
 
         <div style={{ background: "#EBF7F1", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, color: "#2F6E56", lineHeight: 1.7, fontWeight: 500 }}>
           الرصيد مقسّم بين الأبناء <strong>بالتساوي</strong>، وكل واحد له رصيده.
@@ -1580,15 +1590,21 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
         )}
 
         <p style={{ margin: 0, fontSize: 10.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.9 }}>
-          يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك
+          {platform === "ios"
+            ? "يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك"
+            : "شراء لسنة دراسية واحدة · بدون تجديد تلقائي"}
           <br />
           <a href="/terms" style={termsLink}>شروط الاستخدام</a>
           {" · "}
           <a href="/privacy" style={termsLink}>سياسة الخصوصية</a>
-          {" · "}
-          <button onClick={onRestore} style={{ ...termsLink, background: "transparent", padding: 0, fontSize: 10.5, fontWeight: 400 }}>
-            استعادة المشتريات
-          </button>
+          {platform === "ios" && (
+            <>
+              {" · "}
+              <button onClick={onRestore} style={{ ...termsLink, background: "transparent", padding: 0, fontSize: 10.5, fontWeight: 400 }}>
+                استعادة المشتريات
+              </button>
+            </>
+          )}
         </p>
 
         <p style={{ margin: 0, paddingTop: 11, borderTop: "1px solid #F0EEE8", fontSize: 11.5, color: "#6B7280", textAlign: "center", lineHeight: 1.7 }}>
@@ -1702,14 +1718,30 @@ function TeacherView({ children, motherId }) {
     return fresh;
   }
 
-  // الشراء يتم بـStoreKit داخل تطبيق آبل ثم نتحقق من الإيصال بالسيرفر.
-  // على الويب ما فيه شراء بعد — نوجّه ولي الأمر للتطبيق.
+  // مساران منفصلان تماماً: داخل تطبيق آبل الشراء بـStoreKit إلزامياً
+  // (بند 3.1.1)، وعلى الويب بالبطاقة عبر Tap. الاثنان ينتهيان بتحقق من
+  // السيرفر قبل منح الرصيد.
   async function buy(productId) {
     setBuyError("");
+
     if (!native) {
-      setBuyError("الاشتراك متاح من تطبيق دفتري على آيفون حالياً.");
+      setBuying(true);
+      try {
+        const res = await fetch("/api/payments/create-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId, childId }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.url) throw new Error(data.error || "تعذّر بدء عملية الدفع.");
+        window.location.href = data.url;
+      } catch (err) {
+        setBuyError(err.message || "تعذّر بدء عملية الدفع.");
+        setBuying(false);
+      }
       return;
     }
+
     setBuying(true);
     try {
       const { nativePurchase } = await import("@/lib/native");
