@@ -16,6 +16,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { PDFDocument } from "pdf-lib";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { pathToFileURL } from "url";
 
 const MOE_BASE = "https://elibrary.moe.edu.kw";
@@ -90,6 +91,62 @@ async function moeJson(path, body) {
   return res.json();
 }
 
+// ————— المسار النصي (المفضّل) —————
+// لو الكتاب فيه طبقة نص، نستخرجها محلياً بلا تكلفة ونرسل نصاً بدل صور:
+// أرخص وأسرع، وبلا حد حجم — وأهم من كذا نقدر نلقى صفحة الفهرس بالبحث عن
+// عناوينها بدل ما نخمّن مكانها بالاقتطاع.
+const TOC_MARKERS = ["المحتويات", "المحتوى", "الفهرس", "محتويات الكتاب", "contents", "table of contents"];
+const TOC_FOLLOW_PAGES = 4; // الفهرس عادةً ممتد على أكثر من صفحة
+const MIN_TEXT_CHARS = 400; // أقل من كذا يعني الكتاب صور ممسوحة
+
+async function extractPageTexts(pdfBytes) {
+  const pdf = await getDocument({
+    data: new Uint8Array(pdfBytes),
+    useSystemFonts: true,
+    verbosity: 0,
+  }).promise;
+  const texts = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    try {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      texts.push(tc.items.map((it) => it.str).join(" ").replace(/\s+/g, " ").trim());
+    } catch {
+      texts.push("");
+    }
+  }
+  await pdf.cleanup?.();
+  return texts;
+}
+
+// نرجّع نص صفحات الفهرس لو لقيناها، وإلا نص عيّنة من أول الكتاب ووسطه.
+function pickTocText(texts) {
+  const norm = (s) => s.toLowerCase().replace(/[إأآا]/g, "ا");
+  const hits = [];
+  texts.forEach((t, i) => {
+    const n = norm(t);
+    if (TOC_MARKERS.some((m) => n.includes(norm(m)))) hits.push(i);
+  });
+
+  const wanted = new Set();
+  if (hits.length) {
+    for (const h of hits) {
+      for (let i = h; i < Math.min(h + TOC_FOLLOW_PAGES, texts.length); i++) wanted.add(i);
+    }
+  } else {
+    // ما لقينا عنوان فهرس — ناخذ عيّنة معقولة من أول الكتاب ووسطه
+    for (let i = 0; i < Math.min(14, texts.length); i++) wanted.add(i);
+    const mid = Math.floor(texts.length / 2);
+    for (let i = mid; i < Math.min(mid + 8, texts.length); i++) wanted.add(i);
+  }
+
+  const chunks = [...wanted].sort((a, b) => a - b)
+    .filter((i) => texts[i].trim().length > 5)
+    .map((i) => `--- صفحة ${i + 1} ---\n${texts[i]}`);
+  return { text: chunks.join("\n\n"), foundToc: hits.length > 0, tocPages: hits.map((h) => h + 1) };
+}
+
+// ————— المسار المصوّر (احتياطي للكتب الممسوحة) —————
 // نقتطع صفحات الفهرس من الكتاب بدل ما نرسله كامل — الكتاب الكامل يتجاوز حد
 // حجم الطلب، وتكلفة قراءته بالكامل عالية بلا داعي.
 async function slicePages(src, { head, middle, tail }, total) {
@@ -122,7 +179,7 @@ async function extractIndexPages(pdfBytes) {
   return { ...last, totalPages: total, fits: false };
 }
 
-async function askClaudeForLessons(pdfBuffer, { grade, subjectName, term, bookTitle }) {
+async function askClaudeForLessons({ pdfBuffer, tocText }, { grade, subjectName, term, bookTitle }) {
   // مفاتيح Anthropic المرتبطة بالهوية تتطلب تحديد مساحة العمل بكل طلب.
   const headers = {
     "Content-Type": "application/json",
@@ -142,23 +199,25 @@ async function askClaudeForLessons(pdfBuffer, { grade, subjectName, term, bookTi
       messages: [{
         role: "user",
         content: [
-          {
+          ...(pdfBuffer ? [{
             type: "document",
             source: { type: "base64", media_type: "application/pdf", data: pdfBuffer.toString("base64") },
             title: bookTitle,
-          },
+          }] : []),
           {
             type: "text",
-            text: `هذي صفحات مختارة من كتاب "${bookTitle}" — مادة ${subjectName}، الصف ${grade}، الفصل الدراسي ${term} (منهج الكويت).
+            text: (tocText ? `هذا نص مستخرَج من صفحات كتاب "${bookTitle}":\n\n${tocText}\n\n` : "") +
+`${tocText ? "" : `هذي صفحات مختارة من كتاب "${bookTitle}" — `}مادة ${subjectName}، الصف ${grade}، الفصل الدراسي ${term} (منهج الكويت).
 
 فتّشي كل الصفحات المرفقة عن صفحة الفهرس/المحتويات، واستخرجي **كل** الوحدات والدروس المذكورة فيها كما هي مكتوبة حرفياً — بدون تغيير الصياغة ولا إضافة دروس من عندك. كوني شاملة: لو الفهرس ممتد على أكثر من صفحة، أدرجي ما فيها كلها.
 
 لا تدرجي العناصر اللي مو دروساً، مثل: معايير المنهج، نواتج التعلم، المقدمة، دليل استخدام الكتاب، قائمة المراجع، Scope and Sequence، Learning Outcomes، Progress Test، Project.
 
 أرجعي JSON فقط بهذا الشكل، بدون أي نص قبله أو بعده:
-{"lessons":[{"unit":"اسم الوحدة أو الفصل","title":"عنوان الدرس"}]}
+{"lessons":[{"unit":"اسم الوحدة أو الفصل","title":"عنوان الدرس","page":12}]}
 
 - لو الدرس ما ينتمي لوحدة، خلي unit فاضية "".
+- page هو رقم صفحة الدرس **كما هو مكتوب بالفهرس** (رقم صفحة الكتاب مو ترتيب الملف). لو ما فيه رقم، اتركيه null.
 - لو ما لقيتِ صفحة فهرس واضحة بهذي الصفحات، أرجعي {"lessons":[]} — لا تخمّني دروساً من محتوى الصفحات.`,
           },
         ],
@@ -199,23 +258,48 @@ function rankBooks(books) {
 }
 
 async function tryBook({ grade, subject, term, book }) {
+  const title = book.fileDescription.trim();
   const pdfRes = await fetch(`${MOE_BASE}/api/File/preview/book/${book.bookFileID}`);
   if (!pdfRes.ok) throw new Error(`تحميل الكتاب فشل: HTTP ${pdfRes.status}`);
   const full = Buffer.from(await pdfRes.arrayBuffer());
+  const sizeMb = (full.byteLength / 1048576).toFixed(1);
 
+  // المسار المفضّل: نص مستخرَج محلياً — بلا تكلفة، بلا حد حجم، ونقدر نلقى
+  // صفحة الفهرس بالبحث بدل التخمين.
+  let texts = [];
+  try {
+    texts = await extractPageTexts(full);
+  } catch (e) {
+    console.log(`   (تعذّر استخراج النص: ${e.message})`);
+  }
+  const joined = texts.join("");
+  if (joined.length >= MIN_TEXT_CHARS) {
+    const { text, foundToc, tocPages } = pickTocText(texts);
+    console.log(
+      `   «${title}» ${sizeMb}MB / ${texts.length} صفحة — نص` +
+      (foundToc ? ` (فهرس بصفحة ${tocPages.slice(0, 3).join("، ")})` : " (بلا عنوان فهرس — عيّنة)") +
+      ` بحجم ${(text.length / 1024).toFixed(0)}KB`
+    );
+    const lessons = await askClaudeForLessons({ tocText: text }, {
+      grade, subjectName: subject.name, term, bookTitle: title,
+    });
+    if (lessons.length) return lessons;
+    console.log("   (النص ما أعطى فهرساً — نجرّب الصور)");
+  } else {
+    console.log(`   «${title}» ${sizeMb}MB — بلا طبقة نص (صور ممسوحة)`);
+  }
+
+  // احتياطي: نرسل صور الصفحات
   const { bytes, totalPages, count, head, middle, tail, fits } = await extractIndexPages(full);
   if (!fits) {
     throw new Error(
-      `صفحات الفهرس كبيرة حتى بأقل نطاق (${(bytes.byteLength / 1048576).toFixed(1)}MB لـ${count} صفحات) — صفحات هذا الكتاب صور عالية الدقة`
+      `صفحات الفهرس كبيرة حتى بأقل نطاق (${(bytes.byteLength / 1048576).toFixed(1)}MB لـ${count} صفحات) — صور عالية الدقة وبلا طبقة نص`
     );
   }
-  console.log(
-    `   «${book.fileDescription.trim()}» ${(full.byteLength / 1048576).toFixed(1)}MB / ${totalPages} صفحة` +
-    ` → ${count} صفحة (${head}+${middle}+${tail}) بحجم ${(bytes.byteLength / 1048576).toFixed(1)}MB`
-  );
+  console.log(`   → صور: ${count} صفحة (${head}+${middle}+${tail}) بحجم ${(bytes.byteLength / 1048576).toFixed(1)}MB / ${totalPages} صفحة`);
 
-  return askClaudeForLessons(bytes, {
-    grade, subjectName: subject.name, term, bookTitle: book.fileDescription,
+  return askClaudeForLessons({ pdfBuffer: bytes }, {
+    grade, subjectName: subject.name, term, bookTitle: title,
   });
 }
 
@@ -372,4 +456,4 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => { console.error("خطأ غير متوقع:", e); process.exit(1); });
 }
 
-export { extractIndexPages, rankBooks, MAX_PDF_BYTES, PAGE_BUDGETS };
+export { extractIndexPages, extractPageTexts, pickTocText, rankBooks, MAX_PDF_BYTES, PAGE_BUDGETS };
