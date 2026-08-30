@@ -50,6 +50,7 @@ async function handleAsk(req) {
   // ولي الأمر يختار المادة يدوياً.
   let matchedSubject = null;
   let officialMaterials = [];
+  let curriculumOutline = "";
   const attachments = [];
 
   if (gradeInfo) {
@@ -57,6 +58,31 @@ async function handleAsk(req) {
     matchedSubject = matchSubjectFromText(questionText, subjects);
 
     if (matchedSubject) {
+      // فهرس دروس المنهج المستخرَج مسبقاً (scripts/build-curriculum-index.mjs).
+      // نص خفيف، يعطي المعلم إلماماً ببنية المنهج وأسماء الدروس الرسمية بدون
+      // ما نرفق الكتاب نفسه (أحجامها تتجاوز حد الطلب وتكلفتها عالية).
+      const { data: index } = await sb
+        .from("curriculum_index")
+        .select("book_title, lessons")
+        .eq("grade", child.grade)
+        .eq("subject_id", matchedSubject.id)
+        .eq("term", term)
+        .maybeSingle();
+
+      const lessons = Array.isArray(index?.lessons) ? index.lessons : [];
+      if (lessons.length) {
+        const byUnit = new Map();
+        for (const l of lessons) {
+          const unit = (l?.unit || "").trim() || "دروس عامة";
+          if (!byUnit.has(unit)) byUnit.set(unit, []);
+          if (l?.title) byUnit.get(unit).push(l.title);
+        }
+        curriculumOutline = [...byUnit.entries()]
+          .filter(([, titles]) => titles.length)
+          .map(([unit, titles]) => `${unit}: ${titles.join("، ")}`)
+          .join("\n");
+      }
+
       const results = await searchMoeLibrary({
         stageId: gradeInfo.stageId,
         gradeId: gradeInfo.gradeId,
@@ -93,6 +119,7 @@ async function handleAsk(req) {
   const contextText = `أنتِ معلّمة مساعدة لولي أمر كويتي يسأل نيابة عن ابنه/ابنته الطالب/ة "${child.name}" — الصف ${child.grade} (${gradeInfo ? "" : "صف غير محدد بدقة"}), الفصل الدراسي ${term}.
 ${matchedSubject ? `المادة المرجّحة: ${matchedSubject.name}.` : "لم يتضح من السؤال مادة دراسية محددة — أجيبي بعمومية أو استنتجي المادة من الصورة إن وُجدت."}
 ${officialMaterials.length ? `مواد رسمية متوفرة من مكتبة وزارة التربية الكويتية لنفس الصف والمادة والفصل:\n${officialMaterials.join("\n")}` : ""}
+${curriculumOutline ? `فهرس دروس المنهج الرسمي لهذه المادة والصف والفصل (مستخرَج من كتاب الوزارة):\n${curriculumOutline}\n\nاستخدمي هذا الفهرس لتعرفي أي درس يقصده ولي الأمر ولتلتزمي بعناوين الدروس الرسمية كما هي. لو سألك عن درس مو موجود بالفهرس، نبّهيه إنه ما يبدو ضمن مقرر هذا الفصل بدل ما تجاوبين عنه على أنه من المنهج. الفهرس يحتوي عناوين الدروس فقط بدون محتواها، فلا تدّعي معرفة تفاصيل داخل الدرس ما هي متوفرة لك.` : ""}
 ${attachments.length ? "مرفق مع هذه الرسالة نموذج/نماذج اختبار رسمية من الوزارة لنفس المادة والصف — استأنسي بأسلوبها وصياغتها لو كانت متعلقة بسؤال ولي الأمر." : ""}
 
 سؤال ولي الأمر:
