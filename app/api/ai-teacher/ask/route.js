@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { logAiUsage } from "@/lib/aiUsage";
+import { consumeQuestion } from "@/lib/entitlements";
 import {
   moeGradeInfo,
   kuwaitTerm,
@@ -11,7 +12,16 @@ import {
 } from "@/lib/moeCurriculum";
 
 const MAX_ATTACH_BYTES = 15 * 1024 * 1024; // هامش أمان تحت حد 32MB لملفات PDF بالـ API
-const MAX_EXAM_ATTACHMENTS = 2;
+
+// إرفاق نماذج اختبارات الوزارة يضاعف تكلفة السؤال ٨ أضعاف ($0.084 مقابل
+// $0.011)، وأغلب الأسئلة عن شرح درس أو حل واجب ما تستفيد منها إطلاقاً.
+// فنرفقها فقط لما يكون السؤال عن اختبار/مراجعة فعلاً، وبملف واحد.
+const MAX_EXAM_ATTACHMENTS = 1;
+const EXAM_INTENT = /اختبار|امتحان|مراجع|تقويم|نموذج|اسئل|أسئل|exam|test|quiz|revision/i;
+
+function wantsExamMaterials(text) {
+  return EXAM_INTENT.test(text || "");
+}
 
 export async function POST(req) {
   try {
@@ -41,6 +51,16 @@ async function handleAsk(req) {
     .eq("mother_id", motherId)
     .single();
   if (cErr || !child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
+
+  // نخصم السؤال قبل استدعاء الذكاء الاصطناعي — الخصم بعده يعني إن الفشل
+  // بالخصم يمرّ استدعاءً مدفوعاً بلا مقابل.
+  const quota = await consumeQuestion(motherId);
+  if (!quota.allowed) {
+    return NextResponse.json({
+      error: "انتهت أسئلتك المتاحة",
+      quotaExhausted: true,
+    }, { status: 402 });
+  }
 
   const gradeInfo = moeGradeInfo(child.grade);
   const term = kuwaitTerm();
@@ -97,9 +117,11 @@ async function handleAsk(req) {
         ...(results.examFiles || []).map((f) => `نموذج/مراجعة: ${f.fileDescription}`),
       ];
 
-      // نرفق أول ملفين اختبار/مراجعة (عادة أحجامها صغيرة، بعكس الكتب الكاملة اللي
-      // حجمها يتجاوز حد الـ API بسهولة) عشان الإجابة تكون مبنية عليها فعلياً.
-      const examCandidates = (results.examFiles || []).slice(0, MAX_EXAM_ATTACHMENTS);
+      // نرفق نموذج اختبار فقط لو السؤال عن اختبار/مراجعة — إرفاقه بكل سؤال
+      // يضاعف التكلفة ٨ أضعاف بلا فائدة لأسئلة شرح الدروس وحل الواجبات.
+      const examCandidates = wantsExamMaterials(questionText)
+        ? (results.examFiles || []).slice(0, MAX_EXAM_ATTACHMENTS)
+        : [];
       for (const ex of examCandidates) {
         try {
           const fileRes = await fetch(moeExamFileUrl(ex.educationExamFileID));
@@ -177,5 +199,13 @@ ${questionText}
     { child_id: child.id, role: "assistant", content: answer, had_image: false, subject: matchedSubject?.name || null },
   ]);
 
-  return NextResponse.json({ answer, subject: matchedSubject?.name || null, materialsUsed: officialMaterials });
+  return NextResponse.json({
+    answer,
+    subject: matchedSubject?.name || null,
+    materialsUsed: officialMaterials,
+    quota: {
+      source: quota.source,
+      remaining: (quota.remaining_subscription || 0) + (quota.remaining_credits || 0) + (quota.remaining_trial || 0),
+    },
+  });
 }
