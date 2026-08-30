@@ -201,8 +201,54 @@ async function processBook({ grade, gradeInfo, subject, term, book }) {
   return lessons.length;
 }
 
+// نتحقق من المفتاح بطلب صغير قبل ما نبدأ — تنزيل كتب الوزارة يوصل مئات
+// الميجابايتات، وما نبي نكتشف إن المفتاح غلط بعد ما ننزّلها كلها.
+async function preflight() {
+  const headers = {
+    "Content-Type": "application/json",
+    "x-api-key": process.env.ANTHROPIC_API_KEY,
+    "anthropic-version": "2023-06-01",
+  };
+  if (process.env.ANTHROPIC_WORKSPACE_ID) {
+    headers["anthropic-workspace-id"] = process.env.ANTHROPIC_WORKSPACE_ID;
+  }
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: 1,
+      messages: [{ role: "user", content: "hi" }],
+    }),
+  });
+  if (res.ok) {
+    console.log("✓ مفتاح Anthropic شغّال" + (process.env.ANTHROPIC_WORKSPACE_ID ? " (مع مساحة عمل محددة)" : ""));
+    return;
+  }
+  const body = await res.text();
+  console.error(`\n✗ مفتاح Anthropic ما اشتغل (HTTP ${res.status})`);
+  if (body.includes("must be a valid workspace ID")) {
+    console.error(
+      "  قيمة ANTHROPIC_WORKSPACE_ID غير صحيحة.\n" +
+      "  المعرّف الصحيح تلقينه برابط صفحة مساحة العمل بـconsole.anthropic.com\n" +
+      "  (Settings ← Workspaces ← افتحي المساحة، والمعرّف بآخر الرابط).\n" +
+      "  أو الأسهل: سوّي مفتاحاً من داخل مساحة عمل محددة — عندها ما تحتاجين هذا المتغير أصلاً،\n" +
+      "  واحذفيه بالأمر:  unset ANTHROPIC_WORKSPACE_ID"
+    );
+  } else if (body.includes("anthropic-workspace-id is required")) {
+    console.error(
+      "  المفتاح مرتبط بالهوية ويحتاج تحديد مساحة العمل:\n" +
+      "    export ANTHROPIC_WORKSPACE_ID=\"...\"   (من Settings ← Workspaces)"
+    );
+  } else {
+    console.error("  " + body.slice(0, 300));
+  }
+  process.exit(1);
+}
+
 async function main() {
   requireEnv();
+  await preflight();
   const grades = onlyGrade ? [onlyGrade] : Object.keys(GRADE_TO_MOE).map(Number);
   let totalLessons = 0;
   const failures = [];
