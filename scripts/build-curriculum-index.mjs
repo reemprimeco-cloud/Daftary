@@ -5,14 +5,14 @@
 // وتنزيلها ومعالجتها يتجاوز حدود وقت وذاكرة الدوال بـVercel. وكمان مكتبة
 // الوزارة ما تنفتح إلا من شبكة تسمح بها.
 //
-// نرسل صفحات الفهرس فقط (أول وآخر صفحات الكتاب) للذكاء الاصطناعي — مو الكتاب
+// نرسل صفحات الفهرس فقط (أول ووسط وآخر الكتاب) للذكاء الاصطناعي — مو الكتاب
 // كامل — عشان التكلفة تبقى بسيطة. ما نخزّن أي ملف كتاب، فقط عناوين الدروس.
 //
 // التشغيل:
 //   export SUPABASE_URL=...  SUPABASE_SERVICE_ROLE_KEY=...  ANTHROPIC_API_KEY=...
-//   node scripts/build-curriculum-index.mjs --grade 3            # صف واحد (للتجربة)
-//   node scripts/build-curriculum-index.mjs                      # كل الصفوف
-//   node scripts/build-curriculum-index.mjs --grade 3 --dry-run  # بدون كتابة بقاعدة البيانات
+//   node scripts/build-curriculum-index.mjs --grade 3 --term 1 --dry-run  # تجربة
+//   node scripts/build-curriculum-index.mjs --grade 3 --term 1            # صف وفصل
+//   node scripts/build-curriculum-index.mjs                               # كل شي
 
 import { createClient } from "@supabase/supabase-js";
 import { PDFDocument } from "pdf-lib";
@@ -31,14 +31,24 @@ const GRADE_TO_MOE = {
   11: { stageId: 17, gradeId: 28 }, 12: { stageId: 17, gradeId: 29 },
 };
 
-// الفهرس عادةً بأول الكتاب، وبعض الكتب تحطه بالآخر — فنرسل الطرفين.
-// صفحات كتب الوزارة صور ممسوحة عالية الدقة، فبعض الكتب تطلع صفحاتها ضخمة.
-// نبدأ بأوسع نطاق وننزل تدريجياً لين الحجم يدخل تحت الحد.
-const PAGE_BUDGETS = [[12, 6], [8, 4], [5, 3], [3, 2], [2, 1]];
+// الفهرس عادةً بأول الكتاب، وبعضها يحطه بالآخر. وكتب الوزارة كثير منها
+// "القسم الأول والقسم الثاني" مدموجين بملف واحد — وفهرس القسم الثاني يقع
+// بمنتصف الملف، فناخذ عيّنة من الوسط كمان.
+// صفحات هذي الكتب صور ممسوحة عالية الدقة، فنبدأ بأوسع نطاق وننزل تدريجياً
+// لين الحجم يدخل تحت الحد.
+const PAGE_BUDGETS = [
+  { head: 10, middle: 8, tail: 6 },
+  { head: 8, middle: 5, tail: 4 },
+  { head: 5, middle: 4, tail: 3 },
+  { head: 3, middle: 2, tail: 2 },
+  { head: 2, middle: 1, tail: 1 },
+];
 
-// حد الطلب ٣٢ ميجا، وترميز base64 يضخّم الحجم ~٣٣٪ — فالحد الفعلي للملف
-// الخام أقل بكثير. نترك هامشاً للنص والترويسات.
-const MAX_PDF_BYTES = Number(process.env.MAX_PDF_MB || 18) * 1024 * 1024;
+// كراسات التدريبات والخط ما فيها فهرس دروس — نأخّرها ونجرّب كتاب المنهج أول.
+const WORKBOOK_HINTS = ["كراسة", "تدريبات", "الخط", "نشاط", "أنشطة", "handwriting", "workbook", "activity"];
+
+// حد الطلب ٣٢ ميجا وترميز base64 يضخّم ~٣٣٪، فـ٢٢ ميجا خام ≈ ٢٩.٣ مرمّزة.
+const MAX_PDF_BYTES = Number(process.env.MAX_PDF_MB || 22) * 1024 * 1024;
 
 const args = process.argv.slice(2);
 const argValue = (name) => {
@@ -46,6 +56,9 @@ const argValue = (name) => {
   return i !== -1 ? args[i + 1] : null;
 };
 const onlyGrade = argValue("--grade") ? Number(argValue("--grade")) : null;
+// الفصل الثاني ما يحتاج قبل فبراير — استخراجه لاحقاً يوفّر نص الوقت والتكلفة.
+const onlyTerm = argValue("--term") ? Number(argValue("--term")) : null;
+const terms = onlyTerm ? [onlyTerm] : [1, 2];
 const dryRun = args.includes("--dry-run");
 
 function requireEnv() {
@@ -74,9 +87,12 @@ async function moeJson(path, body) {
 
 // نقتطع صفحات الفهرس من الكتاب بدل ما نرسله كامل — الكتاب الكامل يتجاوز حد
 // حجم الطلب، وتكلفة قراءته بالكامل عالية بلا داعي.
-async function sliceePages(src, head, tail, total) {
+async function slicePages(src, { head, middle, tail }, total) {
   const wanted = new Set();
   for (let i = 0; i < Math.min(head, total); i++) wanted.add(i);
+  // عيّنة حول منتصف الملف — مكان فهرس القسم الثاني بالكتب المدموجة
+  const mid = Math.floor(total / 2);
+  for (let i = mid; i < Math.min(mid + middle, total); i++) wanted.add(i);
   for (let i = Math.max(0, total - tail); i < total; i++) wanted.add(i);
 
   const out = await PDFDocument.create();
@@ -90,9 +106,9 @@ async function extractIndexPages(pdfBytes) {
   const total = src.getPageCount();
 
   let last = null;
-  for (const [head, tail] of PAGE_BUDGETS) {
-    const slice = await sliceePages(src, head, tail, total);
-    last = { ...slice, head, tail };
+  for (const budget of PAGE_BUDGETS) {
+    const slice = await slicePages(src, budget, total);
+    last = { ...slice, ...budget };
     if (slice.bytes.byteLength <= MAX_PDF_BYTES) {
       return { ...last, totalPages: total, fits: true };
     }
@@ -160,28 +176,69 @@ async function askClaudeForLessons(pdfBuffer, { grade, subjectName, term, bookTi
   return Array.isArray(parsed.lessons) ? parsed.lessons : [];
 }
 
-async function processBook({ grade, gradeInfo, subject, term, book }) {
-  const label = `صف ${grade} | ${subject.name} | ف${term} | ${book.fileDescription}`;
+// الكراسات (تدريبات/خط) ما فيها فهرس دروس — نرتّب كتاب المنهج قبلها.
+function rankBooks(books) {
+  const isWorkbook = (b) => {
+    const d = (b.fileDescription || "").toLowerCase();
+    return WORKBOOK_HINTS.some((h) => d.includes(h.toLowerCase()));
+  };
+  return [...books].sort((a, b) => {
+    const wa = isWorkbook(a) ? 1 : 0;
+    const wb = isWorkbook(b) ? 1 : 0;
+    if (wa !== wb) return wa - wb;
+    return (b.fileDescription || "").length - (a.fileDescription || "").length;
+  });
+}
+
+async function tryBook({ grade, subject, term, book }) {
   const pdfRes = await fetch(`${MOE_BASE}/api/File/preview/book/${book.bookFileID}`);
   if (!pdfRes.ok) throw new Error(`تحميل الكتاب فشل: HTTP ${pdfRes.status}`);
   const full = Buffer.from(await pdfRes.arrayBuffer());
 
-  const { bytes, totalPages, count, head, tail, fits } = await extractIndexPages(full);
+  const { bytes, totalPages, count, head, middle, tail, fits } = await extractIndexPages(full);
   if (!fits) {
     throw new Error(
       `صفحات الفهرس كبيرة حتى بأقل نطاق (${(bytes.byteLength / 1048576).toFixed(1)}MB لـ${count} صفحات) — صفحات هذا الكتاب صور عالية الدقة`
     );
   }
   console.log(
-    `   الكتاب ${(full.byteLength / 1048576).toFixed(1)}MB / ${totalPages} صفحة → أرسلنا ${count} صفحة (${head}+${tail}) بحجم ${(bytes.byteLength / 1048576).toFixed(1)}MB`
+    `   «${book.fileDescription.trim()}» ${(full.byteLength / 1048576).toFixed(1)}MB / ${totalPages} صفحة` +
+    ` → ${count} صفحة (${head}+${middle}+${tail}) بحجم ${(bytes.byteLength / 1048576).toFixed(1)}MB`
   );
 
-  const lessons = await askClaudeForLessons(bytes, {
+  return askClaudeForLessons(bytes, {
     grade, subjectName: subject.name, term, bookTitle: book.fileDescription,
   });
+}
+
+// نجرّب الكتب بالترتيب لين نلقى واحداً فيه فهرس — كتاب واحد ما ينجح ما يعني
+// إن المادة بلا فهرس، ممكن يكون كراسة أو قسماً بلا فهرس.
+async function processBook({ grade, subject, term, books }) {
+  const label = `صف ${grade} | ${subject.name} | ف${term}`;
+  let lessons = [];
+  let used = null;
+  const problems = [];
+
+  for (const book of rankBooks(books)) {
+    try {
+      const found = await tryBook({ grade, subject, term, book });
+      if (found.length) { lessons = found; used = book; break; }
+      console.log(`   ⚠️  ما فيه فهرس بـ«${book.fileDescription.trim()}»`);
+    } catch (e) {
+      problems.push(`«${book.fileDescription.trim()}»: ${e.message}`);
+    }
+  }
+
   if (!lessons.length) {
+    if (problems.length) throw new Error(problems.join(" | "));
     console.log(`   ⚠️  ما انستخرج فهرس — ${label}`);
     return 0;
+  }
+
+  const book = used;
+  if (dryRun) {
+    const sample = lessons.slice(0, 5).map((l) => l.title).filter(Boolean);
+    console.log(`   عيّنة: ${sample.join(" • ")}${lessons.length > 5 ? " …" : ""}`);
   }
 
   if (!dryRun) {
@@ -262,7 +319,7 @@ async function main() {
     console.log(`\n━━ الصف ${grade} — ${subjects.length} مادة`);
 
     for (const subject of subjects) {
-      for (const term of [1, 2]) {
+      for (const term of terms) {
         let results;
         try {
           results = await moeJson("/api/librarysearch", {
@@ -278,12 +335,8 @@ async function main() {
         const books = results.books || [];
         if (!books.length) continue;
 
-        // الكتاب الأكبر عادةً هو كتاب المنهج نفسه، مو الكراسة المرافقة له.
-        const book = books.reduce((a, b) =>
-          (b.fileDescription || "").length > (a.fileDescription || "").length ? b : a, books[0]);
-
         try {
-          totalLessons += await processBook({ grade, gradeInfo, subject, term, book });
+          totalLessons += await processBook({ grade, subject, term, books });
         } catch (e) {
           console.log(`   ✗ ${subject.name} ف${term}: ${e.message}`);
           failures.push(`صف ${grade}/${subject.name}/ف${term}: ${e.message}`);
@@ -305,4 +358,4 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => { console.error("خطأ غير متوقع:", e); process.exit(1); });
 }
 
-export { extractIndexPages, MAX_PDF_BYTES, PAGE_BUDGETS };
+export { extractIndexPages, rankBooks, MAX_PDF_BYTES, PAGE_BUDGETS };
