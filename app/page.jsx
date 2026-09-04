@@ -2180,12 +2180,22 @@ function PushTestRow() {
         // حتى لو التسجيل فشل، ننادي السيرفر عشان نعرف إذا مفاتيح APNs
         // مضبوطة عنده — يفرّق بين «ينقص بناء» و«ينقص إعداد بالسيرفر»،
         // وبدون هالتفريق ما نعرف أي الطرفين نصلح.
-        const probe = await fetch("/api/push/test", { method: "POST" })
-          .then((r) => r.json())
-          .catch(() => ({}));
-        const serverPart = probe.stage === "config"
-          ? " والمفاتيح ناقصة بالسيرفر كمان."
-          : probe.stage === "registration" ? " (مفاتيح السيرفر سليمة ✅)" : "";
+        let probe = {};
+        let httpStatus = 0;
+        try {
+          const pr = await fetch("/api/push/test", { method: "POST" });
+          httpStatus = pr.status;
+          probe = await pr.json().catch(() => ({}));
+        } catch {
+          httpStatus = -1;
+        }
+        // نعرض نتيجة الفحص دائماً — حتى لما يفشل الفحص نفسه. الصمت هنا
+        // يخلينا نخمّن: هل السيرفر سليم؟ ولا الطلب ما وصل أصلاً؟
+        const serverPart = {
+          config: " والمفاتيح ناقصة بالسيرفر كمان.",
+          registration: " (مفاتيح السيرفر سليمة ✅)",
+          send: " (السيرفر جاهز ✅)",
+        }[probe.stage] || ` (تعذّر فحص السيرفر — HTTP ${httpStatus})`;
 
         const why = {
           // ولي أمر عادي ما يفهم أوامر البناء — نقول له اللي يقدر يسويه فعلاً.
