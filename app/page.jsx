@@ -2154,6 +2154,57 @@ function ResetYearButton({ motherId, onDone, ios }) {
   );
 }
 
+// اختبار إشعارات الجهاز من داخل التطبيق. نعرض سبب الفشل كما جاء من آبل بدل
+// «تعذّر الإرسال» — لأن كل سبب له علاج مختلف تماماً، وبدونه التشخيص تخمين.
+function PushTestRow() {
+  const [state, setState] = useState("idle");
+  const [detail, setDetail] = useState("");
+
+  async function run() {
+    setState("sending");
+    setDetail("");
+    try {
+      // نتأكد إن الجهاز مسجّل أولاً — الاختبار بلا تسجيل يفشل بسبب مضلّل
+      const { registerPushDevice } = await import("@/lib/native");
+      const reg = await registerPushDevice();
+      if (!reg.ok && reg.reason === "denied") {
+        setState("failed");
+        setDetail("إذن الإشعارات مرفوض. فعّله من إعدادات الجهاز ← دفتري ← الإشعارات.");
+        return;
+      }
+
+      const res = await fetch("/api/push/test", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (data.ok) {
+        setState("sent");
+        setDetail(`أُرسل لـ${data.delivered} من ${data.devices} جهاز — راقب شاشة القفل.`);
+      } else {
+        setState("failed");
+        setDetail(data.error || data.results?.map((r) => r.reason).filter(Boolean).join("، ") || "فشل غير معروف");
+      }
+    } catch (e) {
+      setState("failed");
+      setDetail(e?.message || "تعذّر تشغيل الاختبار");
+    }
+  }
+
+  return (
+    <>
+      <button onClick={run} disabled={state === "sending"} className="ios-row" style={{ color: "#7B68C4" }}>
+        <span>اختبار الإشعارات</span>
+        <span className="ios-row-value">
+          {state === "sending" ? "..." : state === "sent" ? "✅" : state === "failed" ? "⚠️" : "›"}
+        </span>
+      </button>
+      {detail && (
+        <div className="ios-row" style={{ fontSize: 12, color: state === "sent" ? "#2F6E56" : "#B91C1C", lineHeight: 1.6 }}>
+          {detail}
+        </div>
+      )}
+    </>
+  );
+}
+
 // حذف الحساب نهائياً — مطلوب من آبل لأي تطبيق فيه إنشاء حساب.
 function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared }) {
   const phone = (mother.phone || "").replace(/^\+965/, "");
@@ -2195,6 +2246,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span>تواصلي معنا</span>
               <span className="ios-chevron">›</span>
             </a>
+            <PushTestRow />
             <div className="ios-row">
               <span>الإصدار</span>
               <span className="ios-row-value" style={{ direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>
