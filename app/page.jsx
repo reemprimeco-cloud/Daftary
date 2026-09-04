@@ -2177,6 +2177,16 @@ function PushTestRow() {
       const { registerPushDevice } = await import("@/lib/native");
       const reg = await registerPushDevice({ force: true });
       if (!reg.ok) {
+        // حتى لو التسجيل فشل، ننادي السيرفر عشان نعرف إذا مفاتيح APNs
+        // مضبوطة عنده — يفرّق بين «ينقص بناء» و«ينقص إعداد بالسيرفر»،
+        // وبدون هالتفريق ما نعرف أي الطرفين نصلح.
+        const probe = await fetch("/api/push/test", { method: "POST" })
+          .then((r) => r.json())
+          .catch(() => ({}));
+        const serverPart = probe.stage === "config"
+          ? " والمفاتيح ناقصة بالسيرفر كمان."
+          : probe.stage === "registration" ? " (مفاتيح السيرفر سليمة ✅)" : "";
+
         const why = {
           // ولي أمر عادي ما يفهم أوامر البناء — نقول له اللي يقدر يسويه فعلاً.
           unavailable: "نسخة التطبيق المثبّتة ما فيها دعم الإشعارات. حدّثه من آب ستور.",
@@ -2185,7 +2195,7 @@ function PushTestRow() {
           server: "الجهاز استلم رمزاً بس السيرفر رفض حفظه.",
         }[reg.reason];
         setState("failed");
-        setDetail(why || `فشل التسجيل: ${reg.reason}`);
+        setDetail((why || `فشل التسجيل: ${reg.reason}`) + serverPart);
         return;
       }
 
