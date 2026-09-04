@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { kuwaitTodayStr, kuwaitNow } from "@/lib/kuwaitDate";
 import webpush from "web-push";
+import { sendApns, apnsConfigured } from "@/lib/apns";
+
+// APNs يحتاج HTTP/2 عبر node:http2، وهو غير متوفر على Edge runtime.
+export const runtime = "nodejs";
 
 function vapidConfigured() {
   return !!(process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_SUBJECT);
@@ -29,6 +33,39 @@ async function sendPush(sb, sub, payload) {
     }
     return false;
   }
+}
+
+// إشعارات أجهزة التطبيق. الفرق الجوهري عن Web Push إنها توصل حتى والتطبيق
+// مقفل ومن غير ما يفتحه ولي الأمر — وهذي كانت الفجوة: مستخدم التطبيق ما
+// كان يوصله شي عن واجب أضافه أحد ثاني، لأن التذكيرات المحلية تُجدول فقط
+// لما يفتح التطبيق.
+async function sendToDevices(sb, motherId, title, body) {
+  if (!apnsConfigured()) return false;
+
+  const { data: devices } = await sb
+    .from("device_tokens").select("token, environment").eq("mother_id", motherId).eq("platform", "ios");
+  if (!devices?.length) return false;
+
+  const results = await sendApns(
+    devices.map((d) => ({ token: d.token, environment: d.environment, title, body }))
+  );
+
+  let delivered = false;
+  for (const r of results) {
+    if (r.ok) {
+      delivered = true;
+      // نحفظ البيئة اللي نجحت عشان ما نخمّنها بكل إرسال
+      await sb.from("device_tokens")
+        .update({ environment: r.environment, last_error: null }).eq("token", r.token);
+    } else if (r.reason === "BadDeviceToken" || r.reason === "Unregistered") {
+      // الرمز ما عاد صالح (حُذف التطبيق أو أُلغي الإذن) — نمسحه بدل ما
+      // نعيد المحاولة عليه كل يوم للأبد.
+      await sb.from("device_tokens").delete().eq("token", r.token);
+    } else {
+      await sb.from("device_tokens").update({ last_error: r.reason }).eq("token", r.token);
+    }
+  }
+  return delivered;
 }
 
 const KIND_TITLES = {
@@ -96,13 +133,19 @@ export async function GET(req) {
       const text = textFn(t);
       let delivered = false;
 
+      const title = KIND_TITLES[kind] || "دفتري";
+
       if (vapidConfigured()) {
         const { data: subs } = await sb.from("push_subscriptions").select("*").eq("mother_id", mother.id);
         for (const sub of subs || []) {
-          const ok = await sendPush(sb, sub, { title: KIND_TITLES[kind] || "دفتري", body: text, url: "/" });
+          const ok = await sendPush(sb, sub, { title, body: text, url: "/" });
           if (ok) delivered = true;
         }
       }
+
+      // نرسل للمتصفح والتطبيق معاً: ولي أمر عنده الاثنان يستحق يوصله بالمكانين،
+      // ونحن نمنع التكرار بسجل reminder_log مو بتقييد وسيلة واحدة.
+      if (await sendToDevices(sb, mother.id, title, text)) delivered = true;
 
       if (!delivered) continue;
       await sb.from("reminder_log").insert({ mother_id: mother.id, task_id: t.id, kind });

@@ -10,6 +10,7 @@ import {
   nativeShare,
   nativeSharePdf,
   syncTaskReminders,
+  registerPushDevice,
   attachPullToRefresh,
 } from "@/lib/native";
 import { installAuthFetch } from "@/lib/authFetch";
@@ -279,6 +280,9 @@ export default function Home() {
     setClassSchedule(data.classSchedule || []);
     // تذكيرات على الجهاز نفسه — تشتغل تلقائياً وحتى بدون إنترنت داخل تطبيق آبل
     syncTaskReminders([...(data.tasks || []), ...(data.upcomingTasks || [])]);
+    // وتسجيل الجهاز لإشعارات السيرفر — تكمّل المحلية: توصل والتطبيق مقفل،
+    // وتخبر ولي الأمر بواجب أضافه شخص ثاني بلا ما يفتح التطبيق.
+    registerPushDevice();
   }
 
   function handleLogout() {
