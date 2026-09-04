@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSessionToken } from "@/lib/session";
+import { hasAppAccess } from "@/lib/appEntitlements";
 
 // حارس مركزي لمسارات الـ API. قبله كانت كل المسارات مفتوحة: أي أحد يعرف معرّف
 // ولي أمر يقدر يقرأ ويعدّل بياناته. نتحقق هنا مرة وحدة بدل ما نكرر الفحص في
@@ -15,6 +16,29 @@ const PUBLIC_PREFIXES = [
   "/api/auth/", "/api/admin/", "/api/cron/", "/api/curriculum/", "/api/register",
   "/api/payments/webhook",
 ];
+
+// مسارات مستثناة من اشتراك التطبيق الشامل تحديداً (بعد التحقق من الجلسة) —
+// لازم تبقى شغّالة حتى لو ولي الأمر ما عنده وصول:
+// - subscription/payments: عشان يقدر يشترك أو يسترجع مشترياته أصلاً — لو
+//   حجبنا مسار الدفع نفسه، ولي الأمر المحجوب ما يقدر حتى يدفع ليفكّ الحجب
+// - ai-teacher: له بوابته المستقلة الخاصة، ما يخص اشتراك التطبيق الشامل
+// - push: التذكيرات تبقى تشتغل بغض النظر عن حالة الاشتراك
+// - delete-account: الحذف حق دائم بصرف النظر عن أي اشتراك
+const APP_PAYWALL_EXEMPT_PREFIXES = [
+  "/api/subscription/", "/api/payments/", "/api/ai-teacher/", "/api/push/", "/api/delete-account",
+];
+
+async function checkAppPaywall(req, motherId) {
+  if (APP_PAYWALL_EXEMPT_PREFIXES.some((p) => req.nextUrl.pathname.startsWith(p))) return null;
+
+  const access = await hasAppAccess(motherId);
+  if (access.allowed) return null;
+
+  return NextResponse.json(
+    { error: "الاشتراك بالتطبيق منتهي أو غير مفعّل", paywall: true, phase: access.phase },
+    { status: 402 }
+  );
+}
 
 export async function middleware(req) {
   const { pathname, searchParams } = req.nextUrl;
@@ -36,6 +60,12 @@ export async function middleware(req) {
   if (requested && requested !== sessionMotherId) {
     return NextResponse.json({ error: "غير مصرّح" }, { status: 403 });
   }
+
+  // اشتراك التطبيق الشامل — hasAppAccess ترجع مسموح فوراً بلا أي استعلام
+  // قاعدة بيانات ما دامت الميزة معطّلة (المفتاح الافتراضي)، فما فيه أي
+  // كلفة إضافية على الأداء لين نفعّلها فعلياً.
+  const paywallBlock = await checkAppPaywall(req, sessionMotherId);
+  if (paywallBlock) return paywallBlock;
 
   // نمرّر المعرّف الموثوق للمسارات اللي تبي تعتمد عليه بدل ما تثق بالعميل
   const headers = new Headers(req.headers);

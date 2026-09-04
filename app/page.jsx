@@ -15,6 +15,7 @@ import {
 } from "@/lib/native";
 import { installAuthFetch } from "@/lib/authFetch";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
+import { APP_TIERS } from "@/lib/appPlans";
 
 const PALETTE = [
   { bg: "#FDEFF3", ring: "#E8A0B4", solid: "#E39CB2", soft: "#F9D9E2", text: "#8C4E62" },
@@ -239,6 +240,7 @@ export default function Home() {
   const [openTask, setOpenTask] = useState(null);
   const [native, setNative] = useState(false);
   const [pull, setPull] = useState(0);
+  const [appAccess, setAppAccess] = useState(null); // { allowed, phase, studentsCount } — null قبل أول فحص
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -270,6 +272,13 @@ export default function Home() {
   }, [native, mother]);
 
   async function loadAll(motherId) {
+    // اشتراك التطبيق الشامل — نفحصه أول شي. لو غير مسموح (معطّل الحين
+    // بمفتاح الإيقاف، فدائماً allowed=true إلى أن نفعّله)، نعرض شاشة
+    // الاشتراك بدل ما نكمّل تحميل البيانات.
+    const access = await fetch("/api/subscription/app-access/status").then((r) => r.json()).catch(() => ({ allowed: true, phase: "off" }));
+    setAppAccess(access);
+    if (!access.allowed) return;
+
     const res = await fetch(`/api/dashboard?motherId=${motherId}`);
     const data = await res.json();
     setChildren(data.children || []);
@@ -418,6 +427,18 @@ export default function Home() {
     );
   }
 
+  // اشتراك التطبيق الشامل — appAccess تكون null لحظياً وقت الفحص الأول،
+  // ونعتبرها "مسموح" بهالحالة عشان ما نعطّل تجربة التحميل المعتادة طول ما
+  // الميزة معطّلة (الوضع الافتراضي). القفل الفعلي بس لما يرجع allowed:false.
+  if (appAccess && !appAccess.allowed) {
+    return (
+      <>
+        <AppAccessPaywall studentsCount={appAccess.studentsCount || children.length} onUnlocked={() => loadAll(mother.id)} motherId={mother.id} onLogout={handleLogout} />
+        <InstallPrompt />
+      </>
+    );
+  }
+
   const weekTasksFor = (childId) => tasks.filter((t) => t.child_id === childId);
   const undatedTasksFor = (childId) => undatedTasks.filter((t) => t.child_id === childId);
   const upcomingTasksFor = (childId) => upcomingTasks.filter((t) => t.child_id === childId);
@@ -474,6 +495,7 @@ export default function Home() {
             {pull > 8 && <div className="ios-spinner" />}
           </div>
         )}
+        {appAccess?.phase === "grace" && <AppAccessGraceBanner enforceAt={appAccess.enforceAt} />}
         {view === "dashboard" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
             {children.length === 0 ? (
@@ -1629,6 +1651,156 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
 }
 
 const termsLink = { color: "#9CA3AF", textDecoration: "underline" };
+
+// شريط تنبيه بفترة السماح — يظهر فوق أي شاشة طول ما الاشتراك الشامل مفعّل
+// بس لسا قبل تاريخ الإلزام. التطبيق يبقى مجانياً بالكامل بهالفترة.
+function AppAccessGraceBanner({ enforceAt }) {
+  const dateLabel = enforceAt
+    ? new Date(enforceAt).toLocaleDateString("ar-KW", { day: "numeric", month: "long", year: "numeric" })
+    : "";
+  return (
+    <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, margin: "0 16px 12px", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
+      📢 بدءاً من {dateLabel}، استخدام دفتري يصير باشتراك سنوي بسيط حسب عدد أبنائك. جرّبي التطبيق بحرية لين ذاك الوقت.
+    </div>
+  );
+}
+
+// شاشة القفل الكاملة — تظهر بدل التطبيق كله لما ينتهي الاشتراك الشامل
+// بعد تاريخ الإلزام. المعلم الذكي مستثنى (له اشتراكه المستقل)، فهذي
+// الشاشة ما تظهر أبداً وطالما appPaywallState() يرجّع غير "enforced".
+function AppAccessPaywall({ studentsCount, motherId, onUnlocked, onLogout }) {
+  const [platform, setPlatform] = useState(null);
+  const [prices, setPrices] = useState({});
+  const [buying, setBuying] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const isNative = isNativeApp();
+    setPlatform(isNative ? "store" : "web");
+    if (!isNative) return;
+    import("@/lib/native")
+      .then(({ nativeProductPrices }) => nativeProductPrices(APP_TIERS.map((t) => t.productId)))
+      .then(setPrices)
+      .catch(() => {});
+  }, []);
+
+  const priceOf = (productId, fallbackKwd) =>
+    prices[productId] || `${String(fallbackKwd).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d])} د.ك / سنة`;
+  const recommended = APP_TIERS.find((t) => studentsCount <= t.maxStudents) || APP_TIERS.at(-1);
+
+  async function buy(productId) {
+    setError("");
+    setBuying(true);
+    try {
+      const { nativePurchase } = await import("@/lib/native");
+      const ref = await nativePurchase(productId, { subscription: true, accountToken: motherId });
+      if (!ref) throw new Error("تم إلغاء الشراء.");
+      const isGoogle = ref.platform === "android";
+      const res = await fetch(isGoogle ? "/api/subscription/app-access/google" : "/api/subscription/app-access/apple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isGoogle ? { purchaseToken: ref.token, productId: ref.productId || productId } : { transactionId: ref.token }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "تعذّر تفعيل الاشتراك.");
+      onUnlocked();
+    } catch (err) {
+      setError(err.message || "تعذّر إتمام الشراء، حاول مرة ثانية.");
+    }
+    setBuying(false);
+  }
+
+  async function restore() {
+    setError("");
+    setBuying(true);
+    try {
+      const { nativeRestorePurchases } = await import("@/lib/native");
+      const refs = await nativeRestorePurchases(motherId);
+      if (!refs.length) throw new Error("ما لقينا مشتريات سابقة على حسابك بالمتجر.");
+      for (const ref of refs) {
+        const isGoogle = ref.platform === "android";
+        await fetch(isGoogle ? "/api/subscription/app-access/google" : "/api/subscription/app-access/apple", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(isGoogle ? { purchaseToken: ref.token, productId: ref.productId } : { transactionId: ref.token }),
+        });
+      }
+      onUnlocked();
+    } catch (err) {
+      setError(err.message || "تعذّرت استعادة المشتريات.");
+    }
+    setBuying(false);
+  }
+
+  return (
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", background: "#FAF7F2", padding: "18px 16px calc(env(safe-area-inset-bottom) + 20px)" }}>
+      <div style={{ maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 13 }}>
+        <img src="/logo.png" alt="دفتري" style={{ width: 54, height: 54, borderRadius: 18 }} />
+        <div>
+          <h2 style={{ margin: 0, fontSize: 21, fontWeight: 800, color: "#1F2937", lineHeight: 1.4 }}>
+            اشتراك دفتري السنوي
+          </h2>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.75, color: "#6B7280" }}>
+            انتهت فترة الاستخدام المجاني. اشتركي لمتابعة الجداول والواجبات والتذكيرات لكل أبنائك ({studentsCount} {studentsCount === 1 ? "طالب/ة" : "طلاب"}).
+          </p>
+        </div>
+
+        {platform === null ? (
+          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
+        ) : platform !== "store" ? (
+          <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
+            الاشتراك يتم من تطبيق دفتري على جوالك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
+          </div>
+        ) : (
+          APP_TIERS.map((t) => (
+            <button
+              key={t.productId}
+              onClick={() => buy(t.productId)}
+              disabled={buying}
+              style={{
+                background: "white", border: t.productId === recommended.productId ? "1.5px solid #5C4B8C" : "1.5px solid #EDE9F4",
+                borderRadius: 18, padding: "15px 16px", display: "flex", flexDirection: "column", gap: 3, textAlign: "start",
+                opacity: buying ? 0.6 : 1, position: "relative",
+              }}
+            >
+              {t.productId === recommended.productId && (
+                <span style={{ position: "absolute", top: -10, insetInlineStart: 15, background: "#5C4B8C", color: "white", fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 999 }}>
+                  الأنسب لعائلتك
+                </span>
+              )}
+              <span style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ fontSize: 16, fontWeight: 800, color: "#1F2937" }}>{t.label}</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: "#5C4B8C", whiteSpace: "nowrap" }}>{priceOf(t.productId, t.priceKwd)}</span>
+              </span>
+            </button>
+          ))
+        )}
+
+        {error && (
+          <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 10, fontSize: 12.5 }}>{error}</div>
+        )}
+
+        {platform === "store" && (
+          <button onClick={restore} disabled={buying} style={{ background: "transparent", color: "#5C4B8C", borderRadius: 15, padding: 11, fontSize: 14, fontWeight: 800 }}>
+            استعادة المشتريات
+          </button>
+        )}
+
+        <p style={{ margin: 0, fontSize: 10.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.9 }}>
+          يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك
+          <br />
+          <a href="/terms" style={termsLink}>شروط الاستخدام</a>
+          {" · "}
+          <a href="/privacy" style={termsLink}>سياسة الخصوصية</a>
+        </p>
+
+        <button onClick={onLogout} style={{ background: "transparent", color: "#9CA3AF", fontSize: 12.5, fontWeight: 700, padding: 8 }}>
+          تسجيل الخروج
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function TeacherView({ children, motherId }) {
   const [childId, setChildId] = useState(children[0]?.id || "");
