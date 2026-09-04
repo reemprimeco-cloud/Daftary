@@ -28,7 +28,7 @@ const PALETTE = [
 ];
 // يُعرض بصفحة الحساب — حدّثيه مع كل إصدار جديد بالتوازي مع
 // MARKETING_VERSION بمشروع Xcode و version بملف package.json.
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.2";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
@@ -2175,7 +2175,7 @@ function PushTestRow() {
       // وأشيعها إن التطبيق المثبّت ما فيه إضافة الإشعارات أصلاً — لأن كود
       // الويب يتحدّث فوراً من السيرفر بينما الإضافات الأصلية تحتاج إعادة بناء.
       const { registerPushDevice } = await import("@/lib/native");
-      const reg = await registerPushDevice();
+      const reg = await registerPushDevice({ force: true });
       if (!reg.ok) {
         const why = {
           // ولي أمر عادي ما يفهم أوامر البناء — نقول له اللي يقدر يسويه فعلاً.
