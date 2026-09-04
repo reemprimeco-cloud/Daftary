@@ -7,9 +7,12 @@ import { grantPurchase, PRODUCTS } from "@/lib/entitlements";
 //
 // App Store Server API يحتاج توقيع JWT بمفتاح خاص من App Store Connect:
 //   APPLE_ISSUER_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY (محتوى ملف .p8)
+// العناوين الحالية بتوثيق آبل الرسمي (App Store Server API) — النطاق
+// القديم "itunes.apple.com" كان يُستخدم عند إطلاق الـAPI أول مرة، وآبل
+// نقلت التوثيق للنطاق الحالي بدونه. لو بقي القديم، كل تحقق شراء يفشل.
 const APPLE_API = {
-  production: "https://api.storekit.itunes.apple.com",
-  sandbox: "https://api.storekit-sandbox.itunes.apple.com",
+  production: "https://api.storekit.apple.com",
+  sandbox: "https://api.storekit-sandbox.apple.com",
 };
 
 function b64url(input) {
@@ -45,9 +48,17 @@ async function fetchTransaction(transactionId, env) {
   const jwt = await appleJwt();
   if (!jwt) return { error: "مفاتيح آبل غير مُعدّة بالسيرفر" };
 
-  const res = await fetch(`${APPLE_API[env]}/inApps/v1/transactions/${transactionId}`, {
-    headers: { Authorization: `Bearer ${jwt}` },
-  });
+  // خطأ شبكة (DNS، مهلة، انقطاع) يرمي استثناءً من fetch نفسه — بدون
+  // التقاطه هنا، الاستثناء ينفلت من مسار الـPOST كامل ويرجع صفحة خطأ 500
+  // عامة بدل رسالة واضحة لولي الأمر يقدر يحاول بعدها.
+  let res;
+  try {
+    res = await fetch(`${APPLE_API[env]}/inApps/v1/transactions/${transactionId}`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+  } catch (e) {
+    return { error: `تعذّر الاتصال بآبل: ${e.message}` };
+  }
   if (res.status === 404) return { notFound: true };
   if (!res.ok) return { error: `آبل ردّت ${res.status}` };
   return { data: await res.json() };
@@ -61,6 +72,15 @@ function decodeJws(signedPayload) {
 }
 
 export async function POST(req) {
+  try {
+    return await handleVerify(req);
+  } catch (e) {
+    console.error("subscription/apple unexpected error:", e);
+    return NextResponse.json({ error: "خطأ غير متوقع بالتحقق من الشراء" }, { status: 500 });
+  }
+}
+
+async function handleVerify(req) {
   const motherId = req.headers.get("x-mother-id");
   if (!motherId) return NextResponse.json({ error: "غير مصرّح" }, { status: 401 });
 
@@ -94,6 +114,7 @@ export async function POST(req) {
   }
 
   // اشتراك منتهي ما يُمنح (يصير مهماً بالاستعادة، لأنها ترجّع معاملات قديمة).
+  // expiresDate بميلي ثانية منذ epoch — نفس وحدة Date.now()، فالمقارنة مباشرة.
   if (PRODUCTS[info.productId].kind === "subscription" && info.expiresDate && info.expiresDate < Date.now()) {
     return NextResponse.json({ error: "هذا الاشتراك منتهي" }, { status: 400 });
   }
