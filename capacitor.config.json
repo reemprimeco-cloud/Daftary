@@ -11,6 +11,11 @@
     "contentInset": "automatic",
     "backgroundColor": "#F9F9F9"
   },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["alert", "sound", "badge"]
+    }
+  },
   "android": {
     "backgroundColor": "#F9F9F9"
   }

@@ -2209,11 +2209,32 @@ function PushTestRow() {
         return;
       }
 
-      const res = await fetch("/api/push/test", { method: "POST" });
+      // إشعار يوصل والتطبيق مفتوح قدامك ما يظهر كبانر على iOS — فنطلب من
+      // السيرفر مهلة قبل الإرسال الفعلي بدل التأخير هنا بالمتصفح: لو قفلتِ
+      // الشاشة، iOS يوقف تنفيذ الجافاسكربت غالباً، فأي تأخير هنا يعني الطلب
+      // نفسه ما يُرسل بعد القفل. الطلب يبدأ الحين، والانتظار يصير بالسيرفر
+      // بغض النظر عن حالة الشاشة.
+      const DELAY = 5;
+      setState("waiting");
+      const countdown = setInterval(() => {
+        setDetail((d) => {
+          const left = Math.max(parseInt(d) || DELAY, 1) - 1;
+          return left > 0 ? `اقفلي شاشتك الحين — الإشعار بيوصل خلال ${left}...` : "";
+        });
+      }, 1000);
+      setDetail(`اقفلي شاشتك الحين — الإشعار بيوصل خلال ${DELAY}...`);
+
+      const res = await fetch("/api/push/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delaySeconds: DELAY }),
+      });
+      clearInterval(countdown);
+      setState("sending");
       const data = await res.json().catch(() => ({}));
       if (data.ok) {
         setState("sent");
-        setDetail(`أُرسل لـ${data.delivered} من ${data.devices} جهاز — راقب شاشة القفل.`);
+        setDetail(`أُرسل لـ${data.delivered} من ${data.devices} جهاز. لو ما وصل والشاشة مقفلة، السيرفر نجح لكن آبل ما سلّمته — راسليني.`);
       } else {
         setState("failed");
         setDetail(data.error || data.results?.map((r) => r.reason).filter(Boolean).join("، ") || "فشل غير معروف");
@@ -2226,14 +2247,14 @@ function PushTestRow() {
 
   return (
     <>
-      <button onClick={run} disabled={state === "sending"} className="ios-row" style={{ color: "#7B68C4" }}>
+      <button onClick={run} disabled={state === "sending" || state === "waiting"} className="ios-row" style={{ color: "#7B68C4" }}>
         <span>اختبار الإشعارات</span>
         <span className="ios-row-value">
-          {state === "sending" ? "..." : state === "sent" ? "✅" : state === "failed" ? "⚠️" : "›"}
+          {state === "sending" || state === "waiting" ? "..." : state === "sent" ? "✅" : state === "failed" ? "⚠️" : "›"}
         </span>
       </button>
       {detail && (
-        <div className="ios-row" style={{ fontSize: 12, color: state === "sent" ? "#2F6E56" : "#B91C1C", lineHeight: 1.6 }}>
+        <div className="ios-row" style={{ fontSize: 12, color: state === "sent" ? "#2F6E56" : state === "waiting" ? "#8C6027" : "#B91C1C", lineHeight: 1.6 }}>
           {detail}
         </div>
       )}
