@@ -29,7 +29,7 @@ const PALETTE = [
 ];
 // يُعرض بصفحة الحساب — حدّثيه مع كل إصدار جديد بالتوازي مع
 // MARKETING_VERSION بمشروع Xcode و version بملف package.json.
-const APP_VERSION = "1.0.2";
+const APP_VERSION = "1.0.3";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
