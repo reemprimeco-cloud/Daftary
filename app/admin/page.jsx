@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase";
+import { PRODUCTS } from "@/lib/plans";
+import { APP_PRODUCTS } from "@/lib/appPlans";
 import AdminLogin from "./AdminLogin";
 import AdminLogoutButton from "./AdminLogoutButton";
 
@@ -34,6 +36,76 @@ async function getStats() {
     withSchedule,
     recentMothers: (recentMothersRes.data || []).map((m) => ({ ...m, childrenCount: childrenByMother[m.id] || 0 })),
     usage: await getUsage(sb, childrenRes.count || 0),
+    subscriptions: await getSubscriptionStats(sb),
+  };
+}
+
+// عدد الاشتراكات المدفوعة الفعّالة الحين، وإجمالي الإيرادات مقسّماً حسب
+// الباقة — من جدولين منفصلين تماماً: اشتراك المعلم الذكي (purchases/
+// entitlements) واشتراك دفتري الشامل (app_purchases/app_subscriptions).
+async function getSubscriptionStats(sb) {
+  const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); // بتوقيت الكويت
+
+  const [teacherPurchasesRes, activeTeacherRes, appPurchasesRes, activeAppRes] = await Promise.all([
+    sb.from("purchases").select("mother_id,product_id,kind,platform,amount_kwd,created_at").order("created_at", { ascending: false }),
+    sb.from("entitlements").select("mother_id").eq("plan", "annual").gte("period_end", today),
+    sb.from("app_purchases").select("mother_id,product_id,platform,amount_kwd,created_at").order("created_at", { ascending: false }),
+    sb.from("app_subscriptions").select("mother_id").eq("plan", "active").gte("period_end", today),
+  ]);
+
+  const teacherPurchases = teacherPurchasesRes.data || [];
+  const appPurchases = appPurchasesRes.data || [];
+
+  // ولي الأمر عنده استحقاق نشط لكل طالب/ة، فنعدّ أولياء الأمور الفريدين
+  // مو عدد الأسطر (وإلا العائلة الواحدة تُحسب مرات بعدد أبنائها).
+  const activeTeacherCount = new Set((activeTeacherRes.data || []).map((r) => r.mother_id)).size;
+  const activeAppCount = new Set((activeAppRes.data || []).map((r) => r.mother_id)).size;
+
+  const byProduct = (rows, catalog) => {
+    const map = {};
+    for (const r of rows) {
+      const key = r.product_id;
+      map[key] = map[key] || { productId: key, label: catalog[key]?.label || key, count: 0, amount: 0 };
+      map[key].count++;
+      map[key].amount += Number(r.amount_kwd) || 0;
+    }
+    return Object.values(map).sort((a, b) => b.amount - a.amount);
+  };
+
+  const motherIds = [...new Set([...teacherPurchases, ...appPurchases].map((r) => r.mother_id).filter(Boolean))];
+  const { data: mothersData } = motherIds.length
+    ? await sb.from("mothers").select("id,name,phone").in("id", motherIds)
+    : { data: [] };
+  const motherById = Object.fromEntries((mothersData || []).map((m) => [m.id, m]));
+
+  const recentPayments = [
+    ...teacherPurchases.map((r) => ({ ...r, type: "teacher", label: PRODUCTS[r.product_id]?.label || r.product_id })),
+    ...appPurchases.map((r) => ({ ...r, type: "app", label: APP_PRODUCTS[r.product_id]?.label || r.product_id })),
+  ]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 30)
+    .map((r) => ({
+      type: r.type,
+      motherName: motherById[r.mother_id]?.name || "—",
+      motherPhone: motherById[r.mother_id]?.phone || "",
+      label: r.label,
+      platform: r.platform,
+      amountKwd: Number(r.amount_kwd) || 0,
+      createdAt: r.created_at,
+    }));
+
+  return {
+    teacher: {
+      activeCount: activeTeacherCount,
+      revenueTotal: teacherPurchases.reduce((s, r) => s + (Number(r.amount_kwd) || 0), 0),
+      byProduct: byProduct(teacherPurchases, PRODUCTS),
+    },
+    appAccess: {
+      activeCount: activeAppCount,
+      revenueTotal: appPurchases.reduce((s, r) => s + (Number(r.amount_kwd) || 0), 0),
+      byProduct: byProduct(appPurchases, APP_PRODUCTS),
+    },
+    recentPayments,
   };
 }
 
@@ -161,6 +233,92 @@ function fmtDate(dateStr) {
   return new Date(dateStr).toLocaleDateString("ar-KW", { day: "numeric", month: "short", year: "numeric" });
 }
 
+const PLATFORM_LABELS = { ios: "آبل", android: "جوجل بلاي", web: "الويب" };
+
+function SubscriptionsSection({ subscriptions }) {
+  if (!subscriptions) return null;
+  const { teacher, appAccess, recentPayments } = subscriptions;
+
+  return (
+    <div style={{ background: "white", borderRadius: 16, padding: 18, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+      <h2 style={{ margin: "0 0 14px", fontSize: 16, color: "#5C4B8C" }}>الاشتراكات المدفوعة</h2>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
+        <StatCard label="مشتركو المعلم الذكي (نشط)" value={teacher.activeCount} color={{ bg: "#F1EFFA", text: "#5C4B8C" }} />
+        <StatCard label="إيرادات المعلم الذكي" value={`${teacher.revenueTotal.toFixed(2)} د.ك`} color={{ bg: "#F1EFFA", text: "#5C4B8C" }} />
+        <StatCard label="مشتركو دفتري الشامل (نشط)" value={appAccess.activeCount} color={{ bg: "#EBF7F1", text: "#2F6E56" }} />
+        <StatCard label="إيرادات دفتري الشامل" value={`${appAccess.revenueTotal.toFixed(2)} د.ك`} color={{ bg: "#EBF7F1", text: "#2F6E56" }} />
+      </div>
+
+      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", marginBottom: 18 }}>
+        <ProductBreakdown title="المعلم الذكي حسب الباقة" rows={teacher.byProduct} />
+        <ProductBreakdown title="دفتري الشامل حسب الباقة" rows={appAccess.byProduct} />
+      </div>
+
+      <h3 style={{ margin: "0 0 8px", fontSize: 13.5, color: "#374151" }}>آخر المدفوعات</h3>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
+          <thead>
+            <tr style={{ textAlign: "right", color: "#9CA3AF", fontSize: 12 }}>
+              <th style={{ padding: "8px 10px" }}>النوع</th>
+              <th style={{ padding: "8px 10px" }}>ولي الأمر</th>
+              <th style={{ padding: "8px 10px" }}>الجوال</th>
+              <th style={{ padding: "8px 10px" }}>الباقة</th>
+              <th style={{ padding: "8px 10px" }}>المتجر</th>
+              <th style={{ padding: "8px 10px" }}>المبلغ</th>
+              <th style={{ padding: "8px 10px" }}>التاريخ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentPayments.map((p, i) => (
+              <tr key={i} style={{ borderTop: "1px solid #F3F4F6" }}>
+                <td style={{ padding: "10px" }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
+                    background: p.type === "teacher" ? "#F1EFFA" : "#EBF7F1",
+                    color: p.type === "teacher" ? "#5C4B8C" : "#2F6E56",
+                  }}>
+                    {p.type === "teacher" ? "المعلم الذكي" : "دفتري الشامل"}
+                  </span>
+                </td>
+                <td style={{ padding: "10px", fontWeight: 700 }}>{p.motherName}</td>
+                <td dir="ltr" style={{ padding: "10px", color: "#6B7280", textAlign: "right" }}>{p.motherPhone}</td>
+                <td style={{ padding: "10px", color: "#6B7280" }}>{p.label}</td>
+                <td style={{ padding: "10px", color: "#6B7280" }}>{PLATFORM_LABELS[p.platform] || p.platform || "—"}</td>
+                <td style={{ padding: "10px", fontWeight: 700 }}>{p.amountKwd ? `${p.amountKwd.toFixed(2)} د.ك` : "—"}</td>
+                <td style={{ padding: "10px", color: "#6B7280" }}>{fmtDate(p.createdAt)}</td>
+              </tr>
+            ))}
+            {recentPayments.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: 20, textAlign: "center", color: "#9CA3AF" }}>ما فيه مدفوعات بعد</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ProductBreakdown({ title, rows }) {
+  return (
+    <div style={{ background: "#FAF7F2", borderRadius: 14, padding: 14 }}>
+      <h4 style={{ margin: "0 0 10px", fontSize: 13, color: "#374151" }}>{title}</h4>
+      {rows.length === 0 ? (
+        <p style={{ margin: 0, fontSize: 12.5, color: "#9CA3AF" }}>ما فيه مشتريات بعد</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {rows.map((r) => (
+            <div key={r.productId} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+              <span style={{ color: "#374151", fontWeight: 700 }}>{r.label}</span>
+              <span style={{ color: "#6B7280" }}>{r.count} عملية · {r.amount.toFixed(2)} د.ك</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminDashboard({ stats }) {
   return (
     <div dir="rtl" className="app-scroll" style={{ minHeight: "100%", background: "#FAF7F2", padding: "24px 16px calc(env(safe-area-inset-bottom) + 24px)" }}>
@@ -181,6 +339,8 @@ function AdminDashboard({ stats }) {
         </div>
 
         <UsageSection usage={stats.usage} />
+
+        <SubscriptionsSection subscriptions={stats.subscriptions} />
 
         <div style={{ background: "white", borderRadius: 16, padding: 4, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 20, overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
