@@ -1643,7 +1643,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
         </p>
 
         <p style={{ margin: 0, paddingTop: 11, borderTop: "1px solid #F0EEE8", fontSize: 11.5, color: "#6B7280", textAlign: "center", lineHeight: 1.7 }}>
-          باقي التطبيق مجاني بالكامل.
+          هذا اشتراك مستقل خاص بالمعلم الذكي، منفصل عن اشتراك دفتري الأساسي.
         </p>
       </div>
     </div>
