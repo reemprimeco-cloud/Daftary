@@ -441,7 +441,12 @@ export default function Home() {
   if (loading || (mother && (!schools || !dataLoaded))) {
     return (
       <>
-        <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#9CA3AF" }}>...جاري التحميل</div>
+        <div style={{ height: "100%", background: "#FAF7F2", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 28 }}>
+          <img src="/logo.png" alt="دفتري" className="splash-logo" style={{ width: 68, height: 68, borderRadius: 21 }} />
+          <p style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: "#5C4B8C", textAlign: "center", lineHeight: 1.9, maxWidth: 280 }}>
+            مع دفتري ما راح تنسين واجب ولا اختبار
+          </p>
+        </div>
         <InstallPrompt />
       </>
     );

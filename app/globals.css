@@ -263,3 +263,12 @@ input:focus, select:focus, textarea:focus {
   animation: ios-spin .7s linear infinite;
 }
 @keyframes ios-spin { to { transform: rotate(360deg); } }
+
+/* شاشة الانتظار: نبضة هادئة على الشعار تدل إن فيه شي يشتغل، بدون
+   دوّارة تحميل تعطي إحساس التأخير. */
+@keyframes daftary-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .72; transform: scale(.96); }
+}
+.splash-logo { animation: daftary-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .splash-logo { animation: none; } }
