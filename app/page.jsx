@@ -1681,7 +1681,7 @@ function AppAccessGraceBanner({ enforceAt }) {
     : "";
   return (
     <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, margin: "0 16px 12px", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-      📢 بدءاً من {dateLabel}، استخدام دفتري يصير باشتراك سنوي بسيط حسب عدد أبنائك. جرّبي التطبيق بحرية لين ذاك الوقت.
+      🎁 تجربتك المجانية مستمرة حتى {dateLabel} — بعدها اشتراك سنوي بسيط حسب عدد أبنائك.
     </div>
   );
 }
