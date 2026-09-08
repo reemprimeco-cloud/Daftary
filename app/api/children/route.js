@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { redistributePool } from "@/lib/entitlements";
+import { hasAppAccess } from "@/lib/appEntitlements";
 
 export async function GET(req) {
   const motherId = req.nextUrl.searchParams.get("motherId");
@@ -13,6 +14,23 @@ export async function GET(req) {
 
 export async function POST(req) {
   const body = await req.json();
+  const motherId = req.headers.get("x-mother-id");
+
+  // حد الباقة يُفرض هنا مو بالواجهة وحدها: الحارس المركزي (middleware) يسمح
+  // بالإضافة ما دام العدد *الحالي* مغطّى، فبدون هالفحص يقدر أحد يضيف بلا
+  // حدود بنداء المسار مباشرة — ثم ينحجب بالطلب اللي بعده، وهي تجربة أسوأ
+  // من منعه بوضوح من البداية.
+  const access = await hasAppAccess(motherId);
+  if (access.phase === "enforced") {
+    const max = access.subscription?.max_students ?? 0;
+    if ((access.studentsCount || 0) + 1 > max) {
+      return NextResponse.json(
+        { error: "باقتك الحالية ما تغطي طالباً/ة إضافياً. رقّي الباقة أولاً.", paywall: true },
+        { status: 402 }
+      );
+    }
+  }
+
   const sb = supabaseAdmin();
 
   let colorIdx = body.colorIdx;
@@ -20,14 +38,14 @@ export async function POST(req) {
     const { count } = await sb
       .from("children")
       .select("*", { count: "exact", head: true })
-      .eq("mother_id", req.headers.get("x-mother-id"));
+      .eq("mother_id", motherId);
     colorIdx = count ?? 0;
   }
 
   const { data, error } = await sb
     .from("children")
     .insert({
-      mother_id: req.headers.get("x-mother-id"),
+      mother_id: motherId,
       name: body.name,
       photo_url: body.photo || null,
       governorate: body.governorate,
@@ -45,7 +63,7 @@ export async function POST(req) {
 
   // الرصيد عائلي وينقسم على الأبناء وقت الشراء، فالطالب/ة المضاف بعده يطلع
   // بلا رصيد ما لم نعِد التوزيع. فشل التوزيع ما يبطّل الإضافة نفسها.
-  const redistributed = await redistributePool(req.headers.get("x-mother-id"));
+  const redistributed = await redistributePool(motherId);
   if (!redistributed.ok) console.error("redistributePool failed:", redistributed.error);
 
   return NextResponse.json({ child: data });

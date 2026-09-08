@@ -19,20 +19,28 @@ export async function POST(req) {
 
   const info = result.data;
 
-  if (info.productId && info.productId !== productId) {
+  // نعتمد على المنتج اللي ترجّعه جوجل، مو اللي يرسله العميل — لو اعتمدنا على
+  // العميل وجوجل ما رجّعت المنتج (رد بلا lineItems)، يقدر أحد يشتري أرخص
+  // باقة ويطالب بأغلى وحدة.
+  if (!info.productId || !APP_PRODUCTS[info.productId]) {
+    return NextResponse.json({ error: "تعذّرت قراءة منتج عملية الشراء" }, { status: 400 });
+  }
+  if (info.productId !== productId) {
     return NextResponse.json({ error: "المنتج لا يطابق عملية الشراء" }, { status: 400 });
   }
   if (!info.active) {
     return NextResponse.json({ error: "عملية الشراء غير مكتملة أو منتهية" }, { status: 400 });
   }
-  if (info.accountId && info.accountId.toLowerCase() !== String(motherId).toLowerCase()) {
+  // نشترط وجود معرّف الحساب ومطابقته، مو نتحقق منه بس لو وُجد — بدون
+  // الاشتراط، أي توكن شراء يصل لأحد يمنحه وصولاً على حسابه هو.
+  if (!info.accountId || info.accountId.toLowerCase() !== String(motherId).toLowerCase()) {
     return NextResponse.json({ error: "هذه العملية تخص حساباً آخر" }, { status: 403 });
   }
 
   const granted = await grantAppSubscription({
     motherId,
     platform: "google",
-    productId,
+    productId: info.productId,
     transactionId: String(info.transactionId),
     raw: info,
   });

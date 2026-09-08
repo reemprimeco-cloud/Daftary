@@ -51,10 +51,11 @@ async function handleVerify(req) {
   }
 
   // التطبيق يمرر معرّف ولي الأمر كـappAccountToken وقت الشراء، فنتأكد إن
-  // المعاملة تخص صاحب الجلسة — بدونه يقدر أحد يطالب بمعاملة غيره لو حصل
-  // معرّفها. المعاملات القديمة بلا توكن نقبلها للتوافق.
+  // المعاملة تخص صاحب الجلسة. نشترط وجوده مو نتساهل عن غيابه: معاملة بلا
+  // توكن تعني إننا نقبل رقم معاملة أي شخص ثاني لو وصل لأحد، ونحرق الرقم
+  // على صاحبه الحقيقي بنفس الوقت (القيد الفريد يمنع منحه مرتين).
   const token = info.appAccountToken;
-  if (token && token.toLowerCase() !== String(motherId).toLowerCase()) {
+  if (!token || token.toLowerCase() !== String(motherId).toLowerCase()) {
     return NextResponse.json({ error: "هذه المعاملة تخص حساباً آخر" }, { status: 403 });
   }
 

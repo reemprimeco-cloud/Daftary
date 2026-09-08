@@ -45,8 +45,12 @@ async function handleVerify(req) {
     return NextResponse.json({ error: "هذا الاشتراك منتهي" }, { status: 400 });
   }
 
+  // التطبيق يمرر معرّف ولي الأمر كـappAccountToken وقت الشراء. نشترط وجوده
+  // ومطابقته — مو نتحقق منه بس لو وُجد. بدون الاشتراط، أي معاملة بلا توكن
+  // (معاملة شخص ثاني حصل أحد على رقمها) تُقبل وتمنح وصولاً لحساب غير صاحبها،
+  // والأسوأ إن صاحبها الحقيقي بعدها ينحجب لأن رقم المعاملة يصير مستهلكاً.
   const token = info.appAccountToken;
-  if (token && token.toLowerCase() !== String(motherId).toLowerCase()) {
+  if (!token || token.toLowerCase() !== String(motherId).toLowerCase()) {
     return NextResponse.json({ error: "هذه المعاملة تخص حساباً آخر" }, { status: 403 });
   }
 
