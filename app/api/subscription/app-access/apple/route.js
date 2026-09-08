@@ -49,8 +49,19 @@ async function handleVerify(req) {
   // ومطابقته — مو نتحقق منه بس لو وُجد. بدون الاشتراط، أي معاملة بلا توكن
   // (معاملة شخص ثاني حصل أحد على رقمها) تُقبل وتمنح وصولاً لحساب غير صاحبها،
   // والأسوأ إن صاحبها الحقيقي بعدها ينحجب لأن رقم المعاملة يصير مستهلكاً.
+  // نفصل «بلا توكن» عن «توكن غير مطابق»: الثانية تخص فعلاً حساباً آخر،
+  // أما الأولى فحالة نادرة (شراء بكود عرض أو مشاركة عائلية) ورسالة
+  // «تخص حساباً آخر» فيها مضلّلة تماماً — ونسجّلها بالسجلات لأنها بلا
+  // تسجيل تصير فشلاً صامتاً ما نعرف سببه.
   const token = info.appAccountToken;
-  if (!token || token.toLowerCase() !== String(motherId).toLowerCase()) {
+  if (!token) {
+    console.error("app-access/apple: transaction without appAccountToken", info.transactionId, info.productId);
+    return NextResponse.json(
+      { error: "تعذّر ربط عملية الشراء بحسابك. جرّبي «استعادة المشتريات»، وإذا تكرر راسلينا." },
+      { status: 403 }
+    );
+  }
+  if (token.toLowerCase() !== String(motherId).toLowerCase()) {
     return NextResponse.json({ error: "هذه المعاملة تخص حساباً آخر" }, { status: 403 });
   }
 

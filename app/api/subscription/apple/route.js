@@ -55,7 +55,14 @@ async function handleVerify(req) {
   // توكن تعني إننا نقبل رقم معاملة أي شخص ثاني لو وصل لأحد، ونحرق الرقم
   // على صاحبه الحقيقي بنفس الوقت (القيد الفريد يمنع منحه مرتين).
   const token = info.appAccountToken;
-  if (!token || token.toLowerCase() !== String(motherId).toLowerCase()) {
+  if (!token) {
+    console.error("subscription/apple: transaction without appAccountToken", info.transactionId, info.productId);
+    return NextResponse.json(
+      { error: "تعذّر ربط عملية الشراء بحسابك. جرّبي «استعادة المشتريات»، وإذا تكرر راسلينا." },
+      { status: 403 }
+    );
+  }
+  if (token.toLowerCase() !== String(motherId).toLowerCase()) {
     return NextResponse.json({ error: "هذه المعاملة تخص حساباً آخر" }, { status: 403 });
   }
 
