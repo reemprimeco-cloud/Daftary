@@ -237,6 +237,7 @@ export default function Home() {
   const [showUpload, setShowUpload] = useState(false);
   const [showUploadSchedule, setShowUploadSchedule] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showSubscriptionManage, setShowSubscriptionManage] = useState(false);
   const [openTask, setOpenTask] = useState(null);
   const [native, setNative] = useState(false);
   const [pull, setPull] = useState(0);
@@ -331,6 +332,17 @@ export default function Home() {
   }
 
   async function handleAddChild(child) {
+    // اشتراك دفتري الشامل يغطي عدداً محدداً من الطلاب — لو إضافة هالطالب/ة
+    // تتجاوز الحد، نمنعها هنا ونوجّه لترقية الباقة، بدل ما نضيفه ثم يُقفل
+    // كامل التطبيق بلا طريقة يرجع فيها ولي الأمر بنفسه إلا الترقية.
+    const maxStudents = appAccess?.subscription?.max_students;
+    if (appAccess?.phase === "enforced" && maxStudents != null && children.length + 1 > maxStudents) {
+      setShowAddChild(false);
+      if (confirm(`باقتك الحالية تغطي ${maxStudents} ${maxStudents === 1 ? "طالب/ة" : "طلاب"} بس. رقّي باقتك الحين لإضافة طالب/ة جديد؟`)) {
+        setShowSubscriptionManage(true);
+      }
+      return;
+    }
     const res = await fetch("/api/children", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...child, motherId: mother.id }) });
     const data = await res.json();
     if (data.child) {
@@ -622,6 +634,15 @@ export default function Home() {
           onLogout={handleLogout}
           onAccountDeleted={handleAccountDeleted}
           onDataCleared={() => loadAll(mother.id)}
+          onManageSubscription={() => setShowSubscriptionManage(true)}
+        />
+      )}
+      {showSubscriptionManage && (
+        <SubscriptionManageView
+          motherId={mother.id}
+          studentsCount={children.length}
+          onClose={() => setShowSubscriptionManage(false)}
+          onChanged={() => loadAll(mother.id)}
         />
       )}
       <InstallPrompt />
@@ -1668,7 +1689,10 @@ function AppAccessGraceBanner({ enforceAt }) {
 // شاشة القفل الكاملة — تظهر بدل التطبيق كله لما ينتهي الاشتراك الشامل
 // بعد تاريخ الإلزام. المعلم الذكي مستثنى (له اشتراكه المستقل)، فهذي
 // الشاشة ما تظهر أبداً وطالما appPaywallState() يرجّع غير "enforced".
-function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, onLogout }) {
+// منطق الشراء والباقات مشترك بين شاشة القفل الكاملة (AppAccessPaywall)
+// وبطاقة إدارة الاشتراك بصفحة الحساب (SubscriptionManageCard) — نفس
+// الأزرار بالضبط، يفرق بس الإطار حولها.
+function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlocked }) {
   const [platform, setPlatform] = useState(null);
   const [prices, setPrices] = useState({});
   const [buying, setBuying] = useState(false);
@@ -1733,6 +1757,68 @@ function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, o
   }
 
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+      {subscription?.max_students && subscription.max_students < studentsCount && (
+        <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.8 }}>
+          عندك اشتراك فعلي يغطي {subscription.max_students} {subscription.max_students === 1 ? "طالب/ة" : "طلاب"} بس، وعندك {studentsCount} مسجَّلين الحين.
+          اختاري باقة أكبر تغطي الجميع — تُحتسب ترقية وآبل تحسب الفرق تلقائياً، مو شراءً جديداً.
+        </div>
+      )}
+
+      {platform === null ? (
+        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
+      ) : platform !== "store" ? (
+        <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
+          الاشتراك يتم من تطبيق دفتري على جوالك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
+        </div>
+      ) : (
+        APP_TIERS.map((t) => (
+          <button
+            key={t.productId}
+            onClick={() => buy(t.productId)}
+            disabled={buying}
+            style={{
+              background: "white", border: t.productId === recommended.productId ? "1.5px solid #5C4B8C" : "1.5px solid #EDE9F4",
+              borderRadius: 18, padding: "15px 16px", display: "flex", flexDirection: "column", gap: 3, textAlign: "start",
+              opacity: buying ? 0.6 : 1, position: "relative",
+            }}
+          >
+            {t.productId === recommended.productId && (
+              <span style={{ position: "absolute", top: -10, insetInlineStart: 15, background: "#5C4B8C", color: "white", fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 999 }}>
+                الأنسب لعائلتك
+              </span>
+            )}
+            <span style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+              <span style={{ fontSize: 16, fontWeight: 800, color: "#1F2937" }}>{t.label}</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: "#5C4B8C", whiteSpace: "nowrap" }}>{priceOf(t.productId, t.priceKwd)}</span>
+            </span>
+          </button>
+        ))
+      )}
+
+      {error && (
+        <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 10, fontSize: 12.5 }}>{error}</div>
+      )}
+
+      {platform === "store" && (
+        <button onClick={restore} disabled={buying} style={{ background: "transparent", color: "#5C4B8C", borderRadius: 15, padding: 11, fontSize: 14, fontWeight: 800 }}>
+          استعادة المشتريات
+        </button>
+      )}
+
+      <p style={{ margin: 0, fontSize: 10.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.9 }}>
+        يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك
+        <br />
+        <a href="/terms" style={termsLink}>شروط الاستخدام</a>
+        {" · "}
+        <a href="/privacy" style={termsLink}>سياسة الخصوصية</a>
+      </p>
+    </div>
+  );
+}
+
+function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, onLogout }) {
+  return (
     <div dir="rtl" className="app-scroll" style={{ height: "100%", background: "#FAF7F2", padding: "18px 16px calc(env(safe-area-inset-bottom) + 20px)" }}>
       <div style={{ maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 13 }}>
         <img src="/logo.png" alt="دفتري" style={{ width: 54, height: 54, borderRadius: 18 }} />
@@ -1745,65 +1831,53 @@ function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, o
           </p>
         </div>
 
-        {subscription?.max_students && subscription.max_students < studentsCount && (
-          <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.8 }}>
-            عندك اشتراك فعلي يغطي {subscription.max_students} {subscription.max_students === 1 ? "طالب/ة" : "طلاب"} بس، وعندك {studentsCount} مسجَّلين الحين.
-            اختاري باقة أكبر تغطي الجميع — تُحتسب ترقية وآبل تحسب الفرق تلقائياً، مو شراءً جديداً.
-          </div>
-        )}
-
-        {platform === null ? (
-          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
-        ) : platform !== "store" ? (
-          <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
-            الاشتراك يتم من تطبيق دفتري على جوالك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
-          </div>
-        ) : (
-          APP_TIERS.map((t) => (
-            <button
-              key={t.productId}
-              onClick={() => buy(t.productId)}
-              disabled={buying}
-              style={{
-                background: "white", border: t.productId === recommended.productId ? "1.5px solid #5C4B8C" : "1.5px solid #EDE9F4",
-                borderRadius: 18, padding: "15px 16px", display: "flex", flexDirection: "column", gap: 3, textAlign: "start",
-                opacity: buying ? 0.6 : 1, position: "relative",
-              }}
-            >
-              {t.productId === recommended.productId && (
-                <span style={{ position: "absolute", top: -10, insetInlineStart: 15, background: "#5C4B8C", color: "white", fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 999 }}>
-                  الأنسب لعائلتك
-                </span>
-              )}
-              <span style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-                <span style={{ fontSize: 16, fontWeight: 800, color: "#1F2937" }}>{t.label}</span>
-                <span style={{ fontSize: 16, fontWeight: 800, color: "#5C4B8C", whiteSpace: "nowrap" }}>{priceOf(t.productId, t.priceKwd)}</span>
-              </span>
-            </button>
-          ))
-        )}
-
-        {error && (
-          <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 10, fontSize: 12.5 }}>{error}</div>
-        )}
-
-        {platform === "store" && (
-          <button onClick={restore} disabled={buying} style={{ background: "transparent", color: "#5C4B8C", borderRadius: 15, padding: 11, fontSize: 14, fontWeight: 800 }}>
-            استعادة المشتريات
-          </button>
-        )}
-
-        <p style={{ margin: 0, fontSize: 10.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.9 }}>
-          يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك
-          <br />
-          <a href="/terms" style={termsLink}>شروط الاستخدام</a>
-          {" · "}
-          <a href="/privacy" style={termsLink}>سياسة الخصوصية</a>
-        </p>
+        <SubscriptionTiersPicker studentsCount={studentsCount} subscription={subscription} motherId={motherId} onUnlocked={onUnlocked} />
 
         <button onClick={onLogout} style={{ background: "transparent", color: "#9CA3AF", fontSize: 12.5, fontWeight: 700, padding: 8 }}>
           تسجيل الخروج
         </button>
+      </div>
+    </div>
+  );
+}
+
+// بطاقة إدارة الاشتراك بصفحة "حسابي" — نفس منتقي الباقات، لكن قابلة
+// للوصول دائماً (مو بس وقت القفل الكامل) عشان ولي الأمر يرقّي باقته
+// بنفسه قبل ما يضيف طالباً يتجاوز حدها، بدل ما يفاجأ بقفل كامل التطبيق.
+function SubscriptionManageView({ motherId, studentsCount, onClose, onChanged }) {
+  const [access, setAccess] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/subscription/app-access/status")
+      .then((r) => r.json())
+      .then(setAccess)
+      .catch(() => setAccess({ subscription: null }));
+  }, []);
+
+  return (
+    <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 60, background: "#FAF7F2", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 14px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={onClose} style={{ background: "none", fontSize: 20, width: 36, height: 36 }}>←</button>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>اشتراك دفتري</p>
+      </div>
+      <div className="app-scroll" style={{ flex: 1, padding: "18px 16px calc(env(safe-area-inset-bottom) + 20px)" }}>
+        <div style={{ maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 13 }}>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.75, color: "#6B7280" }}>
+            {access?.subscription?.max_students
+              ? `اشتراكك الحالي يغطي ${access.subscription.max_students} ${access.subscription.max_students === 1 ? "طالب/ة" : "طلاب"}. رقّي باقتك هنا وقت ما تحتاجين.`
+              : "اختاري الباقة المناسبة لعدد أبنائك."}
+          </p>
+          {access === null ? (
+            <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
+          ) : (
+            <SubscriptionTiersPicker
+              studentsCount={studentsCount}
+              subscription={access?.subscription}
+              motherId={motherId}
+              onUnlocked={() => { onChanged?.(); onClose(); }}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -2442,7 +2516,7 @@ function PushTestRow() {
 }
 
 // حذف الحساب نهائياً — مطلوب من آبل لأي تطبيق فيه إنشاء حساب.
-function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared }) {
+function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared, onManageSubscription }) {
   const phone = (mother.phone || "").replace(/^\+965/, "");
   const [native, setNative] = useState(false);
   useEffect(() => setNative(isNativeApp()), []);
@@ -2482,6 +2556,10 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span>تواصلي معنا</span>
               <span className="ios-chevron">›</span>
             </a>
+            <button onClick={onManageSubscription} className="ios-row">
+              <span>اشتراك دفتري</span>
+              <span className="ios-chevron">›</span>
+            </button>
             <PushTestRow />
             <div className="ios-row">
               <span>الإصدار</span>
@@ -2534,6 +2612,10 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             <span style={{ fontSize: 14.5, fontWeight: 700 }}>✉️ تواصلي معنا</span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
+          <button onClick={onManageSubscription} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", width: "100%", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700 }}>💳 اشتراك دفتري</span>
+            <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
+          </button>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: "#374151" }}>الإصدار</span>
             <span style={{ fontSize: 13.5, color: "#9CA3AF", direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>

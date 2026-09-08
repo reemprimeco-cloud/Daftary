@@ -28,8 +28,17 @@ const APP_PAYWALL_EXEMPT_PREFIXES = [
   "/api/subscription/", "/api/payments/", "/api/ai-teacher/", "/api/push/", "/api/delete-account",
 ];
 
+// حذف طالب/ة يبقى مسموحاً دائماً حتى لو الحساب محجوب — وإلا عائلة تجاوزت
+// حد باقتها (أضافت طالباً زايداً) تنحجب عن كامل التطبيق بلا أي طريقة ترجع
+// فيها تحت الحد بنفسها غير الدفع لباقة أكبر. الإضافة (POST) تبقى محجوبة
+// عادي، بس الحذف تحديداً (DELETE) يفكّ الحجز الذاتي.
+function isChildDeletion(req) {
+  return req.method === "DELETE" && /^\/api\/children\/[^/]+$/.test(req.nextUrl.pathname);
+}
+
 async function checkAppPaywall(req, motherId) {
   if (APP_PAYWALL_EXEMPT_PREFIXES.some((p) => req.nextUrl.pathname.startsWith(p))) return null;
+  if (isChildDeletion(req)) return null;
 
   const access = await hasAppAccess(motherId);
   if (access.allowed) return null;
