@@ -242,6 +242,11 @@ export default function Home() {
   const [native, setNative] = useState(false);
   const [pull, setPull] = useState(0);
   const [appAccess, setAppAccess] = useState(null); // { allowed, phase, studentsCount } — null قبل أول فحص
+  // هل اكتمل أول تحميل للبيانات؟ بدونه تُعرض الشاشة الرئيسية والقوائم
+  // فاضية، فتطلع رسالة «ما فيه طلاب مسجّلين» لعائلة عندها أبناء فعلاً —
+  // وهذا أسوأ من انتظار: يخوّف الأم إن بياناتها راحت. ما نرجّعه false
+  // أبداً بعد أول تحميل، عشان السحب للتحديث ما يومض شاشة انتظار.
+  const [dataLoaded, setDataLoaded] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -273,15 +278,19 @@ export default function Home() {
   }, [native, mother]);
 
   async function loadAll(motherId) {
-    // اشتراك التطبيق الشامل — نفحصه أول شي. لو غير مسموح (معطّل الحين
-    // بمفتاح الإيقاف، فدائماً allowed=true إلى أن نفعّله)، نعرض شاشة
-    // الاشتراك بدل ما نكمّل تحميل البيانات.
-    const access = await fetch("/api/subscription/app-access/status").then((r) => r.json()).catch(() => ({ allowed: true, phase: "off" }));
+    // الطلبان متوازيان مو متتاليين: التتابع كان يضاعف زمن الشاشة الفاضية
+    // عند كل فتح للتطبيق. لو طلع إن الوصول محجوب، نتجاهل نتيجة اللوحة
+    // (والحارس المركزي يرفضها بـ402 أصلاً) — فما نخسر شي بجلبها مسبقاً.
+    const [access, data] = await Promise.all([
+      fetch("/api/subscription/app-access/status").then((r) => r.json()).catch(() => ({ allowed: true, phase: "off" })),
+      fetch(`/api/dashboard?motherId=${motherId}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
     setAppAccess(access);
-    if (!access.allowed) return;
+    // نرفع العلم بكل الحالات (نجاح، حجب، فشل شبكة) — وإلا تبقى شاشة
+    // «جاري التحميل» للأبد بدل ما يشوف المستخدم شي يتصرف معه.
+    setDataLoaded(true);
+    if (!access.allowed || !data) return;
 
-    const res = await fetch(`/api/dashboard?motherId=${motherId}`);
-    const data = await res.json();
     setChildren(data.children || []);
     setTasks(data.tasks || []);
     setUndatedTasks(data.undatedTasks || []);
@@ -306,6 +315,10 @@ export default function Home() {
     setUpcomingTasks([]);
     setRequirements([]);
     setClassSchedule([]);
+    // القوائم انمسحت، فلو دخلت أم ثانية بعدها لازم ننتظر بياناتها قبل
+    // ما نعرض الشاشة — وإلا شافت «ما فيه طلاب» وهي عندها أبناء.
+    setDataLoaded(false);
+    setAppAccess(null);
     setView("dashboard");
   }
 
@@ -319,6 +332,10 @@ export default function Home() {
     setUpcomingTasks([]);
     setRequirements([]);
     setClassSchedule([]);
+    // القوائم انمسحت، فلو دخلت أم ثانية بعدها لازم ننتظر بياناتها قبل
+    // ما نعرض الشاشة — وإلا شافت «ما فيه طلاب» وهي عندها أبناء.
+    setDataLoaded(false);
+    setAppAccess(null);
     setView("dashboard");
     alert("تم حذف حسابك وكل بياناتك نهائياً.");
   }
@@ -421,7 +438,7 @@ export default function Home() {
     setRequirements((prev) => prev.filter((r) => r.id !== id));
   }
 
-  if (loading || (mother && !schools)) {
+  if (loading || (mother && (!schools || !dataLoaded))) {
     return (
       <>
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#9CA3AF" }}>...جاري التحميل</div>
