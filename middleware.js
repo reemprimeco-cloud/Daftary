@@ -28,17 +28,21 @@ const APP_PAYWALL_EXEMPT_PREFIXES = [
   "/api/subscription/", "/api/payments/", "/api/ai-teacher/", "/api/push/", "/api/delete-account",
 ];
 
-// حذف طالب/ة يبقى مسموحاً دائماً حتى لو الحساب محجوب — وإلا عائلة تجاوزت
-// حد باقتها (أضافت طالباً زايداً) تنحجب عن كامل التطبيق بلا أي طريقة ترجع
-// فيها تحت الحد بنفسها غير الدفع لباقة أكبر. الإضافة (POST) تبقى محجوبة
-// عادي، بس الحذف تحديداً (DELETE) يفكّ الحجز الذاتي.
-function isChildDeletion(req) {
-  return req.method === "DELETE" && /^\/api\/children\/[^/]+$/.test(req.nextUrl.pathname);
+// عرض الأبناء وحذف طالب/ة يبقيان مسموحين دائماً حتى لو الحساب محجوب —
+// وإلا عائلة تجاوزت حد باقتها (أضافت طالباً زايداً) تنحجب عن كامل التطبيق
+// بلا حتى ما تقدر تشوف مين تحذف عشان ترجع تحت الحد بنفسها. الإضافة
+// (POST) تبقى محجوبة عادي، بس القراءة (GET) والحذف (DELETE) يفكّان الحجز
+// الذاتي.
+function isChildManagement(req) {
+  const { method, nextUrl } = req;
+  if (method === "GET" && nextUrl.pathname === "/api/children") return true;
+  if (method === "DELETE" && /^\/api\/children\/[^/]+$/.test(nextUrl.pathname)) return true;
+  return false;
 }
 
 async function checkAppPaywall(req, motherId) {
   if (APP_PAYWALL_EXEMPT_PREFIXES.some((p) => req.nextUrl.pathname.startsWith(p))) return null;
-  if (isChildDeletion(req)) return null;
+  if (isChildManagement(req)) return null;
 
   const access = await hasAppAccess(motherId);
   if (access.allowed) return null;

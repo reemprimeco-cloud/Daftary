@@ -1817,7 +1817,54 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
   );
 }
 
+// لو ولي الأمر تجاوز حد باقته (أضافت طالباً زايداً)، هذي الشاشة هي المكان
+// الوحيد اللي تشوفه — فلازم يكون فيها طريقة ترجع تحت الحد بنفسها (حذف
+// طالب/ة) بدون ما تحتاج تدفع أو تتواصل معنا. GET/DELETE على /api/children
+// مستثنيان من الحجب بالضبط لهذا السبب (middleware.js).
+function ManageChildrenInline({ motherId, onChanged }) {
+  const [children, setChildren] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  useEffect(() => {
+    fetch(`/api/children?motherId=${motherId}`)
+      .then((r) => r.json())
+      .then((d) => setChildren(d.children || []))
+      .catch(() => setChildren([]));
+  }, [motherId]);
+
+  async function remove(id) {
+    if (!confirm("حذف هذا الطالب/ـة نهائياً؟ راح تنحذف كل واجباته ومتطلباته معه.")) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/children/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
+      if (!res.ok) throw new Error();
+      setChildren((prev) => prev.filter((c) => c.id !== id));
+      onChanged?.();
+    } catch {
+      alert("تعذّر الحذف، حاولي مرة ثانية.");
+    }
+    setBusyId(null);
+  }
+
+  if (!children?.length) return null;
+
+  return (
+    <div style={{ background: "white", border: "1.5px solid #EDE9F4", borderRadius: 18, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#1F2937" }}>أو احذفي طالباً/ة لترجعي تحت حد باقتك الحالية:</p>
+      {children.map((c) => (
+        <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <span style={{ fontSize: 13.5, color: "#374151" }}>{c.name}</span>
+          <button onClick={() => remove(c.id)} disabled={busyId === c.id} style={{ background: "transparent", color: "#B91C1C", fontSize: 12.5, fontWeight: 700, padding: "6px 10px" }}>
+            {busyId === c.id ? "..." : "حذف"}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, onLogout }) {
+  const overLimit = subscription?.max_students != null && subscription.max_students < studentsCount;
   return (
     <div dir="rtl" className="app-scroll" style={{ height: "100%", background: "#FAF7F2", padding: "18px 16px calc(env(safe-area-inset-bottom) + 20px)" }}>
       <div style={{ maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 13 }}>
@@ -1832,6 +1879,8 @@ function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, o
         </div>
 
         <SubscriptionTiersPicker studentsCount={studentsCount} subscription={subscription} motherId={motherId} onUnlocked={onUnlocked} />
+
+        {overLimit && <ManageChildrenInline motherId={motherId} onChanged={onUnlocked} />}
 
         <button onClick={onLogout} style={{ background: "transparent", color: "#9CA3AF", fontSize: 12.5, fontWeight: 700, padding: 8 }}>
           تسجيل الخروج
