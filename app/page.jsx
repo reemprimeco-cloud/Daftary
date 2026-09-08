@@ -433,7 +433,7 @@ export default function Home() {
   if (appAccess && !appAccess.allowed) {
     return (
       <>
-        <AppAccessPaywall studentsCount={appAccess.studentsCount || children.length} onUnlocked={() => loadAll(mother.id)} motherId={mother.id} onLogout={handleLogout} />
+        <AppAccessPaywall studentsCount={appAccess.studentsCount || children.length} subscription={appAccess.subscription} onUnlocked={() => loadAll(mother.id)} motherId={mother.id} onLogout={handleLogout} />
         <InstallPrompt />
       </>
     );
@@ -1668,7 +1668,7 @@ function AppAccessGraceBanner({ enforceAt }) {
 // شاشة القفل الكاملة — تظهر بدل التطبيق كله لما ينتهي الاشتراك الشامل
 // بعد تاريخ الإلزام. المعلم الذكي مستثنى (له اشتراكه المستقل)، فهذي
 // الشاشة ما تظهر أبداً وطالما appPaywallState() يرجّع غير "enforced".
-function AppAccessPaywall({ studentsCount, motherId, onUnlocked, onLogout }) {
+function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, onLogout }) {
   const [platform, setPlatform] = useState(null);
   const [prices, setPrices] = useState({});
   const [buying, setBuying] = useState(false);
@@ -1744,6 +1744,13 @@ function AppAccessPaywall({ studentsCount, motherId, onUnlocked, onLogout }) {
             انتهت فترة الاستخدام المجاني. اشتركي لمتابعة الجداول والواجبات والتذكيرات لكل أبنائك ({studentsCount} {studentsCount === 1 ? "طالب/ة" : "طلاب"}).
           </p>
         </div>
+
+        {subscription?.max_students && subscription.max_students < studentsCount && (
+          <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.8 }}>
+            عندك اشتراك فعلي يغطي {subscription.max_students} {subscription.max_students === 1 ? "طالب/ة" : "طلاب"} بس، وعندك {studentsCount} مسجَّلين الحين.
+            اختاري باقة أكبر تغطي الجميع — تُحتسب ترقية وآبل تحسب الفرق تلقائياً، مو شراءً جديداً.
+          </div>
+        )}
 
         {platform === null ? (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
