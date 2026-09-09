@@ -70,6 +70,7 @@ async function handleVerify(req) {
     platform: "apple",
     productId: info.productId,
     transactionId: String(info.transactionId || transactionId),
+    expiresAt: info.expiresDate || null, // ميلي ثانية منذ epoch
     raw: info,
   });
   if (!granted.ok) return NextResponse.json({ error: granted.error }, { status: 400 });

@@ -42,6 +42,7 @@ export async function POST(req) {
     platform: "google",
     productId: info.productId,
     transactionId: String(info.transactionId),
+    expiresAt: info.expiresAt || null, // ISO من lineItems[].expiryTime
     raw: info,
   });
   if (!granted.ok) return NextResponse.json({ error: granted.error }, { status: 400 });
