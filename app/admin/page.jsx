@@ -4,6 +4,7 @@ import { PRODUCTS } from "@/lib/plans";
 import { APP_PRODUCTS } from "@/lib/appPlans";
 import AdminLogin from "./AdminLogin";
 import AdminLogoutButton from "./AdminLogoutButton";
+import AppleNotificationTest from "./AppleNotificationTest";
 
 export const dynamic = "force-dynamic";
 
@@ -341,6 +342,8 @@ function AdminDashboard({ stats }) {
         <UsageSection usage={stats.usage} />
 
         <SubscriptionsSection subscriptions={stats.subscriptions} />
+
+        <AppleNotificationTest />
 
         <div style={{ background: "white", borderRadius: 16, padding: 4, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 20, overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
