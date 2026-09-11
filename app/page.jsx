@@ -1725,8 +1725,7 @@ const termsLink = { color: "#9CA3AF", textDecoration: "underline" };
 function TapPayerNotice() {
   return (
     <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "11px 14px", fontSize: 12, lineHeight: 1.85 }}>
-      دفتري من إنتاج <strong>شركة برايم للطباعة</strong>، وسيتم تحويلك لبوابة الدفع التابعة لها —
-      فلا تستغربي ظهور اسم <strong>Prime Printing</strong> بصفحة الدفع وبكشف حسابك.
+      دفتري من إنتاج <strong>شركة برايم للطباعة</strong>، وسيتم تحويلك لبوابة الدفع التابعة لها.
     </div>
   );
 }
