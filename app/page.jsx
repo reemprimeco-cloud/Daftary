@@ -2655,10 +2655,59 @@ function PushTestRow() {
 }
 
 // حذف الحساب نهائياً — مطلوب من آبل لأي تطبيق فيه إنشاء حساب.
+// ملخّص حالة الاشتراك بصفحة الحساب. قبله كان فيه صف «اشتراك دفتري» وحده بلا
+// أي معلومة — ولي الأمر ما يعرف هل هو مشترك أصلاً، ولا كم طالباً تغطي باقته،
+// ولا متى تنتهي، إلا لو دخل شاشة الباقات وخمّن. نعرضها هنا مباشرة.
+function appAccessSummary(access) {
+  if (!access) return null; // لسا نحمّل
+  const dateAr = (d) => new Date(d).toLocaleDateString("ar-KW", { day: "numeric", month: "long", year: "numeric" });
+  const sub = access.subscription;
+  const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); // بتوقيت الكويت
+  const active = sub?.plan === "active" && sub?.period_end && sub.period_end >= today;
+
+  if (active) {
+    const n = sub.max_students;
+    return {
+      status: "فعّال ✓",
+      color: "#166534",
+      bg: "#F0FDF4",
+      detail: `يغطي ${arabicDigits(n)} ${n === 1 ? "طالب/ة" : "طلاب"} · حتى ${dateAr(sub.period_end)}`,
+      action: "تغيير الباقة",
+    };
+  }
+  if (access.phase === "grace") {
+    return {
+      status: "تجربة مجانية",
+      color: "#8C6027",
+      bg: "#FDF3E7",
+      detail: access.enforceAt ? `مجاني حتى ${dateAr(access.enforceAt)}` : "",
+      action: "اشتركي الآن",
+    };
+  }
+  if (sub?.period_end) {
+    return { status: "منتهي", color: "#B91C1C", bg: "#FEF2F2", detail: `انتهى بتاريخ ${dateAr(sub.period_end)}`, action: "جدّدي اشتراكك" };
+  }
+  if (access.phase === "enforced") {
+    return { status: "غير مفعّل", color: "#B91C1C", bg: "#FEF2F2", detail: "اختاري باقة حسب عدد أبنائك", action: "اشتركي الآن" };
+  }
+  // الميزة معطّلة أصلاً — ما فيه حالة اشتراك نعرضها، بس نخلي الباقات متاحة.
+  return { status: "", color: "#5C4B8C", bg: "#F1EFFA", detail: "", action: "عرض الباقات" };
+}
+
 function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared, onManageSubscription }) {
   const phone = (mother.phone || "").replace(/^\+965/, "");
   const [native, setNative] = useState(false);
+  const [access, setAccess] = useState(null);
   useEffect(() => setNative(isNativeApp()), []);
+
+  useEffect(() => {
+    fetch("/api/subscription/app-access/status")
+      .then((r) => r.json())
+      .then(setAccess)
+      .catch(() => setAccess({ phase: "off" }));
+  }, []);
+
+  const plan = appAccessSummary(access);
 
   const childrenLabel =
     childrenCount === 0 ? "ما فيه طلاب مسجّلين" : childrenCount === 1 ? "طالب/ة واحد مسجّل" : `${childrenCount} طلاب مسجّلين`;
@@ -2684,6 +2733,30 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             <p style={{ margin: "2px 0 0", fontSize: 15, color: "#8E8E93" }}>{childrenLabel}</p>
           </div>
 
+          <div>
+            <p className="ios-group-header">الاشتراك</p>
+            <div className="ios-group">
+              <button onClick={onManageSubscription} className="ios-row">
+                <span>اشتراك دفتري</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <span className="ios-row-value" style={{ color: plan?.color }}>{plan ? plan.status : "..."}</span>
+                  <span className="ios-chevron">›</span>
+                </span>
+              </button>
+              {plan?.detail && (
+                <div className="ios-row" style={{ color: "#8E8E93", fontSize: 14 }}>
+                  <span>{plan.detail}</span>
+                </div>
+              )}
+              {plan && (
+                <button onClick={onManageSubscription} className="ios-row" style={{ color: "#7B68C4" }}>
+                  <span>{plan.action}</span>
+                  <span className="ios-chevron">›</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="ios-group">
             {/* داخل التطبيق نفتحها بنفس النافذة — target="_blank" ما يشتغل بـ WebView
                 وصفحة الخصوصية فيها رابط رجوع للتطبيق. */}
@@ -2695,10 +2768,6 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span>تواصلي معنا</span>
               <span className="ios-chevron">›</span>
             </a>
-            <button onClick={onManageSubscription} className="ios-row">
-              <span>اشتراك دفتري</span>
-              <span className="ios-chevron">›</span>
-            </button>
             <PushTestRow />
             <div className="ios-row">
               <span>الإصدار</span>
@@ -2742,6 +2811,22 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
           <p style={{ margin: "10px 0 0", fontSize: 12.5, color: "#B7A6E8", fontWeight: 700 }}>{childrenLabel}</p>
         </div>
 
+        <div style={{ background: "white", borderRadius: 18, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,.05)", display: "flex", flexDirection: "column", gap: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <span style={{ fontSize: 14.5, fontWeight: 800, color: "#374151" }}>💳 اشتراك دفتري</span>
+            {plan?.status && (
+              <span style={{ background: plan.bg, color: plan.color, fontSize: 12, fontWeight: 800, padding: "5px 11px", borderRadius: 999, flexShrink: 0 }}>{plan.status}</span>
+            )}
+          </div>
+          {plan?.detail && <p style={{ margin: 0, fontSize: 13, color: "#6B7280", lineHeight: 1.7 }}>{plan.detail}</p>}
+          <button
+            onClick={onManageSubscription}
+            style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 14, padding: "11px 16px", borderRadius: 12, width: "100%", minHeight: 44 }}
+          >
+            {plan ? plan.action : "..."}
+          </button>
+        </div>
+
         <div style={{ background: "white", borderRadius: 18, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
           <a href="/privacy" target={native ? undefined : "_blank"} rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700 }}>🔒 سياسة الخصوصية</span>
@@ -2751,12 +2836,6 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             <span style={{ fontSize: 14.5, fontWeight: 700 }}>✉️ تواصلي معنا</span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
-          {/* الخلفية صريحة: الزر بلا خلفية محددة يرثّ رمادي المتصفح
-              الافتراضي، فيبان صفاً غريباً وسط صفوف بيضاء. */}
-          <button onClick={onManageSubscription} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", width: "100%", background: "white", color: "#374151", borderBottom: "1px solid #F5F3EF", textAlign: "start", fontFamily: "inherit" }}>
-            <span style={{ fontSize: 14.5, fontWeight: 700 }}>💳 اشتراك دفتري</span>
-            <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
-          </button>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: "#374151" }}>الإصدار</span>
             <span style={{ fontSize: 13.5, color: "#9CA3AF", direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>
