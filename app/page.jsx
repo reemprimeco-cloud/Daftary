@@ -10,6 +10,7 @@ import {
   nativeShare,
   nativeSharePdf,
   syncTaskReminders,
+  reportNotificationOpen,
   registerPushDevice,
   attachPullToRefresh,
 } from "@/lib/native";
@@ -423,6 +424,14 @@ export default function Home() {
       const m = JSON.parse(saved);
       setMother(m);
       loadAll(m.id);
+      // فتحت من إشعار إعلان بالمتصفح (?n=). التطبيق له مستمع أصلي للنقر،
+      // أما المتصفح فما عنده، فنمرر المعرّف بالرابط. ننظّفه بعدها عشان
+      // ما يتكرر التبليغ مع كل تحديث للصفحة ولا يبقى بالمفضلة.
+      const campaign = new URLSearchParams(window.location.search).get("n");
+      if (campaign) {
+        reportNotificationOpen(campaign);
+        window.history.replaceState({}, "", window.location.pathname);
+      }
     } else if (saved) {
       localStorage.removeItem("daftary_mother");
     }

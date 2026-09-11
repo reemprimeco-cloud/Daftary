@@ -7,6 +7,14 @@ export async function GET(req) {
   if (!motherId) return NextResponse.json({ error: "motherId مطلوب" }, { status: 400 });
   const sb = supabaseAdmin();
 
+  // آخر مرة فتحت فيها ولية الأمر التطبيق. لوحة التحكم تُنادى بكل فتحة،
+  // فهي أدق مؤشر على النشاط الفعلي. ما ننتظرها: تحديث إحصائي ما يستاهل
+  // تأخير تحميل الشاشة، وفشله ما يضر.
+  sb.from("mothers").update({ last_seen_at: new Date().toISOString() }).eq("id", motherId).then(
+    () => {},
+    () => {}
+  );
+
   const { data: children, error: cErr } = await sb
     .from("children")
     .select("*")

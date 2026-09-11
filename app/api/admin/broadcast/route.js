@@ -38,16 +38,33 @@ export async function POST(req) {
   let webDelivered = 0;
   const failures = {};
 
+  // نسجّل الإعلان أولاً عشان يكون له معرّف نمرره مع الإشعار نفسه — هو
+  // اللي يرجع لنا وقت ما يفتحه ولي الأمر فنعرف منو فتحه فعلاً.
+  const { data: campaign, error: cErr } = await sb
+    .from("broadcasts")
+    .insert({ title: title.trim(), body: body.trim() })
+    .select("id")
+    .single();
+  if (cErr) return NextResponse.json({ error: `تعذّر تسجيل الإعلان: ${cErr.message}` }, { status: 500 });
+  const campaignId = campaign.id;
+
+  // صف واحد لكل ولي أمر مهما تعددت أجهزته — والمفتاح المركّب بالجدول يمنع
+  // التكرار لو كان له آيفون ومتصفح.
+  const sentTo = new Set();
+  const markSent = (motherId) => { if (motherId) sentTo.add(motherId); };
+
   // ————— أجهزة التطبيق —————
   if (apnsConfigured()) {
-    const { data: devices } = await sb.from("device_tokens").select("token, environment").eq("platform", "ios");
+    const { data: devices } = await sb.from("device_tokens").select("token, environment, mother_id").eq("platform", "ios");
     if (devices?.length) {
+      const motherOf = new Map(devices.map((d) => [d.token, d.mother_id]));
       const results = await sendApns(
-        devices.map((d) => ({ token: d.token, environment: d.environment, title, body }))
+        devices.map((d) => ({ token: d.token, environment: d.environment, title, body, campaign: campaignId }))
       );
       for (const r of results) {
         if (r.ok) {
           apnsDelivered++;
+          markSent(motherOf.get(r.token));
           await sb.from("device_tokens").update({ environment: r.environment, last_error: null }).eq("token", r.token);
         } else if (r.reason === "BadDeviceToken" || r.reason === "Unregistered") {
           // رمز ميت (حُذف التطبيق أو أُلغي الإذن) — نمسحه بدل ما نعيد
@@ -73,9 +90,12 @@ export async function POST(req) {
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          JSON.stringify({ title, body, url: "/" })
+          // المتصفح ما عنده مستمع أصلي مثل التطبيق، فنمرر المعرّف بالرابط
+          // والصفحة تبلّغنا عند فتحها.
+          JSON.stringify({ title, body, url: `/?n=${campaignId}` })
         );
         webDelivered++;
+        markSent(sub.mother_id);
       } catch (err) {
         if (err.statusCode === 404 || err.statusCode === 410) {
           await sb.from("push_subscriptions").delete().eq("id", sub.id);
@@ -85,8 +105,17 @@ export async function POST(req) {
     }
   }
 
+  if (sentTo.size) {
+    await sb.from("broadcast_events").insert(
+      [...sentTo].map((motherId) => ({ broadcast_id: campaignId, mother_id: motherId, kind: "sent" }))
+    );
+  }
+  await sb.from("broadcasts").update({ recipients: sentTo.size }).eq("id", campaignId);
+
   return NextResponse.json({
     ok: true,
+    campaignId,
+    recipients: sentTo.size,
     delivered: apnsDelivered + webDelivered,
     apns: apnsDelivered,
     web: webDelivered,
