@@ -8,6 +8,7 @@ import { installAuthFetch } from "@/lib/authFetch";
 export default function PaymentCallbackPage() {
   const [state, setState] = useState("checking");
   const [error, setError] = useState("");
+  const [scope, setScope] = useState(null);
 
   useEffect(() => {
     installAuthFetch();
@@ -20,8 +21,10 @@ export default function PaymentCallbackPage() {
     fetch(`/api/payments/status?chargeId=${encodeURIComponent(chargeId)}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok) setState("done");
-        else {
+        if (data.ok) {
+          setScope(data.scope || null);
+          setState("done");
+        } else {
           setState("failed");
           setError(data.error || "لم تكتمل عملية الدفع.");
         }
@@ -34,7 +37,17 @@ export default function PaymentCallbackPage() {
 
   const copy = {
     checking: { icon: "⏳", title: "نتحقق من الدفع...", body: "لحظات من فضلك." },
-    done: { icon: "✅", title: "تم تفعيل اشتراكك", body: "رصيد الأسئلة مقسّم بين أبنائك بالتساوي. استمتعوا!" },
+    done: {
+      icon: "✅",
+      title: "تم تفعيل اشتراكك",
+      // الرسالة حسب اللي اشترته فعلاً: رصيد الأسئلة يخص المعلم الذكي وحده.
+      body:
+        scope === "app"
+          ? "اشتراك دفتري صار فعّالاً — الجداول والواجبات والتذكيرات لكل أبنائك."
+          : scope === "teacher"
+          ? "رصيد الأسئلة مقسّم بين أبنائك بالتساوي. استمتعوا!"
+          : "استمتعوا!",
+    },
     failed: { icon: "⚠️", title: "لم تكتمل العملية", body: error },
   }[state];
 
