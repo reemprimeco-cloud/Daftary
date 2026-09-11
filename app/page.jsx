@@ -2735,7 +2735,9 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             <span style={{ fontSize: 14.5, fontWeight: 700 }}>✉️ تواصلي معنا</span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
-          <button onClick={onManageSubscription} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", width: "100%", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
+          {/* الخلفية صريحة: الزر بلا خلفية محددة يرثّ رمادي المتصفح
+              الافتراضي، فيبان صفاً غريباً وسط صفوف بيضاء. */}
+          <button onClick={onManageSubscription} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", width: "100%", background: "white", color: "#374151", borderBottom: "1px solid #F5F3EF", textAlign: "start", fontFamily: "inherit" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700 }}>💳 اشتراك دفتري</span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </button>
