@@ -15,7 +15,7 @@ import {
 } from "@/lib/native";
 import { installAuthFetch } from "@/lib/authFetch";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
-import { APP_TIERS, APP_PLAN } from "@/lib/appPlans";
+import { APP_TIERS, APP_PLAN, arabicDigits } from "@/lib/appPlans";
 
 const PALETTE = [
   { bg: "#FDEFF3", ring: "#E8A0B4", solid: "#E39CB2", soft: "#F9D9E2", text: "#8C4E62" },
@@ -1724,7 +1724,7 @@ function AppAccessGraceBanner({ enforceAt }) {
     : "";
   return (
     <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, margin: "0 16px 12px", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-      🎁 استمتعي بتجربة مجانية لمدة {APP_PLAN.GRACE_DAYS} أيام — حتى {dateLabel}، وبعدها اشتراك سنوي بسيط حسب عدد أبنائك.
+      🎁 استمتعي بتجربة مجانية لمدة {arabicDigits(APP_PLAN.GRACE_DAYS)} أيام — حتى {dateLabel}، وبعدها اشتراك سنوي بسيط حسب عدد أبنائك.
     </div>
   );
 }
