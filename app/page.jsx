@@ -1719,6 +1719,11 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
   const [prices, setPrices] = useState({});
   const [buying, setBuying] = useState(false);
   const [error, setError] = useState("");
+  // الدفع بالبطاقة للويب فقط. داخل التطبيق الشراء عبر المتجر إلزامياً
+  // (بند آبل 3.1.1)، وعرض بديل بالبطاقة هناك يعرّض التطبيق للشطب — لذلك
+  // نعتمد على platform === "web" مو على العلم وحده.
+  const webPayments = process.env.NEXT_PUBLIC_ENABLE_WEB_PAYMENTS === "true";
+  const canPayByCard = platform === "web" && webPayments;
 
   useEffect(() => {
     const isNative = isNativeApp();
@@ -1737,6 +1742,26 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
   async function buy(productId) {
     setError("");
     setBuying(true);
+
+    // على الويب: فاتورة Tap ثم تحويل لصفحة الدفع. المنح يصير بالسيرفر بعد
+    // ما يستعلم عن الشحنة من Tap نفسها، مو من رجوع المتصفح.
+    if (canPayByCard) {
+      try {
+        const res = await fetch("/api/payments/create-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.url) throw new Error(data.error || "تعذّر بدء عملية الدفع.");
+        window.location.href = data.url;
+      } catch (err) {
+        setError(err.message || "تعذّر بدء عملية الدفع.");
+        setBuying(false);
+      }
+      return;
+    }
+
     try {
       const { nativePurchase } = await import("@/lib/native");
       const ref = await nativePurchase(productId, { subscription: true, accountToken: motherId });
@@ -1783,13 +1808,15 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
       {subscription?.max_students && subscription.max_students < studentsCount && (
         <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.8 }}>
           عندك اشتراك فعلي يغطي {subscription.max_students} {subscription.max_students === 1 ? "طالب/ة" : "طلاب"} بس، وعندك {studentsCount} مسجَّلين الحين.
-          اختاري باقة أكبر تغطي الجميع — تُحتسب ترقية وآبل تحسب الفرق تلقائياً، مو شراءً جديداً.
+          {platform === "store"
+            ? " اختاري باقة أكبر تغطي الجميع — تُحتسب ترقية وآبل تحسب الفرق تلقائياً، مو شراءً جديداً."
+            : " اختاري باقة أكبر تغطي الجميع."}
         </div>
       )}
 
       {platform === null ? (
         <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
-      ) : platform !== "store" ? (
+      ) : platform !== "store" && !canPayByCard ? (
         <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
           الاشتراك يتم من تطبيق دفتري على جوالك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
         </div>
@@ -1829,7 +1856,11 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
       )}
 
       <p style={{ margin: 0, fontSize: 10.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.9 }}>
-        يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك
+        {/* الدفع بالبطاقة شراء لسنة واحدة بلا تجديد تلقائي — كتابة «يتجدد
+            سنوياً» هناك وعد بشي ما يصير. */}
+        {platform === "store"
+          ? "يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك"
+          : "اشتراك لسنة دراسية واحدة · بدون تجديد تلقائي"}
         <br />
         <a href="/terms" style={termsLink}>شروط الاستخدام</a>
         {" · "}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createTapCharge } from "@/lib/tap";
 import { PRODUCTS } from "@/lib/entitlements";
+import { APP_PRODUCTS } from "@/lib/appPlans";
 
 export async function POST(req) {
   const motherId = req.headers.get("x-mother-id");
@@ -26,7 +27,9 @@ export async function POST(req) {
   }
 
   const { productId, childId } = await req.json().catch(() => ({}));
-  const product = PRODUCTS[productId];
+  // الكتالوجان: المعلم الذكي، واشتراك دفتري الشامل. الاثنان يمران بنفس
+  // المسار، والمنح يتحدد من المنتج نفسه وقت الإتمام (lib/paymentsService).
+  const product = PRODUCTS[productId] || APP_PRODUCTS[productId];
   if (!product) return NextResponse.json({ error: "منتج غير معروف" }, { status: 400 });
   if (product.kind === "credits" && !childId) {
     return NextResponse.json({ error: "لازم تختار الطالب/ة قبل شراء الرصيد" }, { status: 400 });
