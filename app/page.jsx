@@ -30,6 +30,7 @@ const PALETTE = [
 // يُعرض بصفحة الحساب — حدّثيه مع كل إصدار جديد بالتوازي مع
 // MARKETING_VERSION بمشروع Xcode و version بملف package.json.
 const APP_VERSION = "1.0.3";
+const APP_STORE_URL = "https://apps.apple.com/app/id6801521796";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
@@ -716,12 +717,31 @@ function InstallPrompt() {
     <div dir="rtl" style={{ position: "fixed", bottom: "calc(env(safe-area-inset-bottom) + 12px)", left: 12, right: 12, zIndex: 60, background: "white", borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,.18)", padding: 14, display: "flex", alignItems: "center", gap: 10, maxWidth: 420, margin: "0 auto" }}>
       <img src="/logo.png" alt="دفتري" style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontWeight: 800, fontSize: 13 }}>أضيفي دفتري للشاشة الرئيسية</p>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 13 }}>
+          {platform === "ios" ? "حمّلي تطبيق دفتري" : "أضيفي دفتري للشاشة الرئيسية"}
+        </p>
         <p style={{ margin: 0, fontSize: 11, color: "#6B7280" }}>
-          {platform === "ios" ? 'اضغطي زر المشاركة ⬆️ ثم "إضافة إلى الشاشة الرئيسية"' : "وصول أسرع من شاشة جوالك مباشرة"}
+          {platform === "ios" ? "تجربة أسرع وإشعارات فورية" : "وصول أسرع من شاشة جوالك مباشرة"}
         </p>
       </div>
-      {platform === "android" && (
+      {platform === "ios" ? (
+        // المحرف  هو شعار آبل، ويُرسم صح على أجهزة آبل — وهي الوحيدة اللي
+        // يظهر لها هذا الشريط أصلاً. نتفادى فيه استنساخ شارة App Store
+        // الرسمية (فنّها محمي ولها شروط استخدام بحجم ومسافات محددة).
+        <a
+          href={APP_STORE_URL}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            flexShrink: 0, background: "#111", color: "white", borderRadius: 10,
+            padding: "9px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none",
+            display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+          }}
+        >
+          <span style={{ fontSize: 15, lineHeight: 1 }}></span>
+          App Store
+        </a>
+      ) : (
         <button onClick={install} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>تثبيت</button>
       )}
       <button onClick={dismiss} style={{ background: "none", color: "#9CA3AF", fontSize: 18, width: 28, height: 28, flexShrink: 0 }}>×</button>
@@ -826,7 +846,18 @@ function Onboarding({ onDone }) {
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>رقم الجوال</label>
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
             <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="XXXXXXXX" maxLength={8} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16 }} />
+            {/* لوحة أرقام بدل لوحة الحروف — والتنظيف يقبل اللصق بمسافات أو
+                شرطات (65 068 000) بدل ما يرفضه التحقق بلا ما تعرف السبب. */}
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="XXXXXXXX"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength={8}
+              style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, direction: "ltr" }}
+            />
           </div>
           <button disabled={!canSubmit || busy} onClick={sendCode} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit && !busy ? 1 : 0.4 }}>
             {busy ? "جاري الإرسال..." : "متابعة"}
