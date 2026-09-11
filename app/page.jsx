@@ -1622,6 +1622,8 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
           </p>
         </div>
 
+        {platform === "web" && canBuy && <TapPayerNotice />}
+
         {platform === null ? (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
         ) : !canBuy ? (
@@ -1715,6 +1717,19 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
 }
 
 const termsLink = { color: "#9CA3AF", textDecoration: "underline" };
+
+// الدفع بالبطاقة يمر ببوابة Tap المسجّلة باسم الشركة المالكة، فيظهر
+// «Prime Printing» بصفحة الدفع وبكشف الحساب. بلا تنبيه مسبق، الأم تشوف
+// اسم مطبعة وهي تدفع لتطبيق مدرسي — فإما تلغي الدفع، أو تعترض على
+// العملية ببنكها لاحقاً. التوقّع المسبق أرخص من الاثنين.
+function TapPayerNotice() {
+  return (
+    <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "11px 14px", fontSize: 12, lineHeight: 1.85 }}>
+      دفتري من إنتاج <strong>شركة برايم للطباعة</strong>، وسيتم تحويلك لبوابة الدفع التابعة لها —
+      فلا تستغربي ظهور اسم <strong>Prime Printing</strong> بصفحة الدفع وبكشف حسابك.
+    </div>
+  );
+}
 
 // شريط تنبيه بفترة السماح — يظهر فوق أي شاشة طول ما الاشتراك الشامل مفعّل
 // بس لسا قبل تاريخ الإلزام. التطبيق يبقى مجانياً بالكامل بهالفترة.
@@ -1834,6 +1849,8 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
             : " اختاري باقة أكبر تغطي الجميع."}
         </div>
       )}
+
+      {canPayByCard && <TapPayerNotice />}
 
       {platform === null ? (
         <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
