@@ -34,17 +34,17 @@ const APP_STORE_URL = "https://apps.apple.com/app/id6801521796";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
-  "واجب": { icon: "📝", done: "تم" },
-  "حفظ": { icon: "📖", done: "تم الحفظ" },
-  "اختبار": { icon: "📚", done: "تم المذاكرة" },
-  "مشروع": { icon: "🎨", done: "تم" },
+  "واجب": { done: "تم" },
+  "حفظ": { done: "تم الحفظ" },
+  "اختبار": { done: "تم المذاكرة" },
+  "مشروع": { done: "تم" },
 };
 const TABS = [
-  { key: "dashboard", label: "الرئيسية", icon: "🏠" },
-  { key: "requirements", label: "المتطلبات", icon: "🎒" },
-  { key: "schedule", label: "جدول الحصص", icon: "🗓️" },
-  { key: "progress", label: "الحفظ والدرجات", icon: "📖" },
-  { key: "teacher", label: "المعلم الذكي", icon: "🎓" },
+  { key: "dashboard", label: "الرئيسية" },
+  { key: "requirements", label: "المتطلبات" },
+  { key: "schedule", label: "جدول الحصص" },
+  { key: "progress", label: "الحفظ والدرجات" },
+  { key: "teacher", label: "المعلم الذكي" },
 ];
 
 // أيقونات شريط التبويبات بنمط SF Symbols لتطبيق آبل — الإيموجي يبقى للويب.
@@ -124,6 +124,48 @@ const TILE_GLYPHS = {
       <rect x="13.2" y="9" width="1.7" height="8" rx=".85" fill={sh} />
     </>
   ),
+  gear: (sh) => (
+    <>
+      {[0, 45, 90, 135].map((a) => (
+        <rect key={a} x="10.6" y="1.7" width="2.8" height="20.6" rx="1.3" transform={`rotate(${a} 12 12)`} />
+      ))}
+      <circle cx="12" cy="12" r="6.4" />
+      <circle cx="12" cy="12" r="2.7" fill={sh} />
+    </>
+  ),
+  doc: (sh) => (
+    <>
+      <path d="M6.6 2h6.9L19 7.6V20a2 2 0 0 1-2 2H6.6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2" />
+      <path d="M13.2 2.6v4.2a1 1 0 0 0 1 1h4.3" fill="none" stroke={sh} strokeWidth="1.4" strokeLinejoin="round" />
+      <rect x="7.7" y="11.6" width="8.6" height="1.6" rx=".8" fill={sh} />
+      <rect x="7.7" y="15" width="5.8" height="1.6" rx=".8" fill={sh} />
+    </>
+  ),
+  pencil: () => (
+    <path d="M17.2 2.6a2.2 2.2 0 0 1 3.1 0l1.1 1.1a2.2 2.2 0 0 1 0 3.1l-1.5 1.5-4.2-4.2zM14.6 5.2l4.2 4.2-9.3 9.3-5.2 1 1-5.2z" />
+  ),
+  refresh: () => (
+    <>
+      <path d="M12 4a8 8 0 0 1 6.9 4H16a1 1 0 0 0 0 2h5a1 1 0 0 0 1-1V4a1 1 0 0 0-2 0v1.9A10 10 0 0 0 2.1 10.8a1 1 0 0 0 2 .3A8 8 0 0 1 12 4" />
+      <path d="M12 20a8 8 0 0 1-6.9-4H8a1 1 0 0 0 0-2H3a1 1 0 0 0-1 1v5a1 1 0 0 0 2 0v-1.9A10 10 0 0 0 21.9 13.2a1 1 0 0 0-2-.3A8 8 0 0 1 12 20" />
+    </>
+  ),
+  chart: () => (
+    <>
+      <rect x="3.5" y="12" width="4" height="8.5" rx="1.3" />
+      <rect x="10" y="7" width="4" height="13.5" rx="1.3" />
+      <rect x="16.5" y="3.5" width="4" height="17" rx="1.3" />
+    </>
+  ),
+  // أنواع المهام وبقية الأيقونات تعيد استخدام مسارات ICONS نفسها.
+  homework: () => <path d={ICONS.homework} />,
+  memorize: () => <path d={ICONS.memorize} />,
+  exam: () => <path d={ICONS.exam} />,
+  project: () => <path d={ICONS.project} />,
+  warning: () => <path d={ICONS.warning} />,
+  calendar: () => <path d={ICONS.calendar} />,
+  bell: () => <path d={ICONS.bell} />,
+  camera: () => <path d={ICONS.camera} />,
   // تبويبات الأسفل — نعيد استخدام نفس مسارات أيقونات التطبيق فيطلع الموقع
   // والتطبيق من عائلة وحدة بلا رسم جديد. نأخذ النسخة المفرّغة مو الممتلئة:
   // الشكل الممتلئ أبيض بالكامل يطلع كبقعة بلا ملامح بحجم ٢٥ بكسل، والمفرّغ
@@ -141,6 +183,19 @@ const TILE_TINTS = {
   card: "#A38FDE",
   gift: "#E0B073",
   trash: "#DE8B8B",
+  gear: "#A8A2C4",
+  pencil: "#E0A873",
+  refresh: "#7FA8E0",
+  chart: "#7FC2A0",
+  doc: "#7FA8E0",
+  homework: "#A38FDE",
+  memorize: "#7FC2A0",
+  exam: "#E0A873",
+  project: "#E39AB4",
+  warning: "#E0A873",
+  calendar: "#7FA8E0",
+  bell: "#E0B073",
+  camera: "#A38FDE",
   dashboard: "#A38FDE",
   requirements: "#E0A873",
   schedule: "#7FA8E0",
@@ -229,8 +284,9 @@ function Icon({ name, size = 17, style }) {
 // يرجّع أيقونة متجهية بتطبيق آبل وإيموجي بالويب.
 function TypeGlyph({ type, native, size = 15 }) {
   const map = { "واجب": "homework", "حفظ": "memorize", "اختبار": "exam", "مشروع": "project" };
-  if (!native) return <>{TYPE_META[type]?.icon || "📝"}</>;
-  return <Icon name={map[type] || "homework"} size={size} />;
+  const name = map[type] || "homework";
+  if (!native) return <TileIcon name={name} size={size + 3} />;
+  return <Icon name={name} size={size} />;
 }
 const SUBJECT_ICON_MAP = [
   { file: "islamic", keywords: ["اسلام", "قرآن", "تجويد", "فقه", "حديث"] },
@@ -622,8 +678,8 @@ export default function Home() {
                 رفع جدول
               </button>
             )}
-            <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", color: "#6B7280", fontSize: 18, padding: "10px 12px", borderRadius: 12, minHeight: 40, lineHeight: 1 }}>
-              ⚙️
+            <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", padding: "8px 10px", borderRadius: 12, minHeight: 40, lineHeight: 1 }}>
+              <TileIcon name="gear" size={23} />
             </button>
           </div>
         </div>
@@ -1047,7 +1103,8 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
       {hasPEToday && (
         <div style={{ marginBottom: 6, marginInlineStart: 4 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#FDF3E7", color: "#8C6027", fontSize: 11, fontWeight: 800, padding: "4px 10px", borderRadius: 999 }}>
-            🏃 بدنية اليوم
+            <img src="/icons/pe.png" alt="" width={15} height={15} style={{ display: "block" }} />
+            بدنية اليوم
             {child.pe_uniform_color && (
               <span style={{ width: 9, height: 9, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
             )}
@@ -1061,7 +1118,12 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>الصف {child.grade}/{child.section} · {child.school}</p>
         </div>
-        <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>✏️ تعديل</button>
+        <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <TileIcon name="pencil" size={15} />
+            تعديل
+          </span>
+        </button>
       </div>
       <div style={{ background: "white", padding: 12 }}>
         {tasks.length === 0 && undatedTasks.length === 0 && upcomingTasks.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا واجبات هذا الأسبوع 🎉</p>}
@@ -1080,7 +1142,7 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
         {undatedTasks.length > 0 && (
           <div style={{ marginBottom: upcomingTasks.length > 0 ? 8 : 0 }}>
             <p style={{ fontSize: 12, fontWeight: 800, color: "#B45309", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-              {native ? <Icon name="warning" size={13} /> : "⚠️"} مهام بدون تاريخ محدد
+              {native ? <Icon name="warning" size={13} /> : <TileIcon name="warning" size={17} />} مهام بدون تاريخ محدد
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {undatedTasks.map((t) => (
@@ -1094,7 +1156,7 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
         {upcomingTasks.length > 0 && (
           <div>
             <p style={{ fontSize: 12, fontWeight: 800, color: "#31607C", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-              {native ? <Icon name="calendar" size={13} /> : "📅"} مهام قادمة (بعد هذا الأسبوع)
+              {native ? <Icon name="calendar" size={13} /> : <TileIcon name="calendar" size={17} />} مهام قادمة (بعد هذا الأسبوع)
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {upcomingTasks.map((t) => (
@@ -1206,7 +1268,16 @@ function ScheduleCard({ child, schedule, onUpload }) {
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>الصف {child.grade}/{child.section}</p>
         </div>
-        <button onClick={onUpload} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>{schedule.length ? "🔄 تحديث" : "+ رفع"}</button>
+        <button onClick={onUpload} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
+          {schedule.length ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <TileIcon name="refresh" size={15} />
+              تحديث
+            </span>
+          ) : (
+            "+ رفع"
+          )}
+        </button>
       </div>
       <div style={{ background: "white", padding: 12, overflowX: "auto" }}>
         {schedule.length === 0 ? (
@@ -1215,7 +1286,16 @@ function ScheduleCard({ child, schedule, onUpload }) {
           <>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
             <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
-              {exporting ? "جاري التصدير..." : native ? "📄 تصدير / طباعة" : "📄 تصدير PDF"}
+              {exporting ? (
+                "جاري التصدير..."
+              ) : native ? (
+                "📄 تصدير / طباعة"
+              ) : (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <TileIcon name="doc" size={16} />
+                  تصدير PDF
+                </span>
+              )}
             </button>
           </div>
           <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 4, fontSize: 11 }}>
@@ -1376,7 +1456,8 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
 
         {task.due_date && !dateChanged && !native && (
           <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
-            🔔 إضافة تذكير (قبل يوم)
+            <TileIcon name="bell" size={20} />
+            إضافة تذكير (قبل يوم)
           </a>
         )}
         <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
@@ -1421,7 +1502,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
           <div style={{ display: "flex", justifyContent: "center" }}>
             <button onClick={() => fileRef.current?.click()} style={{ position: "relative", background: "none" }}>
               {photo ? <img src={photo} style={{ width: 92, height: 92, borderRadius: "50%", objectFit: "cover", border: `2px solid ${PALETTE[colorIdx].ring}` }} /> :
-                <div style={{ width: 92, height: 92, borderRadius: "50%", border: `2px dashed ${PALETTE[colorIdx].ring}`, background: PALETTE[colorIdx].soft, display: "flex", alignItems: "center", justifyContent: "center", color: PALETTE[colorIdx].text }}>📷</div>}
+                <div style={{ width: 92, height: 92, borderRadius: "50%", border: `2px dashed ${PALETTE[colorIdx].ring}`, background: PALETTE[colorIdx].soft, display: "flex", alignItems: "center", justifyContent: "center", color: PALETTE[colorIdx].text }}><TileIcon name="camera" size={34} /></div>}
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await resizeToDataUrl(f, 160, true)); }} />
           </div>
@@ -1711,9 +1792,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
     <div className="app-scroll" style={{ height: "100%", padding: "18px 16px calc(env(safe-area-inset-bottom) + 20px)" }}>
       <div style={{ maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 13 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ width: 54, height: 54, borderRadius: 18, background: "#F1EFFA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
-            👩‍🏫
-          </div>
+          <TileIcon name="teacher" size={54} style={{ borderRadius: 18 }} />
           {onClose && (
             <button onClick={onClose} aria-label="إغلاق" style={{ background: "#F3F4F6", color: "#6B7280", borderRadius: "50%", width: 30, height: 30, fontSize: 17, lineHeight: 1 }}>
               ×
@@ -2392,7 +2471,12 @@ function TeacherView({ children, motherId }) {
                 color: m.role === "user" ? "white" : "#374151",
               }}>
                 {m.content}
-                {m.had_image && <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>📷 مع صورة</div>}
+                {m.had_image && (
+                  <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
+                    <TileIcon name="camera" size={14} />
+                    مع صورة
+                  </div>
+                )}
                 {native && m.role === "assistant" && (
                   <button
                     onClick={() => nativeShare({ title: "شرح من المعلم الذكي — دفتري", text: m.content })}
@@ -2426,7 +2510,7 @@ function TeacherView({ children, motherId }) {
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <button onClick={() => (native ? pickImageNative() : fileRef.current?.click())} aria-label="إرفاق صورة" style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0, color: "#7B68C4", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {native ? <Icon name="camera" size={22} /> : "📷"}
+            {native ? <Icon name="camera" size={22} /> : <TileIcon name="camera" size={24} />}
           </button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePickImage} />
           <textarea
@@ -2472,8 +2556,18 @@ function ProgressView({ children, motherId }) {
         </div>
       ) : (
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setSection("memorization")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "memorization" ? "#B7A6E8" : "#F3F4F6", color: section === "memorization" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>🕌 الحفظ</button>
-          <button onClick={() => setSection("grades")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "grades" ? "#B7A6E8" : "#F3F4F6", color: section === "grades" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>📊 الدرجات</button>
+          <button onClick={() => setSection("memorization")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "memorization" ? "#B7A6E8" : "#F3F4F6", color: section === "memorization" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <TileIcon name="memorize" size={17} />
+              الحفظ
+            </span>
+          </button>
+          <button onClick={() => setSection("grades")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "grades" ? "#B7A6E8" : "#F3F4F6", color: section === "grades" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <TileIcon name="chart" size={17} />
+              الدرجات
+            </span>
+          </button>
         </div>
       )}
 
@@ -2516,7 +2610,7 @@ function MemorizationSection({ child, motherId }) {
           <input type="checkbox" checked={it.done} onChange={() => handleToggle(it.id)} style={{ marginTop: 3, width: 18, height: 18, accentColor: "#B7A6E8", flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: it.done ? "#9CA3AF" : "#374151", textDecoration: it.done ? "line-through" : "none", display: "flex", alignItems: "center", gap: 5 }}>
-              {typeof window !== "undefined" && isNativeApp() ? <Icon name="memorize" size={14} style={{ color: "#7B68C4" }} /> : it.kind === "حديث" ? "📗" : "📖"} {it.reference}
+              {typeof window !== "undefined" && isNativeApp() ? <Icon name="memorize" size={14} style={{ color: "#7B68C4" }} /> : <TileIcon name="memorize" size={17} />} {it.reference}
             </p>
             {it.details && <p style={{ margin: "3px 0 0", fontSize: 12, color: "#9CA3AF" }}>{it.details}</p>}
           </div>
