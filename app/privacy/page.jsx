@@ -1,9 +1,11 @@
+import { WebPaymentNote, WebPaymentProvider } from "./WebPrivacyBits";
+
 export const metadata = {
   title: "سياسة الخصوصية — دفتري",
   description: "سياسة الخصوصية وحماية البيانات في تطبيق دفتري",
 };
 
-const UPDATED = "٦ سبتمبر ٢٠٢٦";
+const UPDATED = "١١ سبتمبر ٢٠٢٦";
 
 export default function PrivacyPage() {
   return (
@@ -38,7 +40,11 @@ export default function PrivacyPage() {
             <li style={li}><strong>البيانات الدراسية:</strong> الواجبات والاختبارات والمشاريع، المتطلبات المدرسية، جدول الحصص، مطلوبات الحفظ، ودرجات الاختبارات التي تدخلينها.</li>
             <li style={li}><strong>الصور:</strong> صور جداول الواجبات أو صفحات الواجب التي تصوّرينها أو ترفعينها للتحليل.</li>
             <li style={li}><strong>محادثات المعلم الذكي:</strong> أسئلتك والإجابات المقدَّمة لك.</li>
-            <li style={li}><strong>التذكيرات:</strong> داخل تطبيق آيفون تُجدول التذكيرات محلياً على جهازك فقط، ولا يُرسَل أي معرّف جهاز إلى خوادمنا.</li>
+            <li style={li}>
+              <strong>الإشعارات:</strong> إذا سمحتِ بالإشعارات، نخزّن <strong>رمز الجهاز</strong> — معرّف تقني تصدره
+              آبل (أو متصفحك) للجهاز وحده — عشان نقدر نرسل لك تذكيرات الواجبات والاختبارات والتسميع من خوادمنا.
+              الرمز ما يكشف هويتك ولا رقمك ولا يُستخدم لتتبعك، ويُحذف تلقائياً إذا بطل مفعوله أو حذفتِ حسابك.
+            </li>
           </ul>
           <p style={{ ...p, background: "#F1EFFA", padding: "12px 14px", borderRadius: 12, color: "#5C4B8C", fontSize: 14 }}>
             <strong>لا نجمع:</strong> موقعك الجغرافي، جهات اتصالك، سجل تصفحك، أي معرّفات إعلانية، أو بيانات بطاقتك البنكية.
@@ -75,6 +81,9 @@ export default function PrivacyPage() {
             <li style={li}><strong>Supabase</strong> — تخزين قاعدة البيانات.</li>
             <li style={li}><strong>Vercel</strong> — استضافة التطبيق والموقع.</li>
             <li style={li}><strong>Anthropic</strong> — خدمة الذكاء الاصطناعي.</li>
+            <li style={li}><strong>Twilio</strong> — إرسال رمز التحقق برسالة نصية عند تسجيل الدخول (يصلها رقم جوالك فقط).</li>
+            <li style={li}><strong>آبل</strong> — توصيل الإشعارات لجهازك، والتحقق من عمليات الشراء داخل التطبيق.</li>
+            <WebPaymentProvider />
             <li style={li}><strong>وزارة التربية الكويتية</strong> — مكتبتها الإلكترونية العامة (elibrary.moe.edu.kw) للاستعانة بنماذج الاختبارات والمراجعات الرسمية عند الإجابة على أسئلة المعلم الذكي.</li>
           </ul>
           <p style={p}>
@@ -126,9 +135,11 @@ export default function PrivacyPage() {
             والإجابة على الأسئلة الدراسية — له اشتراك مستقل اختياري، مع أسئلة مجانية لتجربته أولاً.
           </p>
           <p style={{ ...p, background: "#F1EFFA", padding: "12px 14px", borderRadius: 12, color: "#5C4B8C", fontSize: 14 }}>
-            <strong>لا نستقبل ولا نخزّن أي بيانات بطاقة بنكية.</strong> الاشتراك يتم بالكامل عبر مشتريات آبل داخل
-            التطبيق، وآبل هي من تعالج الدفع. كل ما يصلنا منها هو تأكيد بأن عملية شراء تمت، بلا أي بيانات مالية عنك.
+            <strong>لا نستقبل ولا نخزّن ولا نطّلع على أي بيانات بطاقة بنكية.</strong> الاشتراك من داخل التطبيق
+            يتم عبر مشتريات آبل، وآبل هي من تعالج الدفع. كل ما يصلنا منها هو تأكيد بأن عملية شراء تمت، بلا أي
+            بيانات مالية عنك.
           </p>
+          <WebPaymentNote />
           <p style={p}>
             تفاصيل الأسعار والتجديد والإلغاء في <a href="/terms" style={{ color: "#5C4B8C", fontWeight: 700 }}>شروط الاستخدام</a>.
           </p>
