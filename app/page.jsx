@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import {
   isNativeApp,
   initNative,
@@ -71,6 +71,111 @@ const TAB_ICONS = {
       ? "M11.6 2.2a1 1 0 0 1 .8 0l9.1 4a1 1 0 0 1 0 1.83l-2 .88V14a.75.75 0 0 1-1.5 0V9.57l-2 .88V14c0 .38-.2.72-.5.9-1.1.66-2.32.98-3.5.98s-2.4-.32-3.5-.98a1.05 1.05 0 0 1-.5-.9v-3.55L2.5 8.03a1 1 0 0 1 0-1.83z"
       : "M11.6 2.2a1 1 0 0 1 .8 0l9.1 4a1 1 0 0 1 0 1.83l-2 .88V14a.75.75 0 0 1-1.5 0V9.57l-2 .88V14c0 .38-.2.72-.5.9-1.1.66-2.32.98-3.5.98s-2.4-.32-3.5-.98a1.05 1.05 0 0 1-.5-.9v-3.55L2.5 8.03a1 1 0 0 1 0-1.83zM12 3.72 4.72 7.11 12 10.3l7.28-3.19zm-2.6 7.4v2.42c.8.4 1.68.6 2.6.6s1.8-.2 2.6-.6v-2.42l-2.2.96a1 1 0 0 1-.8 0z",
 };
+
+// ————— بلاطات أيقونات الويب —————
+// الإيموجي شكله يختلف من جهاز لجهاز (🔒 بالآيفون غير الأندرويد غير ويندوز)
+// وما نتحكم فيه، فالموقع كان يطلع بهوية مختلفة عند كل مستخدمة. نرسم بدالها
+// بلاطات بنفس أسلوب أيقونات المواد بالجداول: تدرّج بستيل + لمعة علوية + رمز
+// أبيض بسيط. SVG مو صور: بلا تحميل إضافي، وحادّة بأي حجم، ولونها بمتغيّر.
+function mixColor(hex, to, t) {
+  const parse = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [r, g, b] = parse(hex);
+  const [R, G, B] = parse(to);
+  const c = (a, z) => Math.round(a + (z - a) * t);
+  return `rgb(${c(r, R)},${c(g, G)},${c(b, B)})`;
+}
+
+// كل رمز يستقبل لون البلاطة ليرسم فيه التفاصيل الداخلية (طيّة المظروف،
+// شريط البطاقة، شريطة الهدية) — أبيض على أبيض ما يبين.
+const TILE_GLYPHS = {
+  lock: (sh) => (
+    <>
+      <path d="M12 2.5A4.5 4.5 0 0 0 7.5 7v3h2V7a2.5 2.5 0 0 1 5 0v3h2V7A4.5 4.5 0 0 0 12 2.5" />
+      <path d="M6.75 10.75h10.5A2.25 2.25 0 0 1 19.5 13v6a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19v-6a2.25 2.25 0 0 1 2.25-2.25" />
+      <circle cx="12" cy="15.2" r="1.5" fill={sh} />
+      <rect x="11.25" y="15" width="1.5" height="3" rx=".75" fill={sh} />
+    </>
+  ),
+  mail: (sh) => (
+    <>
+      <path d="M4 6.5h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2" />
+      <path d="M3.4 8 12 13.6 20.6 8" fill="none" stroke={sh} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  card: (sh) => (
+    <>
+      <path d="M3 4.5h18a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2" />
+      <rect x="1" y="8" width="22" height="3" fill={sh} />
+      <rect x="3.6" y="13.8" width="6" height="1.9" rx=".95" fill={sh} />
+    </>
+  ),
+  gift: (sh) => (
+    <>
+      <path d="M8.4 1.9c1.7 0 2.9 1.4 3.6 3.1.7-1.7 1.9-3.1 3.6-3.1a2.85 2.85 0 0 1 .9 5.55h-9A2.85 2.85 0 0 1 8.4 1.9" />
+      <path d="M3 8.2h18a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1" />
+      <path d="M4.3 13.5h15.4v6.1A1.9 1.9 0 0 1 17.8 21.5H6.2a1.9 1.9 0 0 1-1.9-1.9z" />
+      <rect x="10.4" y="4.4" width="3.2" height="17.1" rx=".4" fill={sh} />
+    </>
+  ),
+  trash: (sh) => (
+    <>
+      <path d="M9.6 2.5h4.8a1.1 1.1 0 0 1 1.1 1.1V5h4.15a.85.85 0 0 1 0 1.7h-.72l-.83 12.05A2.6 2.6 0 0 1 15.5 21.2h-7A2.6 2.6 0 0 1 5.9 18.75L5.07 6.7h-.72a.85.85 0 0 1 0-1.7H8.5V3.6a1.1 1.1 0 0 1 1.1-1.1m.6 2.5h3.6V4.2h-3.6z" />
+      <rect x="9.1" y="9" width="1.7" height="8" rx=".85" fill={sh} />
+      <rect x="13.2" y="9" width="1.7" height="8" rx=".85" fill={sh} />
+    </>
+  ),
+  // تبويبات الأسفل — نعيد استخدام نفس مسارات أيقونات التطبيق فيطلع الموقع
+  // والتطبيق من عائلة وحدة بلا رسم جديد. نأخذ النسخة المفرّغة مو الممتلئة:
+  // الشكل الممتلئ أبيض بالكامل يطلع كبقعة بلا ملامح بحجم ٢٥ بكسل، والمفرّغ
+  // يخلي لون البلاطة يبين من داخل الأيقونة فتنقرأ.
+  dashboard: () => <path d={TAB_ICONS.dashboard(false)} />,
+  requirements: () => <path d={TAB_ICONS.requirements(false)} />,
+  schedule: () => <path d={TAB_ICONS.schedule(false)} />,
+  progress: () => <path d={TAB_ICONS.progress(false)} />,
+  teacher: () => <path d={TAB_ICONS.teacher(false)} />,
+};
+
+const TILE_TINTS = {
+  lock: "#7FA8E0",
+  mail: "#E39AB4",
+  card: "#A38FDE",
+  gift: "#E0B073",
+  trash: "#DE8B8B",
+  dashboard: "#A38FDE",
+  requirements: "#E0A873",
+  schedule: "#7FA8E0",
+  progress: "#7FC2A0",
+  teacher: "#E39AB4",
+};
+
+function TileIcon({ name, size = 26, tint, style }) {
+  const uid = useId();
+  const base = tint || TILE_TINTS[name] || "#A38FDE";
+  const light = mixColor(base, "#ffffff", 0.74);
+  const mid = mixColor(base, "#ffffff", 0.16);
+  const deep = mixColor(base, "#4A3F6B", 0.3);
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true" style={{ width: size, height: size, display: "block", flexShrink: 0, ...style }}>
+      <defs>
+        <linearGradient id={`${uid}f`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={light} />
+          <stop offset=".5" stopColor={mid} />
+          <stop offset="1" stopColor={deep} />
+        </linearGradient>
+        <linearGradient id={`${uid}s`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity=".5" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect width="48" height="48" rx="13" fill={`url(#${uid}f)`} />
+      {/* اللمعة العلوية — نفس لمعة بلاطات المواد */}
+      <path d="M0 13A13 13 0 0 1 13 0h22a13 13 0 0 1 13 13v8c-7 5.5-41 5.5-48 0z" fill={`url(#${uid}s)`} />
+      <g transform="translate(11.5 11.5) scale(1.042)" fill="#fff">
+        {TILE_GLYPHS[name](mid)}
+      </g>
+    </svg>
+  );
+}
 
 function TabIcon({ tab, active }) {
   return (
@@ -604,7 +709,9 @@ export default function Home() {
         <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderTop: "1px solid #F0EEE8", display: "flex", paddingBottom: "env(safe-area-inset-bottom)" }}>
           {TABS.map((t) => (
             <button key={t.key} onClick={() => setView(t.key)} style={{ flex: 1, padding: "8px 0 6px", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: view === t.key ? "#B7A6E8" : "#9CA3AF", fontWeight: 700, fontSize: 11, minHeight: 52 }}>
-              <span style={{ fontSize: 21, lineHeight: 1 }}>{t.icon}</span>
+              {/* التبويب غير المحدد يخفت بدل ما يختفي لونه — يبقى الشريط
+                  هادياً والمحدد واضح. */}
+              <TileIcon name={t.key} size={25} style={{ opacity: view === t.key ? 1 : 0.6 }} />
               <span>{t.label}</span>
             </button>
           ))}
@@ -1737,8 +1844,11 @@ function AppAccessGraceBanner({ enforceAt }) {
     ? new Date(enforceAt).toLocaleDateString("ar-KW", { day: "numeric", month: "long", year: "numeric" })
     : "";
   return (
-    <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, margin: "0 16px 12px", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-      🎁 استمتعي بتجربة مجانية لمدة {arabicDigits(APP_PLAN.GRACE_DAYS)} أيام — حتى {dateLabel}، وبعدها اشتراك سنوي بسيط حسب عدد أبنائك.
+    <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, margin: "0 16px 12px", fontSize: 12, fontWeight: 700, lineHeight: 1.7, display: "flex", alignItems: "center", gap: 10 }}>
+      <TileIcon name="gift" size={26} />
+      <span>
+        استمتعي بتجربة مجانية لمدة {arabicDigits(APP_PLAN.GRACE_DAYS)} أيام — حتى {dateLabel}، وبعدها اشتراك سنوي بسيط حسب عدد أبنائك.
+      </span>
     </div>
   );
 }
@@ -2541,7 +2651,10 @@ function ResetYearButton({ motherId, onDone, ios }) {
 
   return (
     <button onClick={handleReset} disabled={busy} style={{ marginTop: 8, padding: 10, borderRadius: 12, background: "none", color: "#B91C1C", fontWeight: 700, fontSize: 12.5, border: "1px solid #FECACA", opacity: busy ? 0.6 : 1 }}>
-      🗑️ مسح بيانات العام الدراسي (نهاية السنة)
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        <TileIcon name="trash" size={22} />
+        مسح بيانات العام الدراسي (نهاية السنة)
+      </span>
     </button>
   );
 }
@@ -2813,7 +2926,10 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
 
         <div style={{ background: "white", borderRadius: 18, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,.05)", display: "flex", flexDirection: "column", gap: 11 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <span style={{ fontSize: 14.5, fontWeight: 800, color: "#374151" }}>💳 اشتراك دفتري</span>
+            <span style={{ fontSize: 14.5, fontWeight: 800, color: "#374151", display: "flex", alignItems: "center", gap: 9 }}>
+              <TileIcon name="card" size={25} />
+              اشتراك دفتري
+            </span>
             {plan?.status && (
               <span style={{ background: plan.bg, color: plan.color, fontSize: 12, fontWeight: 800, padding: "5px 11px", borderRadius: 999, flexShrink: 0 }}>{plan.status}</span>
             )}
@@ -2829,11 +2945,17 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
 
         <div style={{ background: "white", borderRadius: 18, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
           <a href="/privacy" target={native ? undefined : "_blank"} rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
-            <span style={{ fontSize: 14.5, fontWeight: 700 }}>🔒 سياسة الخصوصية</span>
+            <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
+              <TileIcon name="lock" size={25} />
+              سياسة الخصوصية
+            </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
           <a href="mailto:reemprimeco@gmail.com" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
-            <span style={{ fontSize: 14.5, fontWeight: 700 }}>✉️ تواصلي معنا</span>
+            <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
+              <TileIcon name="mail" size={25} />
+              تواصلي معنا
+            </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px" }}>
