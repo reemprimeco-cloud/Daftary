@@ -15,7 +15,7 @@ import {
 } from "@/lib/native";
 import { installAuthFetch } from "@/lib/authFetch";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
-import { APP_TIERS } from "@/lib/appPlans";
+import { APP_TIERS, APP_PLAN } from "@/lib/appPlans";
 
 const PALETTE = [
   { bg: "#FDEFF3", ring: "#E8A0B4", solid: "#E39CB2", soft: "#F9D9E2", text: "#8C4E62" },
@@ -725,21 +725,11 @@ function InstallPrompt() {
         </p>
       </div>
       {platform === "ios" ? (
-        // المحرف  هو شعار آبل، ويُرسم صح على أجهزة آبل — وهي الوحيدة اللي
-        // يظهر لها هذا الشريط أصلاً. نتفادى فيه استنساخ شارة App Store
-        // الرسمية (فنّها محمي ولها شروط استخدام بحجم ومسافات محددة).
-        <a
-          href={APP_STORE_URL}
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            flexShrink: 0, background: "#111", color: "white", borderRadius: 10,
-            padding: "9px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none",
-            display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
-          }}
-        >
-          <span style={{ fontSize: 15, lineHeight: 1 }}></span>
-          App Store
+        // شارة App Store الرسمية. آبل تشترط عرضها بلا تعديل على الفن نفسه
+        // ومع مساحة فارغة حولها لا تقل عن ١٠٪ من ارتفاعها — فنعطيها هامشاً
+        // وما نضغطها داخل الشريط.
+        <a href={APP_STORE_URL} target="_blank" rel="noreferrer" style={{ flexShrink: 0, lineHeight: 0, padding: "4px 0" }}>
+          <img src="/app-store-badge.png" alt="حمّلي دفتري من App Store" width={120} height={36} style={{ display: "block" }} />
         </a>
       ) : (
         <button onClick={install} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>تثبيت</button>
@@ -1734,7 +1724,7 @@ function AppAccessGraceBanner({ enforceAt }) {
     : "";
   return (
     <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, margin: "0 16px 12px", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-      🎁 تجربتك المجانية مستمرة حتى {dateLabel} — بعدها اشتراك سنوي بسيط حسب عدد أبنائك.
+      🎁 استمتعي بتجربة مجانية لمدة {APP_PLAN.GRACE_DAYS} أيام — حتى {dateLabel}، وبعدها اشتراك سنوي بسيط حسب عدد أبنائك.
     </div>
   );
 }
