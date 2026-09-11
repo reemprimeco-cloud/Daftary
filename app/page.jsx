@@ -354,7 +354,7 @@ export default function Home() {
     // تتجاوز الحد، نمنعها هنا ونوجّه لترقية الباقة، بدل ما نضيفه ثم يُقفل
     // كامل التطبيق بلا طريقة يرجع فيها ولي الأمر بنفسه إلا الترقية.
     const maxStudents = appAccess?.subscription?.max_students;
-    if (appAccess?.phase === "enforced" && maxStudents != null && children.length + 1 > maxStudents) {
+    if (maxStudents != null && children.length + 1 > maxStudents) {
       setShowAddChild(false);
       if (confirm(`باقتك الحالية تغطي ${maxStudents} ${maxStudents === 1 ? "طالب/ة" : "طلاب"} بس. رقّي باقتك الحين لإضافة طالب/ة جديد؟`)) {
         setShowSubscriptionManage(true);

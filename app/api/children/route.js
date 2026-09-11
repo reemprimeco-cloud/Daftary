@@ -20,10 +20,12 @@ export async function POST(req) {
   // بالإضافة ما دام العدد *الحالي* مغطّى، فبدون هالفحص يقدر أحد يضيف بلا
   // حدود بنداء المسار مباشرة — ثم ينحجب بالطلب اللي بعده، وهي تجربة أسوأ
   // من منعه بوضوح من البداية.
+  // نفحص كذلك من اشتركت وهي بفترة التجربة (phase === "active"): حدّ باقتها
+  // يسري من ساعة ما دفعت، وإلا تضيف بلا حدود قبل الإلزام ثم تنقفل فجأة.
   const access = await hasAppAccess(motherId);
-  if (access.phase === "enforced") {
-    const max = access.subscription?.max_students ?? 0;
-    if ((access.studentsCount || 0) + 1 > max) {
+  const max = access.subscription?.max_students;
+  if (access.phase === "enforced" || max != null) {
+    if ((access.studentsCount || 0) + 1 > (max ?? 0)) {
       return NextResponse.json(
         { error: "باقتك الحالية ما تغطي طالباً/ة إضافياً. رقّي الباقة أولاً.", paywall: true },
         { status: 402 }
