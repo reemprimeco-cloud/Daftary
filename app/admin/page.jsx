@@ -6,6 +6,7 @@ import AdminLogin from "./AdminLogin";
 import AdminLogoutButton from "./AdminLogoutButton";
 import AppleNotificationTest from "./AppleNotificationTest";
 import Broadcast from "./Broadcast";
+import Signups from "./Signups";
 import AlertTest from "./AlertTest";
 
 export const dynamic = "force-dynamic";
@@ -344,6 +345,8 @@ function AdminDashboard({ stats }) {
         <UsageSection usage={stats.usage} />
 
         <SubscriptionsSection subscriptions={stats.subscriptions} />
+
+        <Signups />
 
         <Broadcast />
 
