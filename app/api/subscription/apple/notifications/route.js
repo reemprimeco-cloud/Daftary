@@ -67,8 +67,10 @@ async function handleNotification(req) {
 
   const motherId = await resolveMother(tx);
   if (!motherId) {
-    console.error("apple notifications: no mother for transaction", tx.transactionId, tx.originalTransactionId);
-    return NextResponse.json({ ok: true, ignored: "unknown account" });
+    // ok مقصودة: نقول لآبل استلمنا وخلصنا، فتوقف إعادة المحاولة. الحساب
+    // محذوف أو غير معروف، وما فيه إجراء ينفع معه.
+    console.log("apple notifications: no account for transaction", tx.transactionId, tx.originalTransactionId);
+    return NextResponse.json({ ok: true, ignored: "unknown or deleted account" });
   }
 
   // الاسترجاع وسحب الشراء ينهيان الوصول فوراً. نعتمد revocationDate من
@@ -100,17 +102,26 @@ async function handleNotification(req) {
 // كمان، فهو أوثق مصدر. ولو غاب لأي سبب، نرجع لمعاملة الشراء الأصلية
 // المسجّلة عندنا.
 async function resolveMother(tx) {
-  if (tx.appAccountToken) return tx.appAccountToken;
-
   const sb = supabaseAdmin();
-  const ids = [tx.originalTransactionId, tx.transactionId].filter(Boolean).map(String);
-  if (!ids.length) return null;
 
-  const { data } = await sb
-    .from("app_purchases")
-    .select("mother_id")
-    .eq("platform", "apple")
-    .in("transaction_id", ids)
-    .limit(1);
-  return data?.[0]?.mother_id || null;
+  let motherId = tx.appAccountToken || null;
+  if (!motherId) {
+    const ids = [tx.originalTransactionId, tx.transactionId].filter(Boolean).map(String);
+    if (!ids.length) return null;
+    const { data } = await sb
+      .from("app_purchases")
+      .select("mother_id")
+      .eq("platform", "apple")
+      .in("transaction_id", ids)
+      .limit(1);
+    motherId = data?.[0]?.mother_id || null;
+  }
+  if (!motherId) return null;
+
+  // الحساب ممكن يكون محذوفاً: آبل تبقى ترسل إشعارات التجديد لاشتراك اشتُري
+  // قبل الحذف، والمعرّف اللي تحمله ما عاد موجوداً عندنا. بدون هالفحص يفشل
+  // المنح بخرق المفتاح الأجنبي ونرجّع ٥٠٠، فتعيد آبل المحاولة أياماً على
+  // إشعار ما فيه شي نسويه له أصلاً.
+  const { data: mother } = await sb.from("mothers").select("id").eq("id", motherId).maybeSingle();
+  return mother?.id || null;
 }
