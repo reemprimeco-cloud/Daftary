@@ -134,6 +134,7 @@ const TILE_GLYPHS = {
       <path d="M9.15 7.4c.2-.02.42-.02.6.02.22.05.35.42.45.66l.5 1.2c.08.2.04.42-.1.58l-.45.5a.4.4 0 0 0-.07.45 6 6 0 0 0 2.85 2.5c.17.07.36.02.47-.12l.5-.62c.14-.17.37-.23.57-.15l1.5.6c.2.08.33.28.32.5-.04.62-.32 1.2-.85 1.5-.6.34-1.35.4-2.02.2a8.4 8.4 0 0 1-5.1-4.6c-.3-.7-.35-1.48-.05-2.15.25-.55.72-.99 1.3-1.07" fill={sh} />
     </>
   ),
+  star: () => <path d="M12 2.2l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 18l-6.2 3.3 1.2-6.9-5-4.9 6.9-1z" />,
   gear: (sh) => (
     <>
       {[0, 45, 90, 135].map((a) => (
@@ -194,6 +195,7 @@ const TILE_TINTS = {
   gift: "#E0B073",
   trash: "#DE8B8B",
   gear: "#A8A2C4",
+  star: "#E8C05C",
   whatsapp: "#3FC45E",
   pencil: "#E0A873",
   refresh: "#7FA8E0",
@@ -404,6 +406,10 @@ export default function Home() {
   const [upcomingTasks, setUpcomingTasks] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [classSchedule, setClassSchedule] = useState([]);
+  // طلب التقييم: الخادم يقرر متى يستحق العرض (بعد أسبوع من التسجيل وطالما
+  // ما قيّمت)، والواجهة تعرضه وتخفيه فور الإرسال بلا انتظار تحديث.
+  const [feedbackDue, setFeedbackDue] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [view, setView] = useState("dashboard");
   const [showAddChild, setShowAddChild] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -478,6 +484,7 @@ export default function Home() {
     setUpcomingTasks(data.upcomingTasks || []);
     setRequirements(data.requirements || []);
     setClassSchedule(data.classSchedule || []);
+    setFeedbackDue(!!data.feedbackDue);
     // تذكيرات على الجهاز نفسه — تشتغل تلقائياً وحتى بدون إنترنت داخل تطبيق آبل
     syncTaskReminders([...(data.tasks || []), ...(data.upcomingTasks || [])]);
     // وتسجيل الجهاز لإشعارات السيرفر — تكمّل المحلية: توصل والتطبيق مقفل،
@@ -711,6 +718,7 @@ export default function Home() {
           </div>
         )}
         {appAccess?.phase === "grace" && <AppAccessGraceBanner enforceAt={appAccess.enforceAt} />}
+        {feedbackDue && <FeedbackBanner onOpen={() => setShowFeedback(true)} />}
         {view === "dashboard" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
             {children.length === 0 ? (
@@ -840,6 +848,12 @@ export default function Home() {
           onAccountDeleted={handleAccountDeleted}
           onDataCleared={() => loadAll(mother.id)}
           onManageSubscription={() => setShowSubscriptionManage(true)}
+        />
+      )}
+      {showFeedback && (
+        <FeedbackModal
+          onClose={() => setShowFeedback(false)}
+          onDone={() => { setShowFeedback(false); setFeedbackDue(false); }}
         />
       )}
       {showSubscriptionManage && (
@@ -1931,6 +1945,110 @@ function TapPayerNotice() {
   return (
     <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "11px 14px", fontSize: 12, lineHeight: 1.85 }}>
       دفتري من إنتاج <strong>شركة برايم للطباعة</strong>، وسيتم تحويلك لبوابة الدفع التابعة لها.
+    </div>
+  );
+}
+
+// طلب التقييم. ما فيه زر «مو الحين»: يبقى ظاهراً لين تقيّم، وبعدها يختفي
+// نهائياً — القيد بجدول app_feedback (صف واحد لكل ولية أمر) هو اللي يضمنه.
+function FeedbackBanner({ onOpen }) {
+  return (
+    <button
+      onClick={onOpen}
+      style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "start",
+        background: "#F1EFFA", borderRadius: 14, padding: "13px 14px", margin: "0 16px 12px",
+        width: "calc(100% - 32px)", fontFamily: "inherit" }}
+    >
+      <TileIcon name="star" size={30} />
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 13.5, fontWeight: 800, color: "#5C4B8C" }}>شرايكم بدفتري؟</span>
+        <span style={{ display: "block", fontSize: 11.5, color: "#7A6E96", lineHeight: 1.6 }}>
+          تقييمك بنص دقيقة يساعدنا نطوّره
+        </span>
+      </span>
+      <span style={{ marginInlineStart: "auto", color: "#B7A6E8", fontSize: 18, flexShrink: 0 }}>‹</span>
+    </button>
+  );
+}
+
+const RATING_LABELS = ["", "غير راضية", "مو زينة", "عادية", "راضية", "راضية جداً"];
+
+function FeedbackModal({ onClose, onDone }) {
+  const [rating, setRating] = useState(0);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    if (!rating) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, note: note.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "تعذّر الإرسال");
+      hapticSuccess();
+      onDone();
+    } catch (e) {
+      setError(e.message || "تعذّر الإرسال، حاولي مرة ثانية.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(30,25,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
+      <div style={{ background: "white", borderRadius: 20, padding: "22px 18px", width: "100%", maxWidth: 380, boxShadow: "0 8px 30px rgba(0,0,0,.18)" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -6 }}>
+          <button onClick={onClose} aria-label="إغلاق" style={{ background: "#F3F4F6", color: "#6B7280", borderRadius: "50%", width: 28, height: 28, fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
+
+        <p style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 800, color: "#374151", textAlign: "center" }}>شرايكم بدفتري؟</p>
+        <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.7 }}>
+          رأيك يوصل لنا مباشرة ويساعدنا نطوّر البرنامج
+        </p>
+
+        {/* الترتيب بصرياً من اليمين لليسار: أول نجمة يمين = ١ */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 6 }}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              onClick={() => setRating(n)}
+              aria-label={`${n} من ٥`}
+              style={{ background: "none", padding: 2, lineHeight: 0 }}
+            >
+              <svg width="40" height="40" viewBox="0 0 24 24" fill={n <= rating ? "#EFC148" : "#E8E4DC"}>
+                <path d="M12 2.5l2.9 5.9 6.5 1-4.7 4.6 1.1 6.5L12 17.4 6.2 20.5l1.1-6.5L2.6 9.4l6.5-1z" />
+              </svg>
+            </button>
+          ))}
+        </div>
+        <p style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color: "#5C4B8C", minHeight: 20, margin: "0 0 12px" }}>
+          {RATING_LABELS[rating] || ""}
+        </p>
+
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          placeholder="شنو عندكم ملاحظات أو اقتراحات؟"
+          style={{ width: "100%", border: "1px solid #E8E4DC", borderRadius: 12, padding: "10px 12px", fontSize: 13, fontFamily: "inherit", resize: "none", background: "#FCFBF9", color: "#374151" }}
+        />
+
+        {error && <p style={{ margin: "8px 0 0", fontSize: 12, color: "#B91C1C", textAlign: "center" }}>{error}</p>}
+
+        <button
+          onClick={submit}
+          disabled={!rating || busy}
+          style={{ width: "100%", marginTop: 10, background: !rating || busy ? "#D8D2E8" : "#B7A6E8", color: "white", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 800, minHeight: 48 }}
+        >
+          {busy ? "جاري الإرسال..." : "إرسال التقييم"}
+        </button>
+        <p style={{ textAlign: "center", fontSize: 11.5, color: "#B0AAB8", margin: "10px 0 0" }}>شكراً لوقتكم 🤍</p>
+      </div>
     </div>
   );
 }

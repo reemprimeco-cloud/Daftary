@@ -15,6 +15,19 @@ export async function GET(req) {
     () => {}
   );
 
+  // هل نعرض طلب التقييم؟ بعد أسبوع من التسجيل (عشان تكون جرّبت البرنامج
+  // فعلاً قبل ما نسألها عن رأيها)، وطالما ما قيّمت. الخادم هو اللي يقرر
+  // مو المتصفح — لو تركناها للعميل رجع الطلب بمسح بيانات المتصفح.
+  const FEEDBACK_AFTER_DAYS = 7;
+  const [{ data: profile }, { data: rated }] = await Promise.all([
+    sb.from("mothers").select("created_at").eq("id", motherId).maybeSingle(),
+    sb.from("app_feedback").select("mother_id").eq("mother_id", motherId).maybeSingle(),
+  ]);
+  const feedbackDue =
+    !rated &&
+    !!profile?.created_at &&
+    Date.now() - new Date(profile.created_at).getTime() >= FEEDBACK_AFTER_DAYS * 86400e3;
+
   const { data: children, error: cErr } = await sb
     .from("children")
     .select("*")
@@ -70,5 +83,5 @@ export async function GET(req) {
     classSchedule = cs || [];
   }
 
-  return NextResponse.json({ children, tasks, undatedTasks, upcomingTasks, requirements, classSchedule, weekRange: { sunday, thursday } });
+  return NextResponse.json({ children, tasks, undatedTasks, upcomingTasks, requirements, classSchedule, feedbackDue, weekRange: { sunday, thursday } });
 }
