@@ -32,6 +32,9 @@ const PALETTE = [
 // MARKETING_VERSION بمشروع Xcode و version بملف package.json.
 const APP_VERSION = "1.0.3";
 const APP_STORE_URL = "https://apps.apple.com/app/id6801521796";
+// wa.me يفتح تطبيق واتساب إذا كان منزّلاً، ونسخة الويب إذا لا — فيشتغل
+// داخل تطبيق آبل وبالمتصفح بنفس الرابط.
+const WHATSAPP_URL = "https://wa.me/96565068000";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
@@ -125,6 +128,12 @@ const TILE_GLYPHS = {
       <rect x="13.2" y="9" width="1.7" height="8" rx=".85" fill={sh} />
     </>
   ),
+  whatsapp: (sh) => (
+    <>
+      <path d="M12 2.2a9.5 9.5 0 0 0-8.1 14.45L2.6 21.1a.6.6 0 0 0 .74.74l4.53-1.28A9.5 9.5 0 1 0 12 2.2" />
+      <path d="M9.15 7.4c.2-.02.42-.02.6.02.22.05.35.42.45.66l.5 1.2c.08.2.04.42-.1.58l-.45.5a.4.4 0 0 0-.07.45 6 6 0 0 0 2.85 2.5c.17.07.36.02.47-.12l.5-.62c.14-.17.37-.23.57-.15l1.5.6c.2.08.33.28.32.5-.04.62-.32 1.2-.85 1.5-.6.34-1.35.4-2.02.2a8.4 8.4 0 0 1-5.1-4.6c-.3-.7-.35-1.48-.05-2.15.25-.55.72-.99 1.3-1.07" fill={sh} />
+    </>
+  ),
   gear: (sh) => (
     <>
       {[0, 45, 90, 135].map((a) => (
@@ -185,6 +194,7 @@ const TILE_TINTS = {
   gift: "#E0B073",
   trash: "#DE8B8B",
   gear: "#A8A2C4",
+  whatsapp: "#3FC45E",
   pencil: "#E0A873",
   refresh: "#7FA8E0",
   chart: "#7FC2A0",
@@ -2984,6 +2994,10 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span>تواصلي معنا</span>
               <span className="ios-chevron">›</span>
             </a>
+            <a href={WHATSAPP_URL} target="_blank" rel="noreferrer" className="ios-row">
+              <span>واتساب — أسرع رد</span>
+              <span className="ios-chevron">›</span>
+            </a>
             <PushTestRow />
             <div className="ios-row">
               <span>الإصدار</span>
@@ -3058,6 +3072,13 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
               <TileIcon name="mail" size={25} />
               تواصلي معنا
+            </span>
+            <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
+          </a>
+          <a href={WHATSAPP_URL} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
+              <TileIcon name="whatsapp" size={25} />
+              واتساب — أسرع رد
             </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
