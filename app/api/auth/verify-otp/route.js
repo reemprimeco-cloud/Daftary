@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createSessionToken } from "@/lib/session";
-import { isReviewCode, isReviewPhone, normalizeKuwaitPhone, twilioVerify } from "@/lib/otp";
+import { isReviewCode, isReviewPhone, maskPhone, normalizeKuwaitPhone, twilioVerify } from "@/lib/otp";
 
 // التحقق من الكود. لو صح: ننشئ الحساب لو جديد، ونرجّع جلسة موقّعة تبقى شغالة
 // لين تسجّل خروج.
@@ -29,17 +29,20 @@ export async function POST(req) {
       const check = await twilioVerify("VerificationCheck", { To: to, Code: String(code).trim() });
       // ملاحظة: الكود الغلط ما يرمي خطأ — يرجّع status = pending. لازم نتحقق صراحة.
       if (check.status !== "approved") {
+        console.log("otp wrong code:", maskPhone(to));
         return NextResponse.json({ error: "الكود غير صحيح أو منتهي" }, { status: 401 });
       }
     } catch (e) {
       // 60202 = تجاوزت حد المحاولات، 404 = ما فيه تحقق معلّق (منتهي أو مستخدم)
       if (e.twilioCode === 60202) {
+        console.log("otp too many attempts:", maskPhone(to));
         return NextResponse.json({ error: "حاولتِ مرات كثيرة. اطلبي كود جديد." }, { status: 429 });
       }
       if (e.status === 404) {
+        console.log("otp expired:", maskPhone(to));
         return NextResponse.json({ error: "انتهت صلاحية الكود. اطلبي كود جديد." }, { status: 401 });
       }
-      console.error("verify-otp failed:", e.twilioCode || "", e.message);
+      console.error("verify-otp failed:", maskPhone(to), e.twilioCode || "", e.message);
       return NextResponse.json({ error: "تعذّر التحقق، حاولي بعد شوي." }, { status: 502 });
     }
   }
