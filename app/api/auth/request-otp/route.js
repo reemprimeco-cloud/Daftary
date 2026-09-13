@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cancelPendingVerification, isReviewPhone, normalizeKuwaitPhone, twilioVerify } from "@/lib/otp";
+import { alertAdmin } from "@/lib/opsAlert";
 
 // إرسال كود التحقق على واتساب، مع تحويل تلقائي لرسالة نصية لو ما وصل واتساب
 // (المستخدمة ما عندها واتساب، أو التسليم فشل). Twilio Verify يتكفّل بتوليد
@@ -46,7 +47,17 @@ export async function POST(req) {
     if (e.twilioCode === 60410 || e.twilioCode === 60200) {
       return NextResponse.json({ error: "ما قدرنا نرسل الكود لهذا الرقم. تأكدي منه وحاولي مرة ثانية." }, { status: 400 });
     }
+    // عطل يصيب الجميع مو مستخدمة وحدة: رصيد خلص، حساب موقوف، مفاتيح غلط.
+    // بلا تنبيه يبقى التسجيل مقفلاً على كل الناس لين تلاحظه صاحبة التطبيق
+    // بالصدفة (صار فعلاً: ١١ ساعة ونصف، ٢٦ مستخدمة). ننتظر الإرسال عشان
+    // بيئة السيرفر تقدر توقف العمل الخلفي بعد رد الطلب.
     console.error("request-otp failed:", e.twilioCode || "", e.message);
+    await alertAdmin(
+      "otp_send_failed",
+      "⚠️ التسجيل معطّل بدفتري",
+      "فشل إرسال رمز التحقق — ما فيه أحد يقدر يسجّل دخول. تحققي من حساب Twilio (الرصيد أو حالة الحساب).",
+      { detail: `${e.twilioCode || ""} ${e.message || ""}`.trim() }
+    );
     return NextResponse.json({ error: "تعذّر إرسال الكود، حاولي بعد شوي." }, { status: 502 });
   }
 }

@@ -6,6 +6,25 @@ import { sendApns, apnsConfigured } from "@/lib/apns";
 
 // APNs يحتاج HTTP/2 عبر node:http2، وهو غير متوفر على Edge runtime.
 export const runtime = "nodejs";
+// بلا تحديد تصير المهلة ١٠ ثوانٍ، والمسار يرسل لكل ولي أمر عنده تذكير
+// اليوم — فمع نمو المستخدمين ينقطع بالنص: بعضهم يوصله التذكير وبعضهم لا،
+// بصمت وبلا أي خطأ يبان.
+export const maxDuration = 60;
+
+// ننفّذ على دفعات متوازية بدل واحد واحد. الحد ١٠ كافٍ ليختصر الوقت لعُشره
+// تقريباً، وبنفس الوقت ما يفتح مئات الاتصالات المتزامنة على Supabase وAPNs.
+async function mapPool(items, limit, fn) {
+  const list = [...items];
+  const results = [];
+  const workers = Array.from({ length: Math.min(limit, list.length) }, async () => {
+    while (list.length) {
+      const item = list.shift();
+      results.push(await fn(item));
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
 function vapidConfigured() {
   return !!(process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_SUBJECT);
@@ -102,8 +121,7 @@ async function sendMemorizationReminders(sb, today) {
     byMother.set(motherId, entry);
   }
 
-  let sent = 0;
-  for (const [motherId, { count, names }] of byMother) {
+  const memoResults = await mapPool([...byMother.entries()], 10, async ([motherId, { count, names }]) => {
     // القيد الفريد بـreminder_log على (task_id, kind) وهنا ما فيه مهمة،
     // فنمنع التكرار بفحص إن ما أُرسل شي لنفس ولي الأمر اليوم.
     const { data: already } = await sb
@@ -113,7 +131,7 @@ async function sendMemorizationReminders(sb, today) {
       .eq("kind", "memorization")
       .gte("sent_at", `${today}T00:00:00+03:00`)
       .limit(1);
-    if (already?.length) continue;
+    if (already?.length) return 0;
 
     const who = names.size === 1 ? [...names][0] : "أبنائك";
     const text = `🕌 عند ${who} ${count} للتسميع — وقت المراجعة`;
@@ -121,17 +139,18 @@ async function sendMemorizationReminders(sb, today) {
     let delivered = false;
     if (vapidConfigured()) {
       const { data: subs } = await sb.from("push_subscriptions").select("*").eq("mother_id", motherId);
-      for (const sub of subs || []) {
-        if (await sendPush(sb, sub, { title: "تذكير التسميع", body: text, url: "/" })) delivered = true;
-      }
+      const oks = await Promise.all(
+        (subs || []).map((sub) => sendPush(sb, sub, { title: "تذكير التسميع", body: text, url: "/" }))
+      );
+      if (oks.some(Boolean)) delivered = true;
     }
     if (await sendToDevices(sb, motherId, "تذكير التسميع", text)) delivered = true;
 
-    if (!delivered) continue;
+    if (!delivered) return 0;
     await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind: "memorization" });
-    sent++;
-  }
-  return sent;
+    return 1;
+  });
+  return memoResults.reduce((a, b) => a + b, 0);
 }
 
 export async function GET(req) {
@@ -194,12 +213,14 @@ export async function GET(req) {
   ];
 
   for (const [rows, kind, textFn] of batches) {
-    for (const t of rows) {
+    const results = await mapPool(rows, 10, async (t) => {
       const { data: exists } = await sb.from("reminder_log").select("id").eq("task_id", t.id).eq("kind", kind).maybeSingle();
-      if (exists) continue;
+      if (exists) return 0;
 
-      const { data: mother } = await sb.from("mothers").select("*").eq("id", t.children.mother_id).single();
-      if (!mother) continue;
+      // معرّف ولي الأمر جاي أصلاً مع الطالب/ة بالاستعلام، فما نحتاج استعلاماً
+      // كاملاً عن صف الأم لكل تذكير — كان استعلاماً ضائعاً بالكامل.
+      const motherId = t.children.mother_id;
+      if (!motherId) return 0;
 
       const text = textFn(t);
       let delivered = false;
@@ -207,21 +228,22 @@ export async function GET(req) {
       const title = KIND_TITLES[kind] || "دفتري";
 
       if (vapidConfigured()) {
-        const { data: subs } = await sb.from("push_subscriptions").select("*").eq("mother_id", mother.id);
-        for (const sub of subs || []) {
-          const ok = await sendPush(sb, sub, { title, body: text, url: "/" });
-          if (ok) delivered = true;
-        }
+        const { data: subs } = await sb.from("push_subscriptions").select("*").eq("mother_id", motherId);
+        const oks = await Promise.all(
+          (subs || []).map((sub) => sendPush(sb, sub, { title, body: text, url: "/" }))
+        );
+        if (oks.some(Boolean)) delivered = true;
       }
 
       // نرسل للمتصفح والتطبيق معاً: ولي أمر عنده الاثنان يستحق يوصله بالمكانين،
       // ونحن نمنع التكرار بسجل reminder_log مو بتقييد وسيلة واحدة.
-      if (await sendToDevices(sb, mother.id, title, text)) delivered = true;
+      if (await sendToDevices(sb, motherId, title, text)) delivered = true;
 
-      if (!delivered) continue;
-      await sb.from("reminder_log").insert({ mother_id: mother.id, task_id: t.id, kind });
-      sent++;
-    }
+      if (!delivered) return 0;
+      await sb.from("reminder_log").insert({ mother_id: motherId, task_id: t.id, kind });
+      return 1;
+    });
+    sent += results.reduce((a, b) => a + b, 0);
   }
 
   sent += await sendMemorizationReminders(sb, today);
