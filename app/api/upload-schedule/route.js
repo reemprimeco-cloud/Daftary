@@ -3,6 +3,11 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { logAiUsage } from "@/lib/aiUsage";
 import { kuwaitTodayStr, kuwaitWeekMap, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
 
+// تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
+// وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 const FEATURE = "upload_homework";
 
 export async function POST(req) {
@@ -79,7 +84,13 @@ async function handleUpload(req) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-5",
-      max_tokens: 4000,
+      // كانت ٤٠٠٠ — والنموذج يفكّر افتراضياً، فكان التفكير يبتلع الحصة
+      // كاملة ويرجع JSON مقطوعاً بنص النص (أو بلا نص إطلاقاً). ظهر
+      // بالإنتاج: stop_reason=max_tokens مع thinking_tokens=4000.
+      max_tokens: 16000,
+      // استخراج جدول من صورة عمل ميكانيكي ما يحتاج تفكيراً ممتداً —
+      // إيقافه يمنع قطع الرد ويقصّر زمن الانتظار على الأم كذلك.
+      thinking: { type: "disabled" },
       messages: [{ role: "user", content }],
     }),
   });
@@ -95,19 +106,38 @@ async function handleUpload(req) {
     motherId, childId, feature: FEATURE, model: "claude-sonnet-5",
     usage: aiData.usage, hadImage: true, attachments: images.length,
   });
+  // انقطع الرد لبلوغ سقف المخرجات — رسالة الخطأ الخام بالإنجليزي ما تفيد
+  // الأم بشي، ونحن نعرف السبب هنا بدقة.
+  if (aiData.stop_reason === "max_tokens") {
+    console.error("AI response truncated (max_tokens):", JSON.stringify(aiData.usage));
+    return NextResponse.json(
+      { error: "الجدول طويل وما اكتمل تحليله. جربي صورة أوضح أو قصّيها على جزئين." },
+      { status: 500 }
+    );
+  }
+
   const textBlock = (aiData.content || []).find((b) => b.type === "text");
   if (!textBlock) {
     console.error("No text block in Anthropic response:", JSON.stringify(aiData));
     return NextResponse.json({ error: "لم يصل رد نصي من التحليل" }, { status: 500 });
   }
 
-  const cleaned = textBlock.text.replace(/```json/g, "").replace(/```/g, "").trim();
+  // النموذج أحياناً يسبق الـJSON بجملة تمهيدية أو يغلّفه بـ```json.
+  // نقتطع من أول { لآخر } بدل ما نرفض الرد كله بسبب زينة حوله.
+  const raw = textBlock.text.replace(/```json/g, "").replace(/```/g, "").trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  const cleaned = start !== -1 && end > start ? raw.slice(start, end + 1) : raw;
   let parsed;
   try {
     parsed = JSON.parse(cleaned);
   } catch (e) {
     console.error("Failed to parse AI JSON:", e.message, "raw text:", textBlock.text);
-    return NextResponse.json({ error: "رد غير صالح من التحليل: " + e.message }, { status: 500 });
+    // الخطأ التقني بالسجلات، والأم تشوف خطوة تقدر تسويها.
+    return NextResponse.json(
+      { error: "ما قدرنا نقرأ الجدول من الصورة. تأكدي إنها واضحة وكاملة وجربي مرة ثانية." },
+      { status: 500 }
+    );
   }
 
   const todayStr = kuwaitTodayStr();
