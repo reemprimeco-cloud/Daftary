@@ -1678,12 +1678,18 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   }
 
   // داخل تطبيق آبل نفتح الكاميرا/الألبوم الأصلي بدل منتقي الملفات
+  const [pickError, setPickError] = useState(null);
+
   async function addFromNative(source) {
-    const url = await nativePickImage(source);
+    setPickError(null);
+    const { url, reason } = await nativePickImage(source);
     if (url) {
       hapticLight();
       setImages((prev) => [...prev, url]);
+      return;
     }
+    // الإلغاء اختيار المستخدمة، ما يحتاج رسالة. الباقي يحتاج.
+    if (reason && reason !== "cancelled") setPickError({ reason, source });
   }
 
   async function run() {
@@ -1762,6 +1768,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
           </div>
         )}
+        {pickError && <PickErrorNotice error={pickError} />}
         {images.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
             {images.map((img, i) => (
@@ -1959,6 +1966,33 @@ function TapPayerNotice() {
   return (
     <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "11px 14px", fontSize: 12, lineHeight: 1.85 }}>
       دفتري من إنتاج <strong>شركة برايم للطباعة</strong>، وسيتم تحويلك لبوابة الدفع التابعة لها.
+    </div>
+  );
+}
+
+// سبب عدم فتح الصور + مخرج للأم. الزر الميت بلا تفسير أسوأ من الخطأ
+// نفسه: ما تعرف هل الخلل من البرنامج ولا من جوالها ولا وش تسوي.
+function PickErrorNotice({ error }) {
+  const isCamera = error.source === "camera";
+  const text =
+    error.reason === "denied"
+      ? `دفتري ما عنده إذن يوصل ${isCamera ? "للكاميرا" : "لصورك"}. افتحي إعدادات جوالك ← دفتري ← ${isCamera ? "الكاميرا" : "الصور"} وفعّلي الإذن، ثم ارجعي وجربي.`
+      : error.reason === "unavailable"
+      ? "هذي الميزة تحتاج آخر إصدار من التطبيق. حدّثيه من آب ستور وجربي مرة ثانية."
+      : "صار خلل فني وما انفتحت الصور. جربي تقفلين التطبيق وتفتحينه من جديد.";
+
+  return (
+    <div style={{ background: "#FEF2F2", borderRadius: 12, padding: "12px 14px" }}>
+      <p style={{ margin: 0, fontSize: 12.5, color: "#B91C1C", fontWeight: 700, lineHeight: 1.8 }}>{text}</p>
+      <a
+        href={WHATSAPP_URL}
+        target="_blank"
+        rel="noreferrer"
+        style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 10, background: "white", color: "#374151", borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 800, textDecoration: "none" }}
+      >
+        <TileIcon name="whatsapp" size={20} />
+        ما زالت ما تشتغل؟ راسلينا
+      </a>
     </div>
   );
 }
@@ -2415,7 +2449,7 @@ function TeacherView({ children, motherId }) {
 
   // بتطبيق آبل نصوّر الواجب مباشرة بالكاميرا الأصلية بدل منتقي الملفات
   async function pickImageNative() {
-    const url = await nativePickImage("camera");
+    const { url } = await nativePickImage("camera");
     if (url) {
       hapticLight();
       setImage(url);
