@@ -29,7 +29,7 @@ export default function Broadcast() {
   const [stats, setStats] = useState(null);
 
   const loadStats = useCallback(() => {
-    fetch("/api/admin/broadcast/stats")
+    fetch("/api/admin/broadcast/stats", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setStats(d.campaigns || []))
       .catch(() => setStats([]));

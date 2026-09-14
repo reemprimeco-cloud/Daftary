@@ -8,7 +8,7 @@ export default function Signups() {
   const [auto, setAuto] = useState(false);
 
   const load = useCallback(() => {
-    fetch("/api/admin/signups")
+    fetch("/api/admin/signups", { cache: "no-store" })
       .then((r) => r.json())
       .then(setData)
       .catch(() => setData({ error: true }));

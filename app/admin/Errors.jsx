@@ -20,7 +20,7 @@ export default function Errors() {
   const [data, setData] = useState(null);
 
   const load = useCallback(() => {
-    fetch("/api/admin/errors")
+    fetch("/api/admin/errors", { cache: "no-store" })
       .then((r) => r.json())
       .then(setData)
       .catch(() => setData({ error: true }));

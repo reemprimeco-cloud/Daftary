@@ -6,7 +6,7 @@ export default function Feedback() {
   const [data, setData] = useState(null);
 
   const load = useCallback(() => {
-    fetch("/api/admin/feedback")
+    fetch("/api/admin/feedback", { cache: "no-store" })
       .then((r) => r.json())
       .then(setData)
       .catch(() => setData({ error: true }));

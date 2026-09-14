@@ -4,6 +4,7 @@ import { PRODUCTS } from "@/lib/plans";
 import { APP_PRODUCTS } from "@/lib/appPlans";
 import AdminLogin from "./AdminLogin";
 import AdminLogoutButton from "./AdminLogoutButton";
+import RefreshPage from "./RefreshPage";
 import AppleNotificationTest from "./AppleNotificationTest";
 import Broadcast from "./Broadcast";
 import Signups from "./Signups";
@@ -336,7 +337,8 @@ function AdminDashboard({ stats }) {
             <h1 style={{ margin: 0, fontSize: 20, color: "#5C4B8C", fontWeight: 800 }}>لوحة تحكم دفتري</h1>
             <p style={{ margin: "2px 0 0", fontSize: 12, color: "#9CA3AF" }}>نظرة عامة على استخدام التطبيق</p>
           </div>
-          <AdminLogoutButton />
+          <RefreshPage />
+            <AdminLogoutButton />
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
