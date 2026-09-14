@@ -12,6 +12,8 @@ import {
   syncTaskReminders,
   reportNotificationOpen,
   reportError,
+  permissionStatus,
+  requestPermission,
   registerPushDevice,
   attachPullToRefresh,
 } from "@/lib/native";
@@ -719,6 +721,7 @@ export default function Home() {
           </div>
         )}
         {appAccess?.phase === "grace" && <AppAccessGraceBanner enforceAt={appAccess.enforceAt} />}
+        <PermissionsBanner />
         {feedbackDue && <FeedbackBanner onOpen={() => setShowFeedback(true)} />}
         {view === "dashboard" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1977,6 +1980,84 @@ function TapPayerNotice() {
   );
 }
 
+// شريط الأذونات الناقصة. ١٣ جهازاً فقط من ٥٤ حساباً مفعّلة الإشعارات،
+// والإشعار العام ما يوصل إلا لمن فعّلها أصلاً — فاللي يحتاجون التذكير ما
+// يوصلهم. الشريط هو الطريق الوحيد للباقي.
+function PermissionsBanner() {
+  const [state, setState] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [needsSettings, setNeedsSettings] = useState(false);
+
+  const check = useCallbackRef(async () => {
+    setState(await permissionStatus());
+  });
+
+  useEffect(() => {
+    check();
+    // الأم تروح للإعدادات وترجع — نعيد الفحص عند الرجوع عشان الشريط
+    // يختفي بنفسه بدل ما تعيد فتح التطبيق.
+    const onBack = () => { if (!document.hidden) check(); };
+    document.addEventListener("visibilitychange", onBack);
+    return () => document.removeEventListener("visibilitychange", onBack);
+  }, []);
+
+  if (!state) return null;
+  const missing = [];
+  if (state.notifications !== "granted") missing.push("notifications");
+  if (state.photos !== "granted") missing.push("photos");
+  if (!missing.length) return null;
+
+  const label =
+    missing.length === 2 ? "الإشعارات والصور"
+    : missing[0] === "notifications" ? "الإشعارات"
+    : "الصور";
+
+  // «denied» يعني آبل ما راح تفتح النافذة مهما طلبنا — الإعدادات المخرج الوحيد.
+  const blocked = missing.some((k) => state[k] === "denied");
+
+  async function enable() {
+    setBusy(true);
+    const results = {};
+    for (const kind of missing) results[kind] = await requestPermission(kind);
+
+    // نثق بنتيجة الطلب المباشرة فوق إعادة الفحص: بعض المنصات تتأخر بتحديث
+    // checkPermissions بعد الموافقة مباشرة، فيبقى الشريط ظاهراً بعد ما
+    // وافقت فعلاً — وهذا يخليها تظن إن الضغطة ما نفعت.
+    const next = { ...(await permissionStatus()) };
+    for (const [kind, value] of Object.entries(results)) {
+      if (value === "granted") next[kind] = "granted";
+    }
+    setState(next);
+
+    const still = ["notifications", "photos"].filter((k) => next[k] !== "granted");
+    if (still.length) setNeedsSettings(true);
+    setBusy(false);
+  }
+
+  return (
+    <div style={{ background: "#FDF3E7", borderRadius: 14, padding: "12px 14px", margin: "0 16px 12px", display: "flex", alignItems: "center", gap: 11 }}>
+      <TileIcon name="bell" size={30} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#8C6027" }}>فعّلي {label}</p>
+        <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#A07C43", lineHeight: 1.6 }}>
+          {blocked || needsSettings
+            ? `من إعدادات جوالك ← دفتري ← فعّلي ${label}`
+            : "عشان يوصلك تذكير الواجبات، ويشتغل رفع صور الجداول"}
+        </p>
+      </div>
+      {!(blocked || needsSettings) && (
+        <button
+          onClick={enable}
+          disabled={busy}
+          style={{ background: "#E8B863", color: "white", borderRadius: 10, padding: "8px 14px", fontSize: 12.5, fontWeight: 800, flexShrink: 0, opacity: busy ? 0.6 : 1 }}
+        >
+          {busy ? "..." : "تفعيل"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // سبب عدم فتح الصور + مخرج للأم. الزر الميت بلا تفسير أسوأ من الخطأ
 // نفسه: ما تعرف هل الخلل من البرنامج ولا من جوالها ولا وش تسوي.
 function PickErrorNotice({ error }) {
@@ -2024,6 +2105,13 @@ function FeedbackBanner({ onOpen }) {
       <span style={{ marginInlineStart: "auto", color: "#B7A6E8", fontSize: 18, flexShrink: 0 }}>‹</span>
     </button>
   );
+}
+
+// يحفظ آخر نسخة من الدالة بلا ما يعيد ربط المستمعين بكل رسم
+function useCallbackRef(fn) {
+  const ref = useRef(fn);
+  ref.current = fn;
+  return useRef((...args) => ref.current(...args)).current;
 }
 
 const RATING_LABELS = ["", "غير راضية", "مو زينة", "عادية", "راضية", "راضية جداً"];
