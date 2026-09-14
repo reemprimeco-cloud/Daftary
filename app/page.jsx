@@ -1661,6 +1661,15 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   const effectiveChildId = autoChild ? autoChild.id : childId;
   const needsChildConfirm = selectChild && childrenOfSchool.length > 1;
   const canRun = school && images.length > 0 && (!selectChild || effectiveChildId);
+  // الزر المعطّل بلا تفسير طريق مسدود: الأم تضغط وما يصير شي، وتظن إن
+  // البرنامج خربان. نقول لها وش الناقص بالضبط.
+  const blockedReason = !school
+    ? "اختاري المدرسة أولاً"
+    : needsChildConfirm && !effectiveChildId
+    ? "اختاري الطالب/ة صاحب الجدول"
+    : images.length === 0
+    ? "أضيفي صورة الجدول أولاً"
+    : "";
 
   async function handleFiles(e) {
     const files = Array.from(e.target.files || []);
@@ -1766,6 +1775,11 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         <button disabled={!canRun || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, opacity: canRun ? 1 : 0.4 }}>
           {status === "loading" ? "جاري التحليل..." : buttonLabel}
         </button>
+        {blockedReason && status !== "loading" && (
+          <p style={{ margin: "-4px 0 0", fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 10, padding: "9px 12px", textAlign: "center" }}>
+            {blockedReason}
+          </p>
+        )}
         {status === "done" && summary && (renderSummary ? renderSummary(summary) : (
           <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
             تم تحليل {summary.imagesProcessed} صورة ✓ — أُضيف {summary.matchedTasks} واجب/اختبار و {summary.matchedReqs} طلب مستلزمات.
