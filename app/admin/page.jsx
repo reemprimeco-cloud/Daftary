@@ -25,7 +25,9 @@ async function getStats() {
     sb.from("children").select("*", { count: "exact", head: true }),
     sb.from("tasks").select("*", { count: "exact", head: true }).eq("status", "active"),
     sb.from("class_schedule").select("child_id"),
-    sb.from("mothers").select("id,name,phone,created_at").order("created_at", { ascending: false }).limit(25),
+    // كان الحد ٢٥ والحسابات تجاوزتها — فكانت القائمة تخفي الباقي بصمت
+    // بلا ما تبيّن إن فيه مخفيين. الحد ٥٠٠ سقف أمان لا غير.
+    sb.from("mothers").select("id,name,phone,created_at").order("created_at", { ascending: false }).limit(500),
     sb.from("children").select("mother_id"),
   ]);
 
@@ -360,9 +362,15 @@ function AdminDashboard({ stats }) {
 
         <AppleNotificationTest />
 
-        <div style={{ background: "white", borderRadius: 16, padding: 4, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 20, overflowX: "auto" }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 0 8px" }}>
+          <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>المسجّلات</h2>
+          <span style={{ fontSize: 12, color: "#9CA3AF" }}>{stats.recentMothers.length} حساب · الأحدث أولاً</span>
+        </div>
+        {/* ارتفاع محدود مع تمرير: القائمة تطول مع النمو وتدفن كل شي تحتها،
+            والترويسة ثابتة عشان الأعمدة تبقى مفهومة وأنتِ تمرّرين. */}
+        <div style={{ background: "white", borderRadius: 16, padding: 4, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 20, overflowX: "auto", maxHeight: 460, overflowY: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
+            <thead style={{ position: "sticky", top: 0, background: "white", zIndex: 1 }}>
               <tr>
                 <th style={{ textAlign: "right", padding: "10px 12px", color: "#9CA3AF", fontWeight: 700, fontSize: 12 }}>الاسم</th>
                 <th style={{ textAlign: "right", padding: "10px 12px", color: "#9CA3AF", fontWeight: 700, fontSize: 12 }}>الجوال</th>
