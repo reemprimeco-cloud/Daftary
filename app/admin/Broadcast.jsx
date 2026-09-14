@@ -2,16 +2,28 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-const PRESET = {
-  title: "تجربة مجانية لمدة ٧ أيام",
-  body: "استمتعي بتجربة دفتري مجاناً لمدة ٧ أيام، وبعدها اشتراك سنوي بسيط حسب عدد أبنائك.",
-};
+// قوالب جاهزة — الإعلان المتكرر يُكتب مرة وحدة ويُعاد استخدامه بدل ما
+// يُصاغ من جديد بكل مرة ويطلع بصياغة مختلفة.
+const PRESETS = [
+  {
+    key: "permissions",
+    label: "الأذونات",
+    title: "فعّلي الإشعارات والصور 🔔",
+    body: "عشان يوصلك تذكير الواجبات والاختبارات، ويشتغل رفع صور الجداول: افتحي إعدادات جوالك ← دفتري ← وفعّلي «الإشعارات» و«الصور».",
+  },
+  {
+    key: "trial",
+    label: "التجربة المجانية",
+    title: "تجربة مجانية لمدة ٧ أيام",
+    body: "استمتعي بتجربة دفتري مجاناً لمدة ٧ أيام، وبعدها اشتراك سنوي بسيط حسب عدد أبنائك.",
+  },
+];
 
 // إشعار عام لكل المستخدمين. الإرسال لا رجعة فيه، فنطلب تأكيداً أولاً
 // ونعرض عدد من وصلهم بعده — عشان ما يُرسل نفس الإعلان مرتين بالغلط.
 export default function Broadcast() {
-  const [title, setTitle] = useState(PRESET.title);
-  const [body, setBody] = useState(PRESET.body);
+  const [title, setTitle] = useState(PRESETS[0].title);
+  const [body, setBody] = useState(PRESETS[0].body);
   const [state, setState] = useState("idle");
   const [detail, setDetail] = useState("");
   const [stats, setStats] = useState(null);
@@ -65,6 +77,18 @@ export default function Broadcast() {
       <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#9CA3AF", lineHeight: 1.8 }}>
         يوصل لأجهزة التطبيق والمتصفحات معاً. النص المكتوب جاهز للإعلان عن التجربة المجانية قبل بدء الرسوم.
       </p>
+
+      <div style={{ display: "flex", gap: 7, marginBottom: 10, flexWrap: "wrap" }}>
+        {PRESETS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => { setTitle(t.title); setBody(t.body); }}
+            style={{ background: title === t.title ? "#B7A6E8" : "#F3F4F6", color: title === t.title ? "white" : "#6B7280", borderRadius: 999, padding: "6px 13px", fontSize: 12, fontWeight: 700 }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="العنوان" style={input} />
       <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="النص" style={{ ...input, resize: "vertical" }} />

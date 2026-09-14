@@ -11,6 +11,7 @@ import {
   nativeSharePdf,
   syncTaskReminders,
   reportNotificationOpen,
+  reportError,
   registerPushDevice,
   attachPullToRefresh,
 } from "@/lib/native";
@@ -1689,7 +1690,10 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
       return;
     }
     // الإلغاء اختيار المستخدمة، ما يحتاج رسالة. الباقي يحتاج.
-    if (reason && reason !== "cancelled") setPickError({ reason, source });
+    if (reason && reason !== "cancelled") {
+      setPickError({ reason, source });
+      reportError("image_picker", { reason, detail: source });
+    }
   }
 
   async function run() {
@@ -1707,6 +1711,9 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
       console.error(err);
       setErrorMsg(err.message || "");
       setStatus("error");
+      // نبلّغ حتى لو الطلب ما وصل السيرفر أصلاً (شبكة منقطعة، مهلة) —
+      // وهي الحالة اللي ما تترك أي أثر بسجلات السيرفر.
+      reportError(endpoint.replace("/api/", ""), { reason: "analyze_failed", detail: err.message || "" });
     }
   }
 

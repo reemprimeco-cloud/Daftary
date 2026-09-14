@@ -30,6 +30,9 @@ const PUBLIC_PREFIXES = [
 // - delete-account: الحذف حق دائم بصرف النظر عن أي اشتراك
 const APP_PAYWALL_EXEMPT_PREFIXES = [
   "/api/subscription/", "/api/payments/", "/api/ai-teacher/", "/api/push/", "/api/delete-account",
+  // البلاغ عن خلل لازم يشتغل حتى لو الحساب محجوب — بل هذي أهم حالة نبي
+  // نعرف عنها: أم محجوبة تواجه مشكلة ولا تقدر توصلنا بشي.
+  "/api/error-report",
 ];
 
 // عرض الأبناء وحذف طالب/ة يبقيان مسموحين دائماً حتى لو الحساب محجوب —

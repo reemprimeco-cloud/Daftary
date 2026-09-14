@@ -7,6 +7,7 @@ import AdminLogoutButton from "./AdminLogoutButton";
 import AppleNotificationTest from "./AppleNotificationTest";
 import Broadcast from "./Broadcast";
 import Signups from "./Signups";
+import Errors from "./Errors";
 import Feedback from "./Feedback";
 import AlertTest from "./AlertTest";
 
@@ -346,6 +347,8 @@ function AdminDashboard({ stats }) {
         <UsageSection usage={stats.usage} />
 
         <SubscriptionsSection subscriptions={stats.subscriptions} />
+
+        <Errors />
 
         <Signups />
 
