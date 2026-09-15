@@ -2575,7 +2575,8 @@ function TeacherView({ children, motherId }) {
   async function handlePickImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = await resizeToDataUrl(file, 1400, false);
+    // صفحة الكتاب فيها خط صغير — نفس دقة رفع الجداول عشان تنقرأ.
+    const url = await resizeToDataUrl(file, 1568, false, 0.9);
     setImage(url);
   }
 
@@ -2598,12 +2599,20 @@ function TeacherView({ children, motherId }) {
     setInput("");
     setImage(null);
     try {
-      const res = await fetch("/api/ai-teacher/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ motherId, childId, question: questionText, image: attachedImage || undefined }),
-      });
-      const data = await res.json();
+      // الصورة المقلوبة يكتشفها الخادم قبل ما يخصم السؤال، ونحن ندوّرها
+      // هنا ونعيد الإرسال — نفس آلية رفع الجداول.
+      let img = attachedImage;
+      let res, data;
+      for (let i = 0; ; i++) {
+        res = await fetch("/api/ai-teacher/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ motherId, childId, question: questionText, image: img || undefined }),
+        });
+        data = await res.json();
+        if (!data.needsRotation || !img || i >= 3) break;
+        img = await rotateDataUrl(img, data.needsRotation);
+      }
       // ٤٠٢ = خلص الرصيد. نرجّع شاشة الاشتراك بدل رسالة خطأ مبهمة.
       if (res.status === 402) {
         setQuota((q) => ({ ...(q || {}), remainingTotal: 0, remainingTrial: 0 }));
