@@ -1045,7 +1045,7 @@ function Onboarding({ onDone }) {
         </div>
         <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>ولي الأمر</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: ريم الفرج" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 12 }} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسمك الكامل" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 12 }} />
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>رقم الجوال</label>
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
             <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
