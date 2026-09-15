@@ -5,6 +5,8 @@ import {
   isNativeApp,
   initNative,
   nativePickImage,
+  nativeScanDocument,
+  hasDocumentScanner,
   hapticSuccess,
   hapticLight,
   nativeShare,
@@ -1701,9 +1703,12 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   // داخل تطبيق آبل نفتح الكاميرا/الألبوم الأصلي بدل منتقي الملفات
   const [pickError, setPickError] = useState(null);
 
+  const [scanner, setScanner] = useState(false);
+  useEffect(() => setScanner(hasDocumentScanner()), []);
+
   async function addFromNative(source) {
     setPickError(null);
-    const { url, reason } = await nativePickImage(source);
+    const { url, reason } = source === "scan" ? await nativeScanDocument() : await nativePickImage(source);
     if (url) {
       hapticLight();
       setImages((prev) => [...prev, url]);
@@ -1812,9 +1817,16 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         )}
         {native ? (
           <div style={{ display: "flex", gap: 10 }}>
+            {scanner && (
+              <button onClick={() => addFromNative("scan")} style={{ flex: 1, border: "2px solid #B7A6E8", borderRadius: 16, padding: "22px 12px", textAlign: "center", background: "#F1EFFA", color: "#5C4B8C" }}>
+                <Icon name="camera" size={28} style={{ display: "block", margin: "0 auto 6px" }} />
+                <span style={{ fontWeight: 700, fontSize: 13.5, color: "#1F2937" }}>مسح المستند</span>
+                <span style={{ display: "block", fontSize: 10.5, color: "#7B68C4", marginTop: 2 }}>الأوضح — يقص ويعدّل تلقائياً</span>
+              </button>
+            )}
             <button onClick={() => addFromNative("camera")} style={{ flex: 1, border: "2px dashed #D1D5DB", borderRadius: 16, padding: "22px 12px", textAlign: "center", background: "#FAFAFA", color: "#7B68C4" }}>
               <Icon name="camera" size={28} style={{ display: "block", margin: "0 auto 6px" }} />
-              <span style={{ fontWeight: 700, fontSize: 13.5, color: "#1F2937" }}>تصوير الجدول</span>
+              <span style={{ fontWeight: 700, fontSize: 13.5, color: "#1F2937" }}>{scanner ? "الكاميرا" : "تصوير الجدول"}</span>
             </button>
             <button onClick={() => addFromNative("photos")} style={{ flex: 1, border: "2px dashed #D1D5DB", borderRadius: 16, padding: "22px 12px", textAlign: "center", background: "#FAFAFA", color: "#7B68C4" }}>
               <Icon name="photo" size={28} style={{ display: "block", margin: "0 auto 6px" }} />
@@ -2580,9 +2592,13 @@ function TeacherView({ children, motherId }) {
     setImage(url);
   }
 
-  // بتطبيق آبل نصوّر الواجب مباشرة بالكاميرا الأصلية بدل منتقي الملفات
-  async function pickImageNative() {
-    const { url } = await nativePickImage("camera");
+  // بتطبيق آبل نصوّر الواجب مباشرة بالكاميرا الأصلية بدل منتقي الملفات،
+  // وبالنسخة الجديدة فيه ماسح مستندات يقص ويعدّل تلقائياً.
+  const [scanner, setScanner] = useState(false);
+  useEffect(() => setScanner(hasDocumentScanner()), []);
+
+  async function pickImageNative(mode = "camera") {
+    const { url } = mode === "scan" ? await nativeScanDocument() : await nativePickImage("camera");
     if (url) {
       hapticLight();
       setImage(url);
@@ -2787,11 +2803,11 @@ function TeacherView({ children, motherId }) {
           messages.map((m, i) => (
             <div key={m.id || i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-start" : "flex-end" }}>
               <div style={{
-                maxWidth: "82%",
-                padding: "10px 13px",
+                maxWidth: "84%",
+                padding: "11px 14px",
                 borderRadius: 14,
-                fontSize: 13.5,
-                lineHeight: 1.7,
+                fontSize: 15,
+                lineHeight: 1.75,
                 whiteSpace: "pre-wrap",
                 background: m.role === "user" ? "#B7A6E8" : "#F3F2FA",
                 color: m.role === "user" ? "white" : "#374151",
@@ -2839,7 +2855,12 @@ function TeacherView({ children, motherId }) {
           </div>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <button onClick={() => (native ? pickImageNative() : fileRef.current?.click())} aria-label="إرفاق صورة" style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0, color: "#7B68C4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {native && scanner && (
+            <button onClick={() => pickImageNative("scan")} aria-label="مسح مستند" title="مسح مستند" style={{ background: "#F1EFFA", borderRadius: 12, height: 44, padding: "0 10px", fontSize: 12, fontWeight: 800, flexShrink: 0, color: "#5C4B8C", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <Icon name="camera" size={18} /> مسح
+            </button>
+          )}
+          <button onClick={() => (native ? pickImageNative("camera") : fileRef.current?.click())} aria-label="إرفاق صورة" style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0, color: "#7B68C4", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {native ? <Icon name="camera" size={22} /> : <TileIcon name="camera" size={24} />}
           </button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePickImage} />
