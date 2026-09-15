@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { extractFromImages } from "@/lib/visionExtract";
+import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -57,7 +57,7 @@ async function handleUpload(req) {
   const res = await extractFromImages({ images, prompt, motherId, childId, feature: FEATURE });
   if (!res.ok) {
     if (res.needsRotation) return NextResponse.json({ needsRotation: res.needsRotation });
-    return NextResponse.json({ error: res.error }, { status: res.status });
+    return NextResponse.json({ error: res.error, tips: res.tips }, { status: res.status });
   }
 
   const rows = buildRows(res.parsed, child.id);
@@ -67,7 +67,10 @@ async function handleUpload(req) {
   if (rows.length < DAYS.length) {
     console.error("class_schedule read produced too few rows:", rows.length);
     return NextResponse.json(
-      { error: "ما قدرنا نقرأ الجدول كامل من الصورة. تأكدي إنها واضحة وتشمل الجدول كله وجربي مرة ثانية." },
+      {
+        error: "ما قدرنا نقرأ الجدول كامل من الصورة — لازم ترفعين صورة بجودة أفضل.",
+        tips: QUALITY_TIPS,
+      },
       { status: 422 }
     );
   }

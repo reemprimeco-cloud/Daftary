@@ -1671,6 +1671,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   const [status, setStatus] = useState("idle");
   const [summary, setSummary] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [errorTips, setErrorTips] = useState([]);
   const [native, setNative] = useState(false);
   const fileRef = useRef();
   useEffect(() => setNative(isNativeApp()), []);
@@ -1729,12 +1730,19 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
       : { motherId, school, images: payload };
     const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    if (!res.ok) {
+      // الخطوات العملية تضيع لو مرّرنا النص وحده — نعلّقها على الخطأ نفسه.
+      const err = new Error(data.error);
+      err.tips = data.tips || [];
+      throw err;
+    }
     return data;
   }
 
   async function run() {
     setStatus("loading");
+    setErrorMsg("");
+    setErrorTips([]);
     try {
       // كثير من الجداول المدرسية مطبوعة بالعرض، فتنرفع مقلوبة ٩٠ درجة
       // والنص العربي المقلوب ما ينقرأ. السيرفر يكتشفها ويطلب التدوير،
@@ -1755,6 +1763,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
     } catch (err) {
       console.error(err);
       setErrorMsg(err.message || "");
+      setErrorTips(err.tips || []);
       setStatus("error");
       // نبلّغ حتى لو الطلب ما وصل السيرفر أصلاً (شبكة منقطعة، مهلة) —
       // وهي الحالة اللي ما تترك أي أثر بسجلات السيرفر.
@@ -1851,9 +1860,15 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
           </div>
         ))}
         {status === "error" && (
-          <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 12, fontSize: 13 }}>
-            صار خلل أثناء التحليل، حاولي مرة ثانية.
-            {errorMsg && <div style={{ marginTop: 6, fontSize: 11, opacity: 0.8, wordBreak: "break-word" }}>{errorMsg}</div>}
+          // السبب الحقيقي كان يُعرض بخط ١١ باهت تحت عنوان «صار خلل» — فالأم
+          // تقرأ العنوان وتعيد نفس الصورة بالضبط. صار السبب هو العنوان.
+          <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 14, fontSize: 13.5, fontWeight: 700, lineHeight: 1.8 }}>
+            {errorMsg || "صار خلل أثناء التحليل، حاولي مرة ثانية."}
+            {errorTips.length > 0 && (
+              <ul style={{ margin: "10px 0 0", paddingInlineStart: 18, fontWeight: 400, fontSize: 12.5 }}>
+                {errorTips.map((tip, i) => <li key={i} style={{ marginBottom: 3 }}>{tip}</li>)}
+              </ul>
+            )}
           </div>
         )}
       </div>

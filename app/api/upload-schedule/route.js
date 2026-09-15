@@ -66,7 +66,7 @@ async function handleUpload(req) {
   const res = await extractFromImages({ images, prompt, motherId, childId, feature: FEATURE });
   if (!res.ok) {
     if (res.needsRotation) return NextResponse.json({ needsRotation: res.needsRotation });
-    return NextResponse.json({ error: res.error }, { status: res.status });
+    return NextResponse.json({ error: res.error, tips: res.tips }, { status: res.status });
   }
   const parsed = res.parsed;
 
