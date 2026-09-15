@@ -750,7 +750,10 @@ export default function Home() {
         </div>
       )}
 
-      <div className="app-scroll" style={{ flex: 1 }} ref={scrollRef}>
+      {/* شاشة المعلم كانت height:100% من منطقة التمرير، وفوقها شريط الأذونات أو
+          التقييم — فالمجموع يزيد عن الشاشة بارتفاع الشريط وصف الإرسال ينزل تحت.
+          بعمود flex تاخذ الشاشة المساحة المتبقية بالضبط. */}
+      <div className="app-scroll" style={{ flex: 1, ...(view === "teacher" ? { display: "flex", flexDirection: "column" } : {}) }} ref={scrollRef}>
         {native && (
           <div className="ios-refresh" style={{ height: pull }}>
             {pull > 8 && <div className="ios-spinner" />}
@@ -2601,7 +2604,7 @@ function TeacherView({ children, motherId }) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+  }, [messages, sending, image]);
 
   // بعد التصوير أو الاختيار تمر الصورة بشاشة قص: الأم تحدد السؤال فقط
   // بدل الصفحة كلها. الماسح يقص الصفحة أصلاً فما يحتاجها.
@@ -2788,7 +2791,7 @@ function TeacherView({ children, motherId }) {
   }
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div style={{ flexShrink: 0, padding: "16px 16px 0", display: "flex", flexDirection: "column", gap: 10 }}>
         {children.length > 1 && (
           <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
@@ -2821,7 +2824,10 @@ function TeacherView({ children, motherId }) {
         )}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* minHeight: 0 إلزامي: بدونه الحد الأدنى لعنصر flex يساوي محتواه، فلما
+          تطول المحادثة تتمدد القائمة على طول الرسائل وتدفع صف الإرسال تحت
+          الشاشة بدل ما تتمرر داخلياً — وهذا «زر الإرسال ما يظهر». */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {historyLoading ? (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>...جاري التحميل</p>
         ) : messages.length === 0 ? (
