@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "cropperjs/dist/cropper.css";
 
 // شاشة قص بعد التصوير: الأم تحدد السؤال فقط بدل الصفحة كلها، فيقرأ المعلم
@@ -10,6 +11,10 @@ export default function CropModal({ src, onDone, onCancel }) {
   const imgRef = useRef(null);
   const cropperRef = useRef(null);
   const [ready, setReady] = useState(false);
+  // الشاشة كانت تُرسم داخل منطقة تمرير التطبيق، فشريط التبويبات (بطبقة
+  // أعلى) يغطي أزرارها بالأسفل. نرسمها على body مباشرة فوق كل شيء.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,8 +48,9 @@ export default function CropModal({ src, onDone, onCancel }) {
     onDone(canvas.toDataURL("image/jpeg", 0.9));
   }
 
-  return (
-    <div dir="rtl" style={{ position: "fixed", inset: 0, zIndex: 80, background: "#111", display: "flex", flexDirection: "column" }}>
+  if (!mounted) return null;
+  return createPortal(
+    <div dir="rtl" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#111", display: "flex", flexDirection: "column" }}>
       <div style={{ flexShrink: 0, padding: "calc(env(safe-area-inset-top) + 12px) 16px 10px", color: "white", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>حدّدي السؤال</p>
         <button onClick={onCancel} style={{ background: "rgba(255,255,255,.12)", color: "white", borderRadius: 10, padding: "6px 12px", fontSize: 13, fontWeight: 700 }}>إلغاء</button>
@@ -69,6 +75,7 @@ export default function CropModal({ src, onDone, onCancel }) {
           استخدمي المحدد ✓
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
