@@ -17,6 +17,10 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+// علامة داخلية يبدأ بها المعلم ردّه لما تكون الصورة غير صالحة للإجابة —
+// نحذفها من النص ونرجّع السؤال لرصيد الأم: رد كله «أرسلي صورة أوضح» ما
+// يستاهل يُحسب عليها (شوهد فعلاً: ظل إصبع على منتصف الصفحة).
+const UNREADABLE_TAG = "[صورة_غير_واضحة]";
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 529]);
 const RETRY_DELAYS_MS = [1500, 3000];
 
@@ -155,6 +159,10 @@ ${questionText}
 - لما يكون السؤال معلومة عامة بحتة، جاوبي عليها كاملة، وأضيفي سطراً لطيفاً إن الكتاب المدرسي يبقى المرجع لما يخص المنهج والاختبارات.
 - الي ترفضينه بأدب فقط: الاستشارات الطبية أو القانونية أو المالية الشخصية، والمحتوى غير اللائق أو السياسي أو الديني الخلافي — اشرحي إنك مساعدة تعليمية ووجّهي للمختص.
 
+مهم — التحية والمخاطبة: ما تعرفين إذا السائل أب أو أم، فلا تكتبين «أبو/أم ${child.name}» ولا تخمّنين الجنس. خاطبيه بـ«ولي أمر ${child.name}» أو بتحية عامة («حياك الله»، «أهلاً») وبصيغة محايدة.
+
+مهم — لو ما قدرتِ تجاوبين أصلاً بسبب الصورة (غير واضحة، مقصوصة، عليها ظل يغطي المطلوب، أو مقلوبة): ابدئي ردّك حرفياً بالعلامة ${UNREADABLE_TAG} ثم اطلبي صورة أوضح بلطف واذكري وش بالضبط ما وضح. لا تستخدمي العلامة لو قدرتِ تشرحين ولو جزءاً مفيداً.
+
 مهم: ردّك بيُعرض بمربع رسائل نص عادي بدون أي دعم لـ Markdown، فلا تستخدمي رموز مثل # أو ** أو جداول بخطوط | أو علامات تنصيص كود (\` أو \`\`\`) أو أي صيغة برمجية/كود. اكتبي بنص عادي فقط بلغة عربية بسيطة مفهومة، واستخدمي أسطر جديدة وأرقام (١، ٢، ٣) أو إيموجي بسيطة للتنظيم لو احتجتِ. حتى لو الموضوع علمي أو تقني (زي الوراثة أو الكيمياء)، اشرحيه بكلام عادي بدون رموز أو ترميز أو صيغ مختصرة — الهدف يفهمه ولي أمر وطالب/ة، مو متخصص.`;
 
   const content = [{ type: "text", text: contextText }];
@@ -213,7 +221,13 @@ ${questionText}
     usage: aiData.usage, hadImage: !!image, attachments: 0,
   });
   const textBlock = (aiData.content || []).find((b) => b.type === "text");
-  const answer = textBlock?.text?.trim() || "تعذّر توليد إجابة، حاولي مرة ثانية.";
+  let answer = textBlock?.text?.trim() || "تعذّر توليد إجابة، حاولي مرة ثانية.";
+  let refunded = false;
+  if (answer.startsWith(UNREADABLE_TAG)) {
+    answer = answer.slice(UNREADABLE_TAG.length).trim() + "\n\n(ما انخصم هذا السؤال من رصيدك 🤍)";
+    await refundQuestion(child.id, quota.source).catch(() => {});
+    refunded = true;
+  }
 
   await sb.from("ai_messages").insert([
     { child_id: child.id, role: "user", content: questionText, had_image: !!image, subject: matchedSubject?.name || null },
@@ -226,7 +240,7 @@ ${questionText}
     materialsUsed: officialMaterials,
     quota: {
       source: quota.source,
-      remaining: (quota.remaining_subscription || 0) + (quota.remaining_credits || 0) + (quota.remaining_trial || 0),
+      remaining: (quota.remaining_subscription || 0) + (quota.remaining_credits || 0) + (quota.remaining_trial || 0) + (refunded ? 1 : 0),
     },
   });
 }
