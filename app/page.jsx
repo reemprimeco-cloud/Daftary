@@ -2827,7 +2827,11 @@ function TeacherView({ children, motherId }) {
         <div ref={bottomRef} />
       </div>
 
-      <div style={{ flexShrink: 0, borderTop: "1px solid #F0EEE8", background: "white", padding: "10px 16px calc(env(safe-area-inset-bottom) + 10px)", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ flexShrink: 0, borderTop: "1px solid #F0EEE8", background: "white", padding: "8px 16px calc(env(safe-area-inset-bottom) + 10px)", display: "flex", flexDirection: "column", gap: 8 }}>
+        {/* أكثر سبب لرد «أرسلي صورة أوضح»: ظل اليد على الصفحة. نقولها قبل التصوير. */}
+        <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.6 }}>
+          📸 صوّري الصفحة كاملة، بلا ظل على الكتابة، وقرّبي الكاميرا لين تصير الأرقام واضحة.
+        </p>
         {image && (
           <div style={{ position: "relative", width: 64, height: 64, borderRadius: 10, overflow: "hidden" }}>
             <img src={image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
