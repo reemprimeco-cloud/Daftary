@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { extractFromImages } from "@/lib/visionExtract";
-import { kuwaitWeekMap, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
+import { kuwaitNow, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -13,6 +13,7 @@ export const maxDuration = 120;
 const FEATURE = "upload_homework";
 // القيمة الوحيدة اللي تقبلها القاعدة (tasks_type_check).
 const TASK_TYPES = new Set(["واجب", "حفظ", "اختبار", "مشروع"]);
+const DAY_INDEX = { "الأحد": 0, "الاثنين": 1, "الثلاثاء": 2, "الأربعاء": 3, "الخميس": 4, "الجمعة": 5, "السبت": 6 };
 
 export async function POST(req) {
   try {
@@ -21,6 +22,29 @@ export async function POST(req) {
     console.error("upload-schedule unexpected error:", e);
     return NextResponse.json({ error: "خطأ غير متوقع: " + e.message }, { status: 500 });
   }
+}
+
+// الخطة الأسبوعية تُنشر قبل بداية أسبوعها — الخميس أو الجمعة أو السبت —
+// فـ«الأحد» فيها يعني الأحد القادم، مو الأحد اللي فات قبل خمسة أيام. كان
+// النموذج يطابق اسم اليوم بتواريخ «الأسبوع الحالي» بحساب تقويمي (الأحد اللي
+// بدأ منه هذا الأسبوع)، فخطة مرفوعة يوم السبت كانت تطلع كلها بتواريخ ماضية:
+// ما تظهر باللوحة، ولا يوصل عنها أي تذكير. الحساب هنا بالخادم لا بالنموذج:
+//   الأحد–الأربعاء → الأسبوع الحالي (اليوم اللي فات صار واجباً متأخراً، وهذا صحيح)
+//   الخميس         → الأسبوع الحالي لـ«الخميس» نفسه فقط، والباقي الأسبوع القادم
+//   الجمعة والسبت   → الأسبوع القادم
+function dateForDayName(rawDay) {
+  const key = String(rawDay || "").trim().replace(/[أإآ]/g, "ا").replace(/^ال/, "");
+  const idx = Object.entries(DAY_INDEX).find(([name]) => name.replace(/[أإآ]/g, "ا").replace(/^ال/, "") === key)?.[1];
+  if (idx == null) return null;
+  const now = kuwaitNow();
+  const todayDow = now.getUTCDay();
+  const nextWeek = todayDow >= 5 || (todayDow === 4 && idx !== 4);
+  const sunday = new Date(now);
+  sunday.setUTCHours(0, 0, 0, 0);
+  sunday.setUTCDate(now.getUTCDate() - todayDow + (nextWeek ? 7 : 0));
+  const d = new Date(sunday);
+  d.setUTCDate(sunday.getUTCDate() + idx);
+  return d.toISOString().slice(0, 10);
 }
 
 async function handleUpload(req) {
@@ -39,31 +63,30 @@ async function handleUpload(req) {
     .single();
   if (cErr || !child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
 
-  const { map, sunday, thursday } = kuwaitWeekMap();
   const todayLabel = kuwaitTodayLabel();
   const currentYear = kuwaitYear();
 
-  const prompt = `أنت مساعد يقرأ صور جداول واجبات مدرسية كويتية (من إنستقرام حساب المدرسة). أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص واجبات طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
+  const prompt = `أنت مساعد يقرأ صور جداول واجبات وخطط أسبوعية مدرسية كويتية (من إنستقرام حساب المدرسة أو ورقة مطبوعة). أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
 
-السياق: اليوم ${todayLabel}. السنة الحالية ${currentYear}. الأسبوع الحالي من الأحد ${sunday} إلى الخميس ${thursday}.
-تواريخ أيام هذا الأسبوع بالتحديد:
-الأحد=${map["الأحد"]}, الاثنين=${map["الاثنين"]}, الثلاثاء=${map["الثلاثاء"]}, الأربعاء=${map["الأربعاء"]}, الخميس=${map["الخميس"]}.
+السياق: اليوم ${todayLabel}. السنة الحالية ${currentYear}.
 
-اقرأ كل صورة واستخرج كل مهمة (واجب/اختبار/مشروع) بمادتها — لا تضمّي الحفظ (قرآن أو حديث) هنا، له قسم منفصل تحت — وحدّدي حقل dueDate حسب الحالات التالية بالضبط:
-1) لو مكتوب بالصورة تاريخ صريح (مثل "24 مارس" أو "٢٠٢٦/٣/٢٤" أو "24/3")، حوّليه لصيغة YYYY-MM-DD واستخدميه كما هو حتى لو كان بعيداً عن الأسبوع الحالي (مشروع نهاية فصل، اختبار بعد أسابيع، إلخ). استخدمي سنة ${currentYear} إلا لو الشهر المذكور سابق زمنياً وبشكل واضح عن الشهر الحالي، فاستخدمي ${currentYear + 1}.
-2) لو مذكور بس اسم يوم (الأحد، الاثنين...) بدون تاريخ صريح، طابقيه بجدول الأسبوع الحالي أعلاه.
-3) لو مذكورة عبارة نسبية بدون تاريخ فعلي مرفق (مثل "نهاية الفصل الدراسي" أو "الأسبوع الثامن")، لا تخترعي تاريخاً إطلاقاً — خلّي dueDate تساوي null، واكتبي النص الأصلي كما هو بحقل details (مثلاً "تسليم: نهاية الفصل الدراسي").
+اقرئي كل صورة واستخرجي كل مهمة (واجب/اختبار/مشروع) بمادتها — لا تضمّي الحفظ (قرآن أو حديث) هنا، له قسم منفصل تحت. لكل مهمة حدّدي موعدها بأحد شكلين فقط:
+1) dueDate: لو مكتوب بالصورة تاريخ صريح (مثل "24 مارس" أو "٢٠٢٦/٣/٢٤" أو "24/3")، حوّليه لصيغة YYYY-MM-DD واستخدميه كما هو حتى لو كان بعيداً (مشروع نهاية فصل، اختبار بعد أسابيع). استخدمي سنة ${currentYear} إلا لو الشهر المذكور سابق زمنياً وبشكل واضح عن الشهر الحالي، فاستخدمي ${currentYear + 1}.
+2) dueDay: لو مذكور اسم يوم فقط (الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس) بلا تاريخ، اكتبي اسم اليوم كما هو ولا تحوّليه لتاريخ — الخادم يحسب التاريخ. وإذا كانت المهمة داخل عمود أو صف يوم معيّن في جدول أسبوعي، فذلك اليوم هو dueDay حتى لو ما كُتب داخل الخلية.
+3) لو مذكورة عبارة نسبية بلا يوم ولا تاريخ (مثل "نهاية الفصل الدراسي" أو "الأسبوع الثامن")، لا تخترعي موعداً — خلّي الاثنين null، واكتبي النص الأصلي كما هو بحقل details (مثلاً "تسليم: نهاية الفصل الدراسي").
 
-أي صفحة أو رقم درس أو ملاحظة إضافية ضعيها بحقل details أيضاً.
+نفس المادة قد تتكرر بأيام مختلفة (واجب رياضيات الأحد وواجب رياضيات الأربعاء) — هذي مهمتان منفصلتان، اكتبي كل واحدة على حدة بيومها.
 
-استخرجي أيضاً أي طلبات أو مستلزمات مدرسية إن وُجدت (بنفس منطق تحديد dueDate أعلاه لو كان لها تاريخ تسليم، وإلا null).
+أي صفحة أو رقم درس أو ملاحظة إضافية ضعيها بحقل details.
+
+استخرجي أيضاً أي طلبات أو مستلزمات مدرسية إن وُجدت (بنفس منطق الموعد أعلاه لو كان لها موعد، وإلا null).
 
 بالإضافة لذلك، استخرجي كل مطلوبات الحفظ (قرآن كريم أو حديث) بقسم منفصل تماماً عن entries، بهذا الشكل: لكل عنصر حفظ حدّدي kind ("آية" لو قرآن أو "حديث" لو حديث نبوي)، وreference هو نص المرجع بالضبط زي ما هو مكتوب بالخطة (مثل "سورة البقرة من آية ١٠ إلى ١٥" أو "حديث: إنما الأعمال بالنيات")، وdetails لأي ملاحظة إضافية (رقم الصفحة، طريقة التسميع...). لا تخترعي نطاق آيات لو مو مكتوب بالصورة بالضبط.
 
 انقلي ما هو مكتوب بالصورة حرفياً: أسماء المواد والمستلزمات ونصوص التفاصيل تُكتب كما هي، بلا تصحيح ولا توحيد ولا اختصار ولا إضافة أي كلمة من عندك. وتكرار نفس المادة أو نفس الغرض أمر طبيعي — انقليه كل مرة كما هو ولا تحذفي أي تكرار.
 
 أرجعي JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع","dueDate":"YYYY-MM-DD أو null","details":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري"}]}`;
+{"entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","details":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري"}]}`;
 
   const res = await extractFromImages({ images, prompt, motherId, childId, feature: FEATURE });
   if (!res.ok) {
@@ -73,7 +96,17 @@ async function handleUpload(req) {
   const parsed = res.parsed;
 
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-  const normalizeDueDate = (v) => (typeof v === "string" && DATE_RE.test(v) ? v : null);
+  const resolveDue = (e) => (typeof e.dueDate === "string" && DATE_RE.test(e.dueDate) ? e.dueDate : dateForDayName(e.dueDay));
+
+  // الهوية = المادة + النوع + الموعد. كانت الهوية المادة والنوع فقط، فخطة
+  // فيها «واجب رياضيات» الأحد و«واجب رياضيات» الأربعاء كانت الثانية تكتب
+  // فوق الأولى وتضيّعها. وإعادة رفع نفس الخطة تحدّث التفاصيل بدل ما تكرر
+  // (نفس المعرّف يبقى، فالتذكير المرتبط به يتحدّث بدل ما يتكرر).
+  const { data: activeTasks } = await sb
+    .from("tasks").select("id, subject, type, due_date").eq("child_id", child.id).eq("status", "active");
+  const taskKey = (s, t, d) => `${s}|${t}|${d || ""}`;
+  const known = new Map((activeTasks || []).map((t) => [taskKey(t.subject, t.type, t.due_date), t.id]));
+
   let matchedTasks = 0;
   let updatedTasks = 0;
   let matchedReqs = 0;
@@ -81,62 +114,55 @@ async function handleUpload(req) {
   let matchedMemorization = 0;
 
   for (const e of parsed.entries || []) {
-    const dueDate = normalizeDueDate(e.dueDate);
-    // التفاصيل تُحفظ كما كتبتها المدرسة بالصورة. كنا نلصق فيها «الصف
-    // بالصورة: ...» فيصير نصاً ما كتبه أحد داخل بيانات الأم.
+    const subject = String(e.subject || "").trim();
+    if (!subject) continue;
+    const dueDate = resolveDue(e);
+    // التفاصيل تُحفظ كما كتبتها المدرسة بالصورة، بلا أي إضافة من عندنا.
     const details = e.details || null;
     // القاعدة تقبل أربعة أنواع فقط، وأي نوع غيرها كان يفجّر الإدخال
     // ويضيّع الرفعة كاملة — فنرجع للواجب بدل ما نخسر المهمة.
     const type = TASK_TYPES.has(e.type) ? e.type : "واجب";
 
-    // لو فيه واجب نشط واحد بس بنفس المادة والنوع لهذا الطالب/ة، اعتبريه نفس الواجب
-    // وحدّثي تاريخه/تفاصيله بدل إضافة نسخة مكررة (تحافظ على نفس الـ id عشان التذكير المرتبط به يتحدّث بدل ما يتكرر).
-    // لو فيه أكثر من واجب نشط مطابق (مثل حفظ قرآن يومي بنفس المادة)، ما نخمّن أيهم — نضيف كسجل جديد.
-    const { data: existingTasks } = await sb
-      .from("tasks")
-      .select("id")
-      .eq("child_id", child.id)
-      .eq("subject", e.subject)
-      .eq("type", type)
-      .eq("status", "active");
-
-    if (existingTasks && existingTasks.length === 1) {
-      await sb.from("tasks").update({ due_date: dueDate, details }).eq("id", existingTasks[0].id);
+    const key = taskKey(subject, type, dueDate);
+    const existingId = known.get(key);
+    if (existingId) {
+      await sb.from("tasks").update({ details }).eq("id", existingId);
       updatedTasks++;
     } else {
-      await sb.from("tasks").insert({
+      const { data: inserted } = await sb.from("tasks").insert({
         child_id: child.id,
-        subject: e.subject,
+        subject,
         type,
         due_date: dueDate,
         details,
         status: "active",
         source: "image",
-      });
+      }).select("id").single();
+      if (inserted) known.set(key, inserted.id);
       matchedTasks++;
     }
   }
 
+  const { data: openReqs } = await sb
+    .from("requirements").select("id, item").eq("child_id", child.id).eq("bought", false);
+  const knownReqs = new Map((openReqs || []).map((r) => [r.item, r.id]));
+
   for (const r of parsed.requirements || []) {
-    const dueDate = normalizeDueDate(r.dueDate);
-
-    const { data: existingReqs } = await sb
-      .from("requirements")
-      .select("id")
-      .eq("child_id", child.id)
-      .eq("item", r.item)
-      .eq("bought", false);
-
-    if (existingReqs && existingReqs.length === 1) {
-      await sb.from("requirements").update({ due_date: dueDate }).eq("id", existingReqs[0].id);
+    const item = String(r.item || "").trim();
+    if (!item) continue;
+    const dueDate = resolveDue(r);
+    const existingId = knownReqs.get(item);
+    if (existingId) {
+      await sb.from("requirements").update({ due_date: dueDate }).eq("id", existingId);
       updatedReqs++;
     } else {
-      await sb.from("requirements").insert({
+      const { data: inserted } = await sb.from("requirements").insert({
         child_id: child.id,
-        item: r.item,
+        item,
         due_date: dueDate,
         bought: false,
-      });
+      }).select("id").single();
+      if (inserted) knownReqs.set(item, inserted.id);
       matchedReqs++;
     }
   }

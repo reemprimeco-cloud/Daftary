@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { logAiUsage } from "@/lib/aiUsage";
-import { consumeQuestion } from "@/lib/entitlements";
+import { consumeQuestion, refundQuestion } from "@/lib/entitlements";
 import {
   moeGradeInfo,
   kuwaitTerm,
@@ -9,6 +9,15 @@ import {
   searchMoeLibrary,
   matchSubjectFromText,
 } from "@/lib/moeCurriculum";
+
+// إجابة مطوّلة من النموذج تاخذ ٢٠–٤٠ ثانية، والمهلة الافتراضية القصيرة
+// كانت تقطعها فتظهر للأم كـ«Load failed» بلا تفسير (نفس ما صار بمسارات
+// الرفع قبل تحديد مهلتها).
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 529]);
+const RETRY_DELAYS_MS = [1500, 3000];
 
 export async function POST(req) {
   try {
@@ -144,7 +153,7 @@ ${questionText}
     });
   }
 
-  const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+  const requestInit = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -153,18 +162,39 @@ ${questionText}
     },
     body: JSON.stringify({
       model: "claude-sonnet-5",
-      max_tokens: 3000,
+      // النموذج يفكّر افتراضياً والتفكير يُحسب من max_tokens — بسقف ٣٠٠٠
+      // كان التفكير ياكل الحصة ويرجع الجواب مقطوعاً أو فاضياً («تعذّر
+      // توليد إجابة»). نفس الخلل اللي أصلحناه بمسارات الرفع.
+      max_tokens: 4000,
+      thinking: { type: "disabled" },
       messages: [{ role: "user", content }],
     }),
-  });
+  };
+
+  // ازدحام لحظي (429/529) يوم الحملة ما يستاهل يطلع للأم كعطل — نعيد
+  // المحاولة مرتين بتأخير قصير قبل ما نعتذر.
+  let aiRes;
+  for (let attempt = 0; ; attempt++) {
+    aiRes = await fetch("https://api.anthropic.com/v1/messages", requestInit);
+    if (aiRes.ok || !RETRYABLE_STATUS.has(aiRes.status) || attempt >= RETRY_DELAYS_MS.length) break;
+    const retryAfter = Number(aiRes.headers.get("retry-after")) * 1000;
+    const wait = Math.min(retryAfter > 0 ? retryAfter : RETRY_DELAYS_MS[attempt], 5000);
+    console.warn(`ai-teacher: Anthropic ${aiRes.status} — retry ${attempt + 1} after ${wait}ms`);
+    await new Promise((r) => setTimeout(r, wait));
+  }
 
   if (!aiRes.ok) {
     const errText = await aiRes.text();
     console.error("Anthropic API error:", aiRes.status, errText);
-    return NextResponse.json({ error: `فشل استدعاء المعلم الذكي (${aiRes.status})` }, { status: 500 });
+    // السؤال انخصم من رصيدها قبل النداء — نرجّعه، فالعطل عندنا مو عندها.
+    await refundQuestion(child.id, quota.source).catch(() => {});
+    return NextResponse.json({ error: "المعلم الذكي مشغول هاللحظة. جربي بعد دقيقة — ما انخصم سؤالك." }, { status: 503 });
   }
 
   const aiData = await aiRes.json();
+  if (aiData.stop_reason === "max_tokens") {
+    console.error("ai-teacher: answer truncated (max_tokens):", JSON.stringify(aiData.usage));
+  }
   await logAiUsage({
     motherId, childId: child.id, feature: "ai_teacher", model: "claude-sonnet-5",
     usage: aiData.usage, hadImage: !!image, attachments: 0,
