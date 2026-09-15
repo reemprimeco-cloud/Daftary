@@ -325,6 +325,19 @@ const PE_COLORS = [
   { value: "#F97316", label: "برتقالي" },
   { value: "#A855F7", label: "بنفسجي" },
 ];
+// «الصف ٦/٣» ينقلب بصرياً: الشرطة المائلة تخلي الرقمين كتلة تُرسم من
+// اليسار لليمين، والعين العربية تمشي من اليمين فتلقى ٣ أولاً وتقرأها
+// «٣/٦» — أي الصف والشعبة معكوسين. وهذا يصير بالأرقام اللاتينية والعربية
+// معاً، ولا يصلحه dir="ltr". تسمية كل رقم تنهي اللبس بأي اتجاه قراءة.
+function classLabel(grade, section) {
+  const g = arabicDigits(String(grade ?? "").trim());
+  const raw = String(section ?? "").trim();
+  if (!raw) return `الصف ${g}`;
+  // الشعبة أحياناً حرف (أ/ب) وأحياناً رقم — نعرّب الأرقام فقط.
+  const sec = /^\d+$/.test(raw) ? arabicDigits(raw) : raw;
+  return `الصف ${g} · شعبة ${sec}`;
+}
+
 const stageForGrade = (g) => (g <= 5 ? "ابتدائي" : g <= 9 ? "متوسط" : "ثانوي");
 const studentWord = (gender) => (gender === "بنات" ? "الطالبة" : "الطالب");
 
@@ -1153,7 +1166,7 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
         <Avatar child={child} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
-          <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>الصف {child.grade}/{child.section} · {child.school}</p>
+          <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{classLabel(child.grade, child.section)} · {child.school}</p>
         </div>
         <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -1303,7 +1316,7 @@ function ScheduleCard({ child, schedule, onUpload }) {
         <Avatar child={child} size={44} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
-          <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>الصف {child.grade}/{child.section}</p>
+          <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{classLabel(child.grade, child.section)}</p>
         </div>
         <button onClick={onUpload} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
           {schedule.length ? (
@@ -1397,7 +1410,7 @@ function ScheduleCard({ child, schedule, onUpload }) {
           <div ref={printRef} style={{ background: "white", padding: 24, direction: "rtl", letterSpacing: "normal" }}>
             <div style={{ textAlign: "center", marginBottom: 16, borderBottom: "2px solid #111", paddingBottom: 12 }}>
               <h2 style={{ margin: 0, fontSize: 22, color: "#111", letterSpacing: "normal" }}>جدول حصص {child.name}</h2>
-              <p style={{ margin: "6px 0 0", fontSize: 13, color: "#333" }}>{child.school} — الصف {child.grade}/{child.section}</p>
+              <p style={{ margin: "6px 0 0", fontSize: 13, color: "#333" }}>{child.school} — {classLabel(child.grade, child.section)}</p>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead>
@@ -1741,7 +1754,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         </div>
         {selectChild && autoChild && (
           <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 12, padding: 12, fontSize: 13, fontWeight: 700 }}>
-            هذا الجدول لـ {autoChild.name} — الصف {autoChild.grade}/{autoChild.section}
+            هذا الجدول لـ {autoChild.name} — {classLabel(autoChild.grade, autoChild.section)}
           </div>
         )}
         {needsChildConfirm && (
@@ -1754,7 +1767,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
                     <input type="radio" name="uploadChild" checked={childId === c.id} onChange={() => setChildId(c.id)} style={{ accentColor: "#B7A6E8" }} />
                     <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{c.name}</span>
                   </span>
-                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>الصف {c.grade}/{c.section}</span>
+                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>{classLabel(c.grade, c.section)}</span>
                 </label>
               ))}
             </div>
