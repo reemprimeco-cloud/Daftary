@@ -91,6 +91,7 @@ const KIND_TITLES = {
   exam_day_before: "تذكير اختبار غداً",
   exam_today: "اختبار اليوم",
   new_task: "واجب جديد",
+  task_day_before: "تذكير تسليم غداً",
   task_today: "موعد التسليم اليوم",
 };
 
@@ -153,6 +154,56 @@ async function sendMemorizationReminders(sb, today) {
   return memoResults.reduce((a, b) => a + b, 0);
 }
 
+// المستلزمات كانت تُستخرج من الصور وتنعرض بالبرنامج، لكن ما كان لها أي
+// تذكير — والأم تحتاج تعرف قبل بيوم عشان تشتريها، مو صبح يوم التسليم.
+// رسالة واحدة مجمّعة: خمسة أغراض لنفس اليوم رحلة شراء وحدة مو خمس رسائل.
+// وreminder_log.task_id مرتبط بجدول المهام، فنمنع التكرار باليوم وولي الأمر.
+async function sendRequirementReminders(sb, today, tomorrow) {
+  const { data: due } = await sb
+    .from("requirements")
+    .select("item, children(mother_id, name)")
+    .eq("bought", false)
+    .eq("due_date", tomorrow);
+
+  const byMother = new Map();
+  for (const r of due || []) {
+    const motherId = r.children?.mother_id;
+    if (!motherId) continue;
+    const entry = byMother.get(motherId) || { items: [], names: new Set() };
+    entry.items.push(r.item);
+    entry.names.add(r.children.name);
+    byMother.set(motherId, entry);
+  }
+
+  const results = await mapPool([...byMother.entries()], 10, async ([motherId, { items, names }]) => {
+    const { data: already } = await sb
+      .from("reminder_log")
+      .select("id")
+      .eq("mother_id", motherId)
+      .eq("kind", "requirement_day_before")
+      .gte("sent_at", `${today}T00:00:00+03:00`)
+      .limit(1);
+    if (already?.length) return 0;
+
+    const who = names.size === 1 ? [...names][0] : "العيال";
+    const text = `🎒 مستلزمات ${who} المطلوبة غداً: ${items.join("، ")}`;
+    const title = "مستلزمات غداً";
+
+    let delivered = false;
+    if (vapidConfigured()) {
+      const { data: subs } = await sb.from("push_subscriptions").select("*").eq("mother_id", motherId);
+      const oks = await Promise.all((subs || []).map((sub) => sendPush(sb, sub, { title, body: text, url: "/" })));
+      if (oks.some(Boolean)) delivered = true;
+    }
+    if (await sendToDevices(sb, motherId, title, text)) delivered = true;
+
+    if (!delivered) return 0;
+    await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind: "requirement_day_before" });
+    return 1;
+  });
+  return results.reduce((a, b) => a + b, 0);
+}
+
 export async function GET(req) {
   const auth = req.headers.get("authorization");
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -194,6 +245,16 @@ export async function GET(req) {
     .not("due_date", "is", null)
     .gte("created_at", new Date(Date.now() - 26 * 3600 * 1000).toISOString());
 
+  // الواجبات اللي موعد تسليمها بكرا. كان التذكير «قبل بيوم» للاختبارات
+  // وحدها، والواجب ما يوصل عنه شي إلا صبح يوم التسليم — وهو متأخر: ما
+  // يبقى وقت لعمله. نفس قاعدة الاختبار تنطبق عليه.
+  const { data: tasksTomorrow } = await sb
+    .from("tasks")
+    .select("*, children(mother_id, name)")
+    .neq("type", "اختبار")
+    .eq("due_date", tomorrow)
+    .eq("status", "active");
+
   // الواجبات اللي موعد تسليمها اليوم. قبل هذا كان تذكير يوم التسليم تنبيهاً
   // محلياً على الجهاز فقط، وهو يُجدول لما يُفتح التطبيق — فأم ما فتحته من
   // أيام ما كان يوصلها شي أصلاً. الاختبارات مستثناة لأن لها تذكيرها الخاص.
@@ -209,6 +270,7 @@ export async function GET(req) {
     [examsTomorrow || [], "exam_day_before", (t) => `⏰ تذكير: اختبار ${t.subject} لـ ${t.children.name} غداً — وقت المذاكرة 📚`],
     [examsToday || [], "exam_today", (t) => `⏰ اليوم اختبار ${t.subject} لـ ${t.children.name} — بالتوفيق 🌟`],
     [freshTasks || [], "new_task", (t) => `📝 واجب جديد لـ ${t.children.name}: ${t.subject} (${t.type}) — الموعد ${t.due_date}`],
+    [tasksTomorrow || [], "task_day_before", (t) => `⏰ تذكير: ${t.subject} (${t.type}) لـ ${t.children.name} موعد تسليمه غداً`],
     [tasksToday || [], "task_today", (t) => `📝 اليوم موعد تسليم ${t.subject} لـ ${t.children.name}`],
   ];
 
@@ -246,6 +308,7 @@ export async function GET(req) {
     sent += results.reduce((a, b) => a + b, 0);
   }
 
+  sent += await sendRequirementReminders(sb, today, tomorrow);
   sent += await sendMemorizationReminders(sb, today);
 
   return NextResponse.json({ ok: true, sent });
