@@ -38,12 +38,13 @@ export async function GET(req) {
   let tasks = [];
   let undatedTasks = [];
   let upcomingTasks = [];
+  let doneTasks = [];
   let requirements = [];
   let classSchedule = [];
   if (childIds.length) {
-    // الخمسة مستقلة عن بعض تماماً، وكانت تنفّذ واحداً بعد الآخر — خمس رحلات
+    // الستة مستقلة عن بعض تماماً، وكانت تنفّذ واحداً بعد الآخر — رحلات
     // شبكة متتابعة لقاعدة البيانات على كل فتحة للتطبيق. صارت رحلة وحدة.
-    const [{ data: t }, { data: u }, { data: up }, { data: r }, { data: cs }] = await Promise.all([
+    const [{ data: t }, { data: u }, { data: up }, { data: r }, { data: cs }, { data: dn }] = await Promise.all([
       // نجيب لين آخر السبت (مو الخميس بس) عشان أي واجب تاريخه صريح صادف
       // يوم جمعة/سبت (نادر، لكن ممكن بعد ميزة التواريخ البعيدة) ما يختفي.
       sb.from("tasks").select("*").in("child_id", childIds).eq("status", "active")
@@ -56,13 +57,18 @@ export async function GET(req) {
         .gt("due_date", saturday).order("due_date"),
       sb.from("requirements").select("*").in("child_id", childIds).order("created_at"),
       sb.from("class_schedule").select("*").in("child_id", childIds).order("period_number"),
+      // المنجز من هذا الأسبوع فصاعداً (أو بلا تاريخ) — يظهر بقائمة الإنجاز
+      // بعلامة ✓ ويدخل بنسبة الإنجاز. الأقدم ما يهم أحداً.
+      sb.from("tasks").select("*").in("child_id", childIds).eq("status", "done")
+        .or(`due_date.gte.${sunday},due_date.is.null`).order("due_date"),
     ]);
     tasks = t || [];
     undatedTasks = u || [];
     upcomingTasks = up || [];
     requirements = r || [];
     classSchedule = cs || [];
+    doneTasks = dn || [];
   }
 
-  return NextResponse.json({ children, tasks, undatedTasks, upcomingTasks, requirements, classSchedule, feedbackDue, weekRange: { sunday, thursday } });
+  return NextResponse.json({ children, tasks, undatedTasks, upcomingTasks, doneTasks, requirements, classSchedule, feedbackDue, weekRange: { sunday, thursday, saturday } });
 }

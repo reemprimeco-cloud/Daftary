@@ -444,6 +444,10 @@ export default function Home() {
   const [tasks, setTasks] = useState([]);
   const [undatedTasks, setUndatedTasks] = useState([]);
   const [upcomingTasks, setUpcomingTasks] = useState([]);
+  // المنجز يبقى ظاهراً بقائمة الإنجاز (✓) ويدخل بنسبة الإنجاز
+  const [doneTasks, setDoneTasks] = useState([]);
+  const [weekRange, setWeekRange] = useState(null);
+  const [planChild, setPlanChild] = useState(null);
   const [requirements, setRequirements] = useState([]);
   const [classSchedule, setClassSchedule] = useState([]);
   // طلب التقييم: الخادم يقرر متى يستحق العرض (بعد أسبوع من التسجيل وطالما
@@ -522,6 +526,8 @@ export default function Home() {
     setTasks(data.tasks || []);
     setUndatedTasks(data.undatedTasks || []);
     setUpcomingTasks(data.upcomingTasks || []);
+    setDoneTasks(data.doneTasks || []);
+    setWeekRange(data.weekRange || null);
     setRequirements(data.requirements || []);
     setClassSchedule(data.classSchedule || []);
     setFeedbackDue(!!data.feedbackDue);
@@ -622,13 +628,22 @@ export default function Home() {
     setEditingChild(null);
   }
 
-  async function handleMarkDone(taskId) {
-    const res = await fetch(`/api/tasks/${taskId}/done`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
+  // «تم» تنقل الواجب لقائمة المنجز (يبقى ظاهراً بـ✓ بالخطة الأسبوعية)،
+  // وdone=false ترجّعه لمكانه حسب تاريخه. تحديث محلي فوري بلا إعادة تحميل.
+  async function handleMarkDone(taskId, done = true) {
+    const res = await fetch(`/api/tasks/${taskId}/done`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id, done }) });
     if (!res.ok) { alert("تعذّر تحديث الواجب، حاولي مرة ثانية."); return; }
-    hapticSuccess();
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
-    setUpcomingTasks((prev) => prev.filter((t) => t.id !== taskId));
+    done ? hapticSuccess() : hapticLight();
+    const found = [...tasks, ...undatedTasks, ...upcomingTasks, ...doneTasks].find((t) => t.id === taskId);
+    const strip = (prev) => prev.filter((t) => t.id !== taskId);
+    setTasks(strip); setUndatedTasks(strip); setUpcomingTasks(strip); setDoneTasks(strip);
+    if (found) {
+      const updated = { ...found, status: done ? "done" : "active" };
+      if (done) setDoneTasks((prev) => [...prev, updated]);
+      else if (!updated.due_date) setUndatedTasks((prev) => [...prev, updated]);
+      else if (weekRange?.saturday && updated.due_date > weekRange.saturday) setUpcomingTasks((prev) => [...prev, updated]);
+      else setTasks((prev) => [...prev, updated]);
+    }
     setOpenTask(null);
   }
 
@@ -639,6 +654,7 @@ export default function Home() {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUpcomingTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setDoneTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenTask(null);
   }
 
@@ -773,7 +789,7 @@ export default function Home() {
                   <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
                 </div>
                 {children.map((c) => (
-                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} undatedTasks={undatedTasksFor(c.id)} upcomingTasks={upcomingTasksFor(c.id)} hasPEToday={hasPEToday(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} />
+                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} undatedTasks={undatedTasksFor(c.id)} upcomingTasks={upcomingTasksFor(c.id)} hasPEToday={hasPEToday(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} onOpenPlan={() => setPlanChild(c)} />
                 ))}
               </>
             )}
@@ -853,6 +869,18 @@ export default function Home() {
           onClose={() => setEditingChild(null)}
           onSave={(data) => handleUpdateChild(editingChild.id, data)}
           onDelete={() => handleDeleteChild(editingChild.id)}
+        />
+      )}
+      {planChild && (
+        <WeekPlanView
+          child={children.find((c) => c.id === planChild.id) || planChild}
+          motherId={mother.id}
+          tasks={[...weekTasksFor(planChild.id), ...undatedTasksFor(planChild.id), ...upcomingTasksFor(planChild.id)]}
+          doneTasks={doneTasks.filter((t) => t.child_id === planChild.id)}
+          weekRange={weekRange}
+          onToggle={handleMarkDone}
+          onOpenTask={setOpenTask}
+          onClose={() => setPlanChild(null)}
         />
       )}
       {showUpload && (
@@ -1164,7 +1192,7 @@ function EmptyState({ onAdd }) {
   );
 }
 
-function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOpenTask, onEdit }) {
+function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOpenTask, onEdit, onOpenPlan }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const [native, setNative] = useState(false);
   useEffect(() => setNative(isNativeApp()), []);
@@ -1194,7 +1222,13 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{classLabel(child.grade, child.section)} · {child.school}</p>
         </div>
-        <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
+        <button onClick={onOpenPlan} style={{ background: "white", color: color.text, fontSize: 12, fontWeight: 800, padding: "7px 10px", borderRadius: 10, flexShrink: 0, border: `1px solid ${color.soft}`, display: "inline-flex", alignItems: "center", gap: 5, minHeight: 34 }}>
+          <span style={{ width: 16, height: 16, borderRadius: 5, background: color.solid, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>
+          </span>
+          الخطة
+        </button>
+        <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 4px 6px 8px", flexShrink: 0 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
             <TileIcon name="pencil" size={15} />
             تعديل
@@ -1246,6 +1280,199 @@ function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOp
         )}
       </div>
     </div>
+    </div>
+  );
+}
+
+function addDays(iso, n) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function shortDate(iso) {
+  const [y, m, d] = iso.split("-");
+  return `${y}/${Number(m)}/${Number(d)}`;
+}
+
+// مربّع ✓ بمساحة لمس ٤٤ بكسل: أخضر عند الإنجاز، إطار رمادي قبله.
+function CheckBox({ checked, onClick, label }) {
+  return (
+    <button onClick={onClick} aria-label={label} aria-pressed={checked} style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", flexShrink: 0, padding: 0 }}>
+      <span style={{ width: 26, height: 26, borderRadius: 8, border: checked ? "none" : "2px solid #C9C6D6", background: checked ? "#22C55E" : "white", display: "flex", alignItems: "center", justifyContent: "center", transition: "background .15s" }}>
+        {checked && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>}
+      </span>
+    </button>
+  );
+}
+
+function ProgressRing({ pct, color, size = 78, stroke = 9 }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#ECEAF3" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} style={{ transition: "stroke-dashoffset .4s" }} />
+      </svg>
+      <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 15, color: "#1F2937" }}>{pct}%</span>
+    </div>
+  );
+}
+
+function PlanRow({ task, onToggle, onOpen }) {
+  const done = task.status === "done";
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "8px 0", borderTop: "1px solid #F3F2EE" }}>
+      <button onClick={() => onOpen(task)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: "4px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <SubjectIcon subject={task.subject} size={34} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: done ? "#9CA3AF" : "#1F2937", textDecoration: done ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {task.subject}
+            {task.type === "اختبار" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#FEE2E2", color: "#B91C1C", borderRadius: 999, padding: "2px 8px" }}>اختبار</span>}
+            {task.type === "مشروع" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#DBEAFE", color: "#1D4ED8", borderRadius: 999, padding: "2px 8px" }}>مشروع</span>}
+            {task.type === "حفظ" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#EDE9FE", color: "#5B21B6", borderRadius: 999, padding: "2px 8px" }}>حفظ</span>}
+          </p>
+          {/* النص كما كُتب بالخطة حرفياً — بلا تلخيص ولا تعديل */}
+          {task.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: done ? "#B0B3BA" : "#6B7280", lineHeight: 1.65, whiteSpace: "pre-line" }}>{renderWithNumbers(task.details)}</p>}
+        </div>
+      </button>
+      <CheckBox checked={done} label={done ? "إرجاعه لغير مكتمل" : "تم"} onClick={() => onToggle(task.id, !done)} />
+    </div>
+  );
+}
+
+// الخطة الأسبوعية للطالب/ة كقائمة إنجاز: كل واجب بسطر مع تفاصيله كما
+// كُتبت بالخطة وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر — تصميم
+// صاحبة التطبيق ١٥ سبتمبر (بلا شريط تبويبات خاص؛ تنفتح من بطاقة الطالب/ة).
+function WeekPlanView({ child, motherId, tasks, doneTasks, weekRange, onToggle, onOpenTask, onClose }) {
+  const color = PALETTE[child.color_idx % PALETTE.length];
+  const [filter, setFilter] = useState("all");
+  const [memo, setMemo] = useState([]);
+
+  useEffect(() => {
+    fetch(`/api/memorization?childId=${child.id}&motherId=${motherId}`)
+      .then((r) => r.json()).then((d) => setMemo(d.items || [])).catch(() => {});
+  }, [child.id, motherId]);
+
+  async function toggleMemo(id) {
+    const flip = (prev) => prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it));
+    setMemo(flip);
+    hapticLight();
+    const res = await fetch(`/api/memorization/${id}/toggle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
+    if (!res.ok) setMemo(flip);
+  }
+
+  // ترتيب السطور داخل اليوم = ترتيب استخراجها من الخطة (created_at)، فلا
+  // يتغير مكان الواجب لما تعلّمه الأم ✓ أو تتراجع.
+  const all = [...tasks, ...doneTasks].sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+  const isDone = (t) => t.status === "done";
+  const show = (t) => filter === "all" || (filter === "open" && !isDone(t)) || (filter === "done" && isDone(t)) || (filter === "exam" && t.type === "اختبار");
+  const memoShown = memo.filter((m) => filter === "all" || (filter === "open" && !m.done) || (filter === "done" && m.done));
+
+  const total = all.length + memo.length;
+  const doneCount = all.filter(isDone).length + memo.filter((m) => m.done).length;
+  const pct = total ? Math.round((doneCount / total) * 100) : 0;
+  const female = child.gender === "بنات";
+  const mood = total === 0 ? "ما فيه واجبات هذا الأسبوع 🎉" : pct === 100 ? `أكملتِ كل شي يا ${child.name} 🎉` : pct === 0 ? "يلا نبدأ 💪" : `أحسنت يا ${child.name} 💜`;
+
+  const sunday = weekRange?.sunday;
+  const saturday = weekRange?.saturday || (sunday ? addDays(sunday, 6) : null);
+  const groups = [];
+  if (sunday) {
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(sunday, i);
+      const items = all.filter((t) => t.due_date === date && show(t));
+      if (items.length) groups.push({ key: date, label: FULL_DAY_NAMES[i], sub: shortDate(date), items, tone: "day" });
+    }
+  }
+  const upcoming = all.filter((t) => t.due_date && saturday && t.due_date > saturday && show(t));
+  if (upcoming.length) groups.push({ key: "upcoming", label: "بعد هذا الأسبوع", items: upcoming, tone: "upcoming" });
+  const undated = all.filter((t) => !t.due_date && show(t));
+  if (undated.length) groups.push({ key: "undated", label: "بدون تاريخ محدد", items: undated, tone: "undated" });
+
+  const chips = [["all", "الكل"], ["open", "غير مكتمل"], ["done", "مكتمل"], ["exam", "اختبارات"]];
+  const groupDone = (items) => items.filter(isDone).length;
+
+  return (
+    <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 45, background: "#F7F5FC", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 12px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={onClose} aria-label="رجوع" style={{ background: "#F3F4F6", fontSize: 20, width: 38, height: 38, borderRadius: 12, flexShrink: 0 }}>←</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontWeight: 900, fontSize: 17, color: "#3F3566" }}>الخطة الأسبوعية</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{child.name} · {classLabel(child.grade, child.section)} · {child.school}</p>
+        </div>
+        <Avatar child={child} size={44} />
+      </div>
+
+      <div className="app-scroll" style={{ padding: "14px 16px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ background: "white", borderRadius: 18, padding: 14, display: "flex", alignItems: "center", gap: 14, border: `1px solid ${color.soft}` }}>
+          <ProgressRing pct={pct} color={color.solid} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: "#1F2937" }}>{doneCount} من {total} مكتمل</p>
+            <p style={{ margin: "3px 0 0", fontSize: 13, color: "#6B7280" }}>{mood}</p>
+          </div>
+          {total > 0 && pct >= 80 && (
+            <div style={{ flexShrink: 0, background: "#FFF7E6", color: "#8C6027", borderRadius: 14, padding: "8px 10px", fontSize: 11, fontWeight: 800, textAlign: "center", lineHeight: 1.4 }}>
+              🏆<br />{female ? "مستمرة" : "مستمر"} نحو التميز
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 6, background: "white", borderRadius: 14, padding: 4, border: "1px solid #EEEDE8" }}>
+          {chips.map(([key, label]) => (
+            <button key={key} onClick={() => setFilter(key)} style={{ flex: 1, padding: "8px 4px", borderRadius: 11, fontSize: 12.5, fontWeight: 800, background: filter === key ? color.solid : "transparent", color: filter === key ? "white" : "#6B7280", minHeight: 36 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {groups.length === 0 && memoShown.length === 0 && (
+          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>
+            {total === 0 ? "ما فيه واجبات هذا الأسبوع — ارفعي الخطة الأسبوعية من الرئيسية." : "ما فيه شي بهالفلتر."}
+          </p>
+        )}
+
+        {groups.map((g) => (
+          <div key={g.key} style={{ background: "white", borderRadius: 18, overflow: "hidden", border: "1px solid #EEEDE8" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: g.tone === "undated" ? "#FEF3C7" : g.tone === "upcoming" ? "#EBF4FA" : color.bg }}>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: g.tone === "undated" ? "#92400E" : g.tone === "upcoming" ? "#31607C" : color.text }}>{g.label}</p>
+              {g.sub && <span style={{ fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>{g.sub}</span>}
+              <span style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 800, color: groupDone(g.items) === g.items.length ? "#15803D" : "#6B7280", background: "white", borderRadius: 999, padding: "3px 9px" }}>
+                {groupDone(g.items) === g.items.length ? "✓ " : ""}{groupDone(g.items)} من {g.items.length}
+              </span>
+            </div>
+            <div style={{ padding: "0 12px" }}>
+              {g.items.map((t) => <PlanRow key={t.id} task={t} onToggle={onToggle} onOpen={onOpenTask} />)}
+            </div>
+          </div>
+        ))}
+
+        {memoShown.length > 0 && (
+          <div style={{ background: "white", borderRadius: 18, overflow: "hidden", border: "1px solid #EEEDE8" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#EDE9FE" }}>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: "#5B21B6" }}>الحفظ والتسميع</p>
+              <span style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 800, color: "#6B7280", background: "white", borderRadius: 999, padding: "3px 9px" }}>
+                {memo.filter((m) => m.done).length} من {memo.length}
+              </span>
+            </div>
+            <div style={{ padding: "0 12px" }}>
+              {memoShown.map((m) => (
+                <div key={m.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "8px 0", borderTop: "1px solid #F3F2EE" }}>
+                  <div style={{ flex: 1, minWidth: 0, padding: "4px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <SubjectIcon subject={m.kind === "حديث" ? "التربية الإسلامية" : "القرآن الكريم"} size={34} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: m.done ? "#9CA3AF" : "#1F2937", textDecoration: m.done ? "line-through" : "none" }}>{m.kind === "حديث" ? "حديث" : "القرآن الكريم"} · {m.reference}</p>
+                      {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: m.done ? "#B0B3BA" : "#6B7280", lineHeight: 1.65 }}>{m.details}</p>}
+                    </div>
+                  </div>
+                  <CheckBox checked={m.done} label={m.done ? "إرجاعه لغير مكتمل" : "تم"} onClick={() => toggleMemo(m.id)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1536,9 +1763,15 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
             إضافة تذكير (قبل يوم)
           </a>
         )}
-        <button onClick={() => onMarkDone(task.id)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
-          {meta.done}
-        </button>
+        {task.status === "done" ? (
+          <button onClick={() => onMarkDone(task.id, false)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
+            إرجاعه لغير مكتمل
+          </button>
+        ) : (
+          <button onClick={() => onMarkDone(task.id, true)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
+            {meta.done}
+          </button>
+        )}
         <button onClick={() => onDelete(task.id)} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
           حذف الواجب (دخل غلط)
         </button>

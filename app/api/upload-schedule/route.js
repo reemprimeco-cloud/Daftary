@@ -137,8 +137,10 @@ async function handleUpload({ childId, images }, motherId) {
   // فيها «واجب رياضيات» الأحد و«واجب رياضيات» الأربعاء كانت الثانية تكتب
   // فوق الأولى وتضيّعها. وإعادة رفع نفس الخطة تحدّث التفاصيل بدل ما تكرر
   // (نفس المعرّف يبقى، فالتذكير المرتبط به يتحدّث بدل ما يتكرر).
+  // المنجز (done) يدخل بالمطابقة كذلك — وإلا إعادة رفع نفس الخطة بعد ما
+  // علّمت الأم واجباً «تم» تنشئ نسخة ثانية منه غير منجزة.
   const { data: activeTasks } = await sb
-    .from("tasks").select("id, subject, type, due_date").eq("child_id", child.id).eq("status", "active");
+    .from("tasks").select("id, subject, type, due_date").eq("child_id", child.id).in("status", ["active", "done"]);
   const taskKey = (s, t, d) => `${s}|${t}|${d || ""}`;
   const known = new Map((activeTasks || []).map((t) => [taskKey(t.subject, t.type, t.due_date), t.id]));
 
