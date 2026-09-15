@@ -52,10 +52,13 @@ export default function CropModal({ src, onDone, onCancel }) {
       <p style={{ margin: "0 16px 8px", color: "#C7C2D4", fontSize: 12, lineHeight: 1.6 }}>
         اسحبي الإطار وكبّريه أو صغّريه من أطرافه لين يغطي السؤال فقط.
       </p>
-      <div style={{ flex: 1, minHeight: 0, padding: "0 8px" }}>
-        {/* cropperjs يتحكم بحجم الصورة بنفسه؛ نعطيه حاوية بارتفاع كامل */}
-        <div style={{ height: "100%" }}>
-          <img ref={imgRef} src={src} alt="" style={{ display: "block", maxWidth: "100%" }} />
+      {/* cropperjs ياخذ مقاس الحاوية من ارتفاعها الفعلي — وبداخل flex الارتفاع
+          النسبي يصير auto فتتمدد الحاوية على طول الصورة (١٥٦٨ بكسل) وتدفع
+          الأزرار تحت الشاشة. الحاوية المطلقة داخل عنصر نسبي تعطيه ارتفاعاً
+          محدداً = المساحة المتبقية بالضبط. */}
+      <div style={{ flex: 1, minHeight: 0, position: "relative", margin: "0 8px", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0 }}>
+          <img ref={imgRef} src={src} alt="" style={{ display: "block", maxWidth: "100%", maxHeight: "100%" }} />
         </div>
       </div>
       <div style={{ flexShrink: 0, display: "flex", gap: 8, padding: "10px 16px calc(env(safe-area-inset-bottom) + 12px)" }}>
