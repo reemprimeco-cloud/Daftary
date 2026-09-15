@@ -447,7 +447,9 @@ export default function Home() {
   // المنجز يبقى ظاهراً بقائمة الإنجاز (✓) ويدخل بنسبة الإنجاز
   const [doneTasks, setDoneTasks] = useState([]);
   const [weekRange, setWeekRange] = useState(null);
-  const [planChild, setPlanChild] = useState(null);
+  // الرئيسية = الخطة الأسبوعية كقائمة إنجاز؛ مع أكثر من طالب/ة نعرض واحداً
+  // ونبدّل بينهم من شريط علوي (الاختيار محفوظ بالجهاز).
+  const [planChildId, setPlanChildId] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("daftary_plan_child") : null));
   const [requirements, setRequirements] = useState([]);
   const [classSchedule, setClassSchedule] = useState([]);
   // طلب التقييم: الخادم يقرر متى يستحق العرض (بعد أسبوع من التسجيل وطالما
@@ -717,6 +719,7 @@ export default function Home() {
     );
   }
 
+  const planChild = children.find((c) => c.id === planChildId) || children[0] || null;
   const weekTasksFor = (childId) => tasks.filter((t) => t.child_id === childId);
   const undatedTasksFor = (childId) => undatedTasks.filter((t) => t.child_id === childId);
   const upcomingTasksFor = (childId) => upcomingTasks.filter((t) => t.child_id === childId);
@@ -779,18 +782,30 @@ export default function Home() {
         <PermissionsBanner />
         {feedbackDue && <FeedbackBanner onOpen={() => setShowFeedback(true)} />}
         {view === "dashboard" ? (
-          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
             {children.length === 0 ? (
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>واجبات هذا الأسبوع</span>
+                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>الخطة الأسبوعية</span>
                   <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
                 </div>
-                {children.map((c) => (
-                  <ChildCard key={c.id} child={c} tasks={weekTasksFor(c.id)} undatedTasks={undatedTasksFor(c.id)} upcomingTasks={upcomingTasksFor(c.id)} hasPEToday={hasPEToday(c.id)} onOpenTask={setOpenTask} onEdit={() => setEditingChild(c)} onOpenPlan={() => setPlanChild(c)} />
-                ))}
+                {children.length > 1 && (
+                  <ChildSwitcher children={children} selectedId={planChild.id} onSelect={(id) => { setPlanChildId(id); try { localStorage.setItem("daftary_plan_child", id); } catch {} }} />
+                )}
+                <WeekPlanPanel
+                  key={planChild.id}
+                  child={planChild}
+                  motherId={mother.id}
+                  tasks={[...weekTasksFor(planChild.id), ...undatedTasksFor(planChild.id), ...upcomingTasksFor(planChild.id)]}
+                  doneTasks={doneTasks.filter((t) => t.child_id === planChild.id)}
+                  weekRange={weekRange}
+                  hasPEToday={hasPEToday(planChild.id)}
+                  onToggle={handleMarkDone}
+                  onOpenTask={setOpenTask}
+                  onEdit={() => setEditingChild(planChild)}
+                />
               </>
             )}
           </div>
@@ -869,18 +884,6 @@ export default function Home() {
           onClose={() => setEditingChild(null)}
           onSave={(data) => handleUpdateChild(editingChild.id, data)}
           onDelete={() => handleDeleteChild(editingChild.id)}
-        />
-      )}
-      {planChild && (
-        <WeekPlanView
-          child={children.find((c) => c.id === planChild.id) || planChild}
-          motherId={mother.id}
-          tasks={[...weekTasksFor(planChild.id), ...undatedTasksFor(planChild.id), ...upcomingTasksFor(planChild.id)]}
-          doneTasks={doneTasks.filter((t) => t.child_id === planChild.id)}
-          weekRange={weekRange}
-          onToggle={handleMarkDone}
-          onOpenTask={setOpenTask}
-          onClose={() => setPlanChild(null)}
         />
       )}
       {showUpload && (
@@ -1192,98 +1195,6 @@ function EmptyState({ onAdd }) {
   );
 }
 
-function ChildCard({ child, tasks, undatedTasks, upcomingTasks, hasPEToday, onOpenTask, onEdit, onOpenPlan }) {
-  const color = PALETTE[child.color_idx % PALETTE.length];
-  const [native, setNative] = useState(false);
-  useEffect(() => setNative(isNativeApp()), []);
-  // معظم المهام تقع الأحد-الخميس (أيام الدراسة)، لكن تاريخ صريح مستخرج من صورة
-  // (ميزة التواريخ البعيدة) ممكن نادراً يصادف جمعة/سبت — نعرضها بدل ما تختفي.
-  const byDay = FULL_DAY_NAMES.map((day) => ({
-    day,
-    items: tasks.filter((t) => FULL_DAY_NAMES[new Date(t.due_date + "T00:00:00").getDay()] === day),
-  }));
-  return (
-    <div>
-      {hasPEToday && (
-        <div style={{ marginBottom: 6, marginInlineStart: 4 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#FDF3E7", color: "#8C6027", fontSize: 11, fontWeight: 800, padding: "4px 10px", borderRadius: 999 }}>
-            <img src="/icons/pe.png" alt="" width={15} height={15} style={{ display: "block" }} />
-            بدنية اليوم
-            {child.pe_uniform_color && (
-              <span style={{ width: 9, height: 9, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
-            )}
-          </span>
-        </div>
-      )}
-    <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, background: color.bg }}>
-        <Avatar child={child} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
-          <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{classLabel(child.grade, child.section)} · {child.school}</p>
-        </div>
-        <button onClick={onOpenPlan} style={{ background: "white", color: color.text, fontSize: 12, fontWeight: 800, padding: "7px 10px", borderRadius: 10, flexShrink: 0, border: `1px solid ${color.soft}`, display: "inline-flex", alignItems: "center", gap: 5, minHeight: 34 }}>
-          <span style={{ width: 16, height: 16, borderRadius: 5, background: color.solid, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>
-          </span>
-          الخطة
-        </button>
-        <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 4px 6px 8px", flexShrink: 0 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <TileIcon name="pencil" size={15} />
-            تعديل
-          </span>
-        </button>
-      </div>
-      <div style={{ background: "white", padding: 12 }}>
-        {tasks.length === 0 && undatedTasks.length === 0 && upcomingTasks.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا واجبات هذا الأسبوع 🎉</p>}
-        {byDay.filter((d) => d.items.length).map(({ day, items }) => (
-          <div key={day} style={{ marginBottom: 8 }}>
-            <p style={{ fontSize: 12, fontWeight: 800, color: "#9CA3AF", margin: "0 0 4px" }}>{day}</p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {items.map((t) => (
-                <button key={t.id} onClick={() => onOpenTask(t)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: color.soft, color: color.text, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <TypeGlyph type={t.type} native={native} /> {t.subject}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-        {undatedTasks.length > 0 && (
-          <div style={{ marginBottom: upcomingTasks.length > 0 ? 8 : 0 }}>
-            <p style={{ fontSize: 12, fontWeight: 800, color: "#B45309", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-              {native ? <Icon name="warning" size={13} /> : <TileIcon name="warning" size={17} />} مهام بدون تاريخ محدد
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {undatedTasks.map((t) => (
-                <button key={t.id} onClick={() => onOpenTask(t)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: "#FEF3C7", color: "#92400E", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <TypeGlyph type={t.type} native={native} /> {t.subject}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {upcomingTasks.length > 0 && (
-          <div>
-            <p style={{ fontSize: 12, fontWeight: 800, color: "#31607C", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-              {native ? <Icon name="calendar" size={13} /> : <TileIcon name="calendar" size={17} />} مهام قادمة (بعد هذا الأسبوع)
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {upcomingTasks.map((t) => (
-                <button key={t.id} onClick={() => onOpenTask(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "8px 10px", borderRadius: 10, fontWeight: 700, background: "#EBF4FA", color: "#31607C", textAlign: "right" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><TypeGlyph type={t.type} native={native} /> {t.subject}</span>
-                  <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 700 }}>{fmtDate(t.due_date)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-    </div>
-  );
-}
-
 function addDays(iso, n) {
   const d = new Date(iso + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + n);
@@ -1342,10 +1253,28 @@ function PlanRow({ task, onToggle, onOpen }) {
   );
 }
 
-// الخطة الأسبوعية للطالب/ة كقائمة إنجاز: كل واجب بسطر مع تفاصيله كما
-// كُتبت بالخطة وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر — تصميم
-// صاحبة التطبيق ١٥ سبتمبر (بلا شريط تبويبات خاص؛ تنفتح من بطاقة الطالب/ة).
-function WeekPlanView({ child, motherId, tasks, doneTasks, weekRange, onToggle, onOpenTask, onClose }) {
+// شريط تبديل الطالب/ة فوق الخطة لما يكون فيه أكثر من واحد.
+function ChildSwitcher({ children, selectedId, onSelect }) {
+  return (
+    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+      {children.map((c) => {
+        const pal = PALETTE[c.color_idx % PALETTE.length];
+        const on = c.id === selectedId;
+        return (
+          <button key={c.id} onClick={() => onSelect(c.id)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px 6px 8px", borderRadius: 999, background: on ? pal.solid : "white", color: on ? "white" : pal.text, border: `1px solid ${on ? pal.solid : pal.soft}`, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", minHeight: 40, flexShrink: 0 }}>
+            <Avatar child={c} size={26} />
+            {c.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// الخطة الأسبوعية للطالب/ة كقائمة إنجاز — وهي الواجهة الرئيسية للتطبيق
+// (قرار صاحبة التطبيق ١٥ سبتمبر): كل واجب بسطر مع تفاصيله كما كُتبت بالخطة
+// وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر.
+function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const [filter, setFilter] = useState("all");
   const [memo, setMemo] = useState([]);
@@ -1395,17 +1324,30 @@ function WeekPlanView({ child, motherId, tasks, doneTasks, weekRange, onToggle, 
   const groupDone = (items) => items.filter(isDone).length;
 
   return (
-    <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 45, background: "#F7F5FC", display: "flex", flexDirection: "column" }}>
-      <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 12px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
-        <button onClick={onClose} aria-label="رجوع" style={{ background: "#F3F4F6", fontSize: 20, width: 38, height: 38, borderRadius: 12, flexShrink: 0 }}>←</button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontWeight: 900, fontSize: 17, color: "#3F3566" }}>الخطة الأسبوعية</p>
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{child.name} · {classLabel(child.grade, child.section)} · {child.school}</p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}`, background: color.bg }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14 }}>
+            <Avatar child={child} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
+              <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{classLabel(child.grade, child.section)} · {child.school}</p>
+              {hasPEToday && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, background: "white", color: "#8C6027", fontSize: 11, fontWeight: 800, padding: "3px 9px", borderRadius: 999 }}>
+                  <img src="/icons/pe.png" alt="" width={14} height={14} style={{ display: "block" }} />
+                  بدنية اليوم
+                  {child.pe_uniform_color && <span style={{ width: 9, height: 9, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />}
+                </span>
+              )}
+            </div>
+            <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <TileIcon name="pencil" size={15} />
+                تعديل
+              </span>
+            </button>
+          </div>
         </div>
-        <Avatar child={child} size={44} />
-      </div>
 
-      <div className="app-scroll" style={{ padding: "14px 16px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ background: "white", borderRadius: 18, padding: 14, display: "flex", alignItems: "center", gap: 14, border: `1px solid ${color.soft}` }}>
           <ProgressRing pct={pct} color={color.solid} />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1429,7 +1371,7 @@ function WeekPlanView({ child, motherId, tasks, doneTasks, weekRange, onToggle, 
 
         {groups.length === 0 && memoShown.length === 0 && (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>
-            {total === 0 ? "ما فيه واجبات هذا الأسبوع — ارفعي الخطة الأسبوعية من الرئيسية." : "ما فيه شي بهالفلتر."}
+            {total === 0 ? "ما فيه واجبات هذا الأسبوع — ارفعي الخطة الأسبوعية من زر «رفع جدول» فوق." : "ما فيه شي بهالفلتر."}
           </p>
         )}
 
@@ -1472,7 +1414,6 @@ function WeekPlanView({ child, motherId, tasks, doneTasks, weekRange, onToggle, 
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }
