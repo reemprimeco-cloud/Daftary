@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PRODUCTS } from "@/lib/plans";
 import { APP_PRODUCTS } from "@/lib/appPlans";
+import { appPaywallEnabled } from "@/lib/appEntitlements";
 import AdminLogin from "./AdminLogin";
 import AdminLogoutButton from "./AdminLogoutButton";
 import RefreshPage from "./RefreshPage";
@@ -365,6 +366,13 @@ function AdminDashboard({ stats }) {
 
         <AppleNotificationTest />
 
+        {/* حالة الجدار المدفوع تُقرأ من متغير البيئة بالخادم — ما ينشاف من
+            الكود ولا من قاعدة البيانات، فهذا المكان الوحيد الي يبيّن فعلاً
+            هل الاشتراك مُلزم للجميع الحين أو لا. */}
+        <p style={{ margin: "0 0 14px", fontSize: 12.5, fontWeight: 800, padding: "8px 12px", borderRadius: 10,
+          background: appPaywallEnabled() ? "#F0FDF4" : "#FEF2F2", color: appPaywallEnabled() ? "#166534" : "#B91C1C" }}>
+          {appPaywallEnabled() ? "الاشتراك مُلزم للجميع من أول دخول ✓" : "⚠️ الاشتراك معطّل (APP_PAYWALL_ENABLED غير مضبوط) — التطبيق مجاني للكل"}
+        </p>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 0 8px" }}>
           <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>المسجّلات</h2>
           <span style={{ fontSize: 12, color: "#9CA3AF" }}>

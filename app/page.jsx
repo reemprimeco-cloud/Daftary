@@ -735,7 +735,6 @@ export default function Home() {
             {pull > 8 && <div className="ios-spinner" />}
           </div>
         )}
-        {appAccess?.phase === "grace" && <AppAccessGraceBanner enforceAt={appAccess.enforceAt} />}
         <PermissionsBanner />
         {feedbackDue && <FeedbackBanner onOpen={() => setShowFeedback(true)} />}
         {view === "dashboard" ? (
@@ -2253,25 +2252,9 @@ function FeedbackModal({ onClose, onDone }) {
   );
 }
 
-// شريط تنبيه بفترة السماح — يظهر فوق أي شاشة طول ما الاشتراك الشامل مفعّل
-// بس لسا قبل تاريخ الإلزام. التطبيق يبقى مجانياً بالكامل بهالفترة.
-function AppAccessGraceBanner({ enforceAt }) {
-  const dateLabel = enforceAt
-    ? new Date(enforceAt).toLocaleDateString("ar-KW", { day: "numeric", month: "long", year: "numeric" })
-    : "";
-  return (
-    <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, margin: "0 16px 12px", fontSize: 12, fontWeight: 700, lineHeight: 1.7, display: "flex", alignItems: "center", gap: 10 }}>
-      <TileIcon name="gift" size={26} />
-      <span>
-        استمتعي بتجربة مجانية لمدة {arabicDigits(APP_PLAN.GRACE_DAYS)} أيام — حتى {dateLabel}، وبعدها اشتراك سنوي بسيط حسب عدد أبنائك.
-      </span>
-    </div>
-  );
-}
-
-// شاشة القفل الكاملة — تظهر بدل التطبيق كله لما ينتهي الاشتراك الشامل
-// بعد تاريخ الإلزام. المعلم الذكي مستثنى (له اشتراكه المستقل)، فهذي
-// الشاشة ما تظهر أبداً وطالما appPaywallState() يرجّع غير "enforced".
+// شاشة القفل الكاملة — تظهر بدل التطبيق كله لمن ما عنده اشتراك سارٍ.
+// المعلم الذكي مستثنى (له اشتراكه المستقل)، فهذي الشاشة ما تظهر أبداً
+// طالما appPaywallState() يرجّع غير "enforced".
 // منطق الشراء والباقات مشترك بين شاشة القفل الكاملة (AppAccessPaywall)
 // وبطاقة إدارة الاشتراك بصفحة الحساب (SubscriptionManageCard) — نفس
 // الأزرار بالضبط، يفرق بس الإطار حولها.
@@ -2490,7 +2473,9 @@ function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, o
             اشتراك دفتري السنوي
           </h2>
           <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.75, color: "#6B7280" }}>
-            انتهت فترة الاستخدام المجاني. اشتركي لمتابعة الجداول والواجبات والتذكيرات لكل أبنائك ({studentsCount} {studentsCount === 1 ? "طالب/ة" : "طلاب"}).
+            {studentsCount > 0
+              ? `اشتركي لمتابعة الجداول والواجبات والتذكيرات لكل أبنائك (${arabicDigits(studentsCount)} ${studentsCount === 1 ? "طالب/ة" : "طلاب"}).`
+              : "اختاري الباقة حسب عدد أبنائك، وبعدها أضيفيهم وارفعي جداولهم مباشرة."}
           </p>
         </div>
 
@@ -3217,15 +3202,6 @@ function appAccessSummary(access) {
       bg: "#F0FDF4",
       detail: `يغطي ${arabicDigits(n)} ${n === 1 ? "طالب/ة" : "طلاب"} · حتى ${dateAr(sub.period_end)}`,
       action: "تغيير الباقة",
-    };
-  }
-  if (access.phase === "grace") {
-    return {
-      status: "تجربة مجانية",
-      color: "#8C6027",
-      bg: "#FDF3E7",
-      detail: access.enforceAt ? `مجاني حتى ${dateAr(access.enforceAt)}` : "",
-      action: "اشتركي الآن",
     };
   }
   if (sub?.period_end) {

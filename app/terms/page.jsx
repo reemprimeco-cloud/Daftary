@@ -1,5 +1,5 @@
 import { PLAN, SUBSCRIPTION_TIERS } from "@/lib/plans";
-import { APP_PLAN, APP_TIERS } from "@/lib/appPlans";
+import { APP_TIERS } from "@/lib/appPlans";
 import WebPaymentTerms from "./WebPaymentTerms";
 
 export const metadata = {
@@ -7,14 +7,7 @@ export const metadata = {
   description: "شروط استخدام تطبيق دفتري وأحكام الاشتراك في المعلم الذكي",
 };
 
-const UPDATED = "١١ سبتمبر ٢٠٢٦";
-
-// صياغة مدة التجربة بالعربي الصحيح — «٧ يوماً» ركيك، و«أسبوع» أوضح.
-// مشتقّة من نفس ثابت الكود عشان النص ما يناقض السلوك الفعلي أبداً.
-const GRACE_LABEL =
-  APP_PLAN.GRACE_DAYS === 7 ? "لمدة أسبوع"
-  : APP_PLAN.GRACE_DAYS === 14 ? "لمدة أسبوعين"
-  : `لمدة ${APP_PLAN.GRACE_DAYS} يوماً`;
+const UPDATED = "١٥ سبتمبر ٢٠٢٦";
 
 export default function TermsPage() {
   return (
@@ -60,10 +53,8 @@ export default function TermsPage() {
             باقتك الحالية، تحتاجين ترقية الباقة — والترقية تتم بضغطة واحدة وتُحسب الفروق تلقائياً عبر متجر آبل.
           </p>
           <p style={{ ...p, background: "#FDF3E7", padding: "12px 14px", borderRadius: 12, color: "#8C6027", fontSize: 14 }}>
-            <strong>تجربة مجانية:</strong> إذا سجَّلتِ حساباً جديداً، تحصلين على تجربة مجانية {GRACE_LABEL} من
-            تاريخ تسجيلك. أما الحسابات المسجَّلة قبل تفعيل هذا الاشتراك فتجربتها تستمر حتى التاريخ المعروض داخل
-            التطبيق (ولا تقل عن {GRACE_LABEL}). بعد انتهاء التجربة، يتطلّب الاستمرار في استخدام دفتري اشتراكاً
-            سارياً.
+            يبدأ الاشتراك من لحظة إنشاء الحساب، ولا تتضمن خدمة دفتري فترة تجربة مجانية. يمكنك حذف حسابك في أي
+            وقت من صفحة «حسابي».
           </p>
         </Section>
 
