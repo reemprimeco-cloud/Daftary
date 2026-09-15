@@ -16,6 +16,8 @@ import {
   requestPermission,
   registerPushDevice,
   attachPullToRefresh,
+  rotateDataUrl,
+  resizeDataUrl,
 } from "@/lib/native";
 import { installAuthFetch } from "@/lib/authFetch";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
@@ -359,7 +361,7 @@ function fmtDate(dateStr) {
 }
 
 
-async function resizeToDataUrl(file, maxSize = 900, square = false) {
+async function resizeToDataUrl(file, maxSize = 900, square = false, quality = 0.82) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -378,7 +380,7 @@ async function resizeToDataUrl(file, maxSize = 900, square = false) {
           canvas.width = width; canvas.height = height;
           canvas.getContext("2d").drawImage(img, 0, 0, width, height);
         }
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
+        resolve(canvas.toDataURL("image/jpeg", quality));
       };
       img.onerror = reject;
       img.src = e.target.result;
@@ -1690,7 +1692,9 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
 
   async function handleFiles(e) {
     const files = Array.from(e.target.files || []);
-    const urls = await Promise.all(files.map((f) => resizeToDataUrl(f)));
+    // ٩٠٠ بكسل كانت تمحي أسماء المعلمات بجدول الحصص فيخمّنها النموذج.
+    // ١٥٦٨ هو أقصى ضلع تستفيد منه واجهة التحليل.
+    const urls = await Promise.all(files.map((f) => resizeToDataUrl(f, 1568, false, 0.9)));
     setImages((prev) => [...prev, ...urls]);
   }
 
@@ -1712,13 +1716,38 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
     }
   }
 
+  async function post(imgs) {
+    // رفعنا دقة الصور عشان النموذج يقرأ أسماء المعلمات، وسقف حجم الطلب
+    // ٤٫٥ ميجا يُرفض قبل ما يوصل السيرفر — أي رفض هنا يطلع للأم كعطل
+    // بلا سبب. لو الحزمة كبرت نصغّرها خطوة وحدة بدل ما نخسر الطلب كله.
+    let payload = imgs;
+    if (imgs.reduce((n, s) => n + s.length, 0) > 3_500_000) {
+      payload = await Promise.all(imgs.map((img) => resizeDataUrl(img, 1100)));
+    }
+    const body = selectChild
+      ? { motherId, childId: effectiveChildId, images: payload }
+      : { motherId, school, images: payload };
+    const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    return data;
+  }
+
   async function run() {
     setStatus("loading");
     try {
-      const body = selectChild ? { motherId, childId: effectiveChildId, images } : { motherId, school, images };
-      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      // كثير من الجداول المدرسية مطبوعة بالعرض، فتنرفع مقلوبة ٩٠ درجة
+      // والنص العربي المقلوب ما ينقرأ. السيرفر يكتشفها ويطلب التدوير،
+      // وندوّرها هنا بالجهاز ونعيد بلا ما نطلب من الأم شي. نكرر لأن
+      // تقدير الزاوية نفسه ممكن يطلع ناقصاً بالمحاولة الأولى.
+      let current = images;
+      let data = await post(current);
+      for (let i = 0; data.needsRotation && i < 3; i++) {
+        current = await Promise.all(current.map((img) => rotateDataUrl(img, data.needsRotation)));
+        setImages(current);
+        data = await post(current);
+      }
+      if (data.needsRotation) throw new Error("ما قدرنا نضبط اتجاه الصورة. صوّري الجدول وهو معتدل وجربي مرة ثانية.");
       setSummary(data);
       setStatus("done");
       setImages([]);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { logAiUsage } from "@/lib/aiUsage";
+import { extractFromImages } from "@/lib/visionExtract";
 import { kuwaitTodayStr, kuwaitWeekMap, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
@@ -26,11 +26,6 @@ async function handleUpload(req) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error("ANTHROPIC_API_KEY is not set");
-    return NextResponse.json({ error: "مفتاح الذكاء الاصطناعي غير مُعدّ بالسيرفر" }, { status: 500 });
-  }
-
   const sb = supabaseAdmin();
   const { data: child, error: cErr } = await sb
     .from("children")
@@ -44,10 +39,7 @@ async function handleUpload(req) {
   const todayLabel = kuwaitTodayLabel();
   const currentYear = kuwaitYear();
 
-  const content = [
-    {
-      type: "text",
-      text: `أنت مساعد يقرأ صور جداول واجبات مدرسية كويتية (من إنستقرام حساب المدرسة). أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص واجبات طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
+  const prompt = `أنت مساعد يقرأ صور جداول واجبات مدرسية كويتية (من إنستقرام حساب المدرسة). أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص واجبات طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
 
 السياق: اليوم ${todayLabel}. السنة الحالية ${currentYear}. الأسبوع الحالي من الأحد ${sunday} إلى الخميس ${thursday}.
 تواريخ أيام هذا الأسبوع بالتحديد:
@@ -67,78 +59,14 @@ async function handleUpload(req) {
 إذا ظهر رقم صف أو شعبة بوضوح بالصورة، اذكريه بحقل gradeSeen (مثلاً "٣/١") — هذا اختياري وللمرجعية فقط، ولا يمنع استخراج البيانات لو ما ظهر أو كانت الصورة مقصوصة.
 
 أرجعي JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع","dueDate":"YYYY-MM-DD أو null","details":"نص اختياري","gradeSeen":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري"}]}`,
-    },
-    ...images.map((img) => ({
-      type: "image",
-      source: { type: "base64", media_type: "image/jpeg", data: (img.split(",")[1] || img) },
-    })),
-  ];
+{"entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع","dueDate":"YYYY-MM-DD أو null","details":"نص اختياري","gradeSeen":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري"}]}`;
 
-  const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-5",
-      // كانت ٤٠٠٠ — والنموذج يفكّر افتراضياً، فكان التفكير يبتلع الحصة
-      // كاملة ويرجع JSON مقطوعاً بنص النص (أو بلا نص إطلاقاً). ظهر
-      // بالإنتاج: stop_reason=max_tokens مع thinking_tokens=4000.
-      max_tokens: 16000,
-      // استخراج جدول من صورة عمل ميكانيكي ما يحتاج تفكيراً ممتداً —
-      // إيقافه يمنع قطع الرد ويقصّر زمن الانتظار على الأم كذلك.
-      thinking: { type: "disabled" },
-      messages: [{ role: "user", content }],
-    }),
-  });
-
-  if (!aiRes.ok) {
-    const errText = await aiRes.text();
-    console.error("Anthropic API error:", aiRes.status, errText);
-    return NextResponse.json({ error: `فشل استدعاء التحليل (${aiRes.status}): ${errText}` }, { status: 500 });
+  const res = await extractFromImages({ images, prompt, motherId, childId, feature: FEATURE });
+  if (!res.ok) {
+    if (res.needsRotation) return NextResponse.json({ needsRotation: res.needsRotation });
+    return NextResponse.json({ error: res.error }, { status: res.status });
   }
-
-  const aiData = await aiRes.json();
-  await logAiUsage({
-    motherId, childId, feature: FEATURE, model: "claude-sonnet-5",
-    usage: aiData.usage, hadImage: true, attachments: images.length,
-  });
-  // انقطع الرد لبلوغ سقف المخرجات — رسالة الخطأ الخام بالإنجليزي ما تفيد
-  // الأم بشي، ونحن نعرف السبب هنا بدقة.
-  if (aiData.stop_reason === "max_tokens") {
-    console.error("AI response truncated (max_tokens):", JSON.stringify(aiData.usage));
-    return NextResponse.json(
-      { error: "الجدول طويل وما اكتمل تحليله. جربي صورة أوضح أو قصّيها على جزئين." },
-      { status: 500 }
-    );
-  }
-
-  const textBlock = (aiData.content || []).find((b) => b.type === "text");
-  if (!textBlock) {
-    console.error("No text block in Anthropic response:", JSON.stringify(aiData));
-    return NextResponse.json({ error: "لم يصل رد نصي من التحليل" }, { status: 500 });
-  }
-
-  // النموذج أحياناً يسبق الـJSON بجملة تمهيدية أو يغلّفه بـ```json.
-  // نقتطع من أول { لآخر } بدل ما نرفض الرد كله بسبب زينة حوله.
-  const raw = textBlock.text.replace(/```json/g, "").replace(/```/g, "").trim();
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  const cleaned = start !== -1 && end > start ? raw.slice(start, end + 1) : raw;
-  let parsed;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch (e) {
-    console.error("Failed to parse AI JSON:", e.message, "raw text:", textBlock.text);
-    // الخطأ التقني بالسجلات، والأم تشوف خطوة تقدر تسويها.
-    return NextResponse.json(
-      { error: "ما قدرنا نقرأ الجدول من الصورة. تأكدي إنها واضحة وكاملة وجربي مرة ثانية." },
-      { status: 500 }
-    );
-  }
+  const parsed = res.parsed;
 
   const todayStr = kuwaitTodayStr();
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

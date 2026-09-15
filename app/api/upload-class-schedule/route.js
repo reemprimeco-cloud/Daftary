@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { logAiUsage } from "@/lib/aiUsage";
+import { extractFromImages } from "@/lib/visionExtract";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -26,11 +26,6 @@ async function handleUpload(req) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error("ANTHROPIC_API_KEY is not set");
-    return NextResponse.json({ error: "مفتاح الذكاء الاصطناعي غير مُعدّ بالسيرفر" }, { status: 500 });
-  }
-
   const sb = supabaseAdmin();
   const { data: child, error: cErr } = await sb
     .from("children")
@@ -40,114 +35,117 @@ async function handleUpload(req) {
     .single();
   if (cErr || !child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
 
-  const content = [
-    {
-      type: "text",
-      text: `أنت مساعد يقرأ صور "الجدول الدراسي الأسبوعي" (جدول الحصص) لمدرسة كويتية — جدول يبيّن مادة ومعلم/ـة كل حصة في كل يوم دراسي، وليس جدول واجبات أو تواريخ. أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
+  const prompt = `أنت مساعد يقرأ صور "الجدول الدراسي الأسبوعي" (جدول الحصص) لمدرسة كويتية — جدول يبيّن مادة ومعلم/ـة كل حصة في كل يوم دراسي، وليس جدول واجبات أو تواريخ. أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
 
-اقرأ كل صورة واستخرج لكل يوم من أيام الأسبوع الدراسي (الأحد, الاثنين, الثلاثاء, الأربعاء, الخميس) كل حصة بالترتيب من الأولى للأخيرة: رقم الحصة، اسم المادة، اسم المعلم/ـة إن وُجد بالجدول، ووقت البداية والنهاية إن وُجدا (مثل "8:00"). إذا كانت حصة "فسحة" أو "نشاط" اكتبيها بحقل subject كما هي بدل تجاهلها. اترك teacher أو startTime أو endTime فارغة/null لو ما ظهرت بالصورة، ولا تخترعي بيانات.
+شكل الجدول يختلف من مدرسة لمدرسة، فحدّدي أولاً كيف هو مرتّب قبل ما تقرئين: أحياناً الأيام صفوف والحصص أعمدة، وأحياناً العكس (الأيام أعمدة والحصص صفوف). وترتيب الأعمدة نفسه أحياناً من اليمين لليسار وأحياناً من اليسار لليمين — اعتمدي على ترويسات الصفوف والأعمدة المكتوبة، لا على موضع الخلية. قد يكون الجدول مكتوباً بالعربي أو بالإنجليزي أو بالاثنين معاً، وعدد الحصص يختلف (٥ إلى ٨ عادة).
+
+بعد ما تعرفين الترتيب، اقرئي الجدول خلية خلية. لكل يوم دراسي استخرجي كل حصة بالترتيب من الأولى للأخيرة: رقم الحصة، اسم المادة، اسم المعلم/ـة كما هو مكتوب تحت اسم المادة، ووقت البداية والنهاية من ترويسة الحصة.
+
+اكتبي أسماء الأيام بالعربي بهذه الصيغة بالضبط: الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس — حتى لو كانت مكتوبة بالإنجليزي أو بصيغة مختلفة في الصورة.
+
+انتبهي: اسم المعلّم/ـة يتكرر عادة في كل حصص نفس المادة. لو قرأتِ اسماً في خلية وما قدرتِ تقرئينه في خلية ثانية لنفس المادة، لا تخترعي اسماً مختلفاً — اتركيه null. ولا تكتبي اسم المعلّمة في حقل subject ولا اسم المادة في حقل teacher.
+
+إذا كانت الخلية "فسحة" أو "نشاط" اكتبيها بحقل subject كما هي بدل تجاهلها.
 
 أرجعي JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"days":{"الأحد":[{"period":1,"subject":"اسم المادة","teacher":"اسم اختياري","startTime":"اختياري","endTime":"اختياري"}],"الاثنين":[],"الثلاثاء":[],"الأربعاء":[],"الخميس":[]}}
+{"days":{"الأحد":[{"period":1,"subject":"اسم المادة","teacher":"اسم أو null","startTime":"7:30","endTime":"8:10"}],"الاثنين":[],"الثلاثاء":[],"الأربعاء":[],"الخميس":[]}}`;
 
-إن لم تستطعي قراءة الجدول بوضوح من الصور، أرجعي كل الأيام بمصفوفات فارغة.`,
-    },
-    ...images.map((img) => ({
-      type: "image",
-      source: { type: "base64", media_type: "image/jpeg", data: (img.split(",")[1] || img) },
-    })),
-  ];
-
-  const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-5",
-      // كانت ٤٠٠٠ — والنموذج يفكّر افتراضياً، فكان التفكير يبتلع الحصة
-      // كاملة ويرجع JSON مقطوعاً بنص النص (أو بلا نص إطلاقاً). ظهر
-      // بالإنتاج: stop_reason=max_tokens مع thinking_tokens=4000.
-      max_tokens: 16000,
-      // استخراج جدول من صورة عمل ميكانيكي ما يحتاج تفكيراً ممتداً —
-      // إيقافه يمنع قطع الرد ويقصّر زمن الانتظار على الأم كذلك.
-      thinking: { type: "disabled" },
-      messages: [{ role: "user", content }],
-    }),
-  });
-
-  if (!aiRes.ok) {
-    const errText = await aiRes.text();
-    console.error("Anthropic API error:", aiRes.status, errText);
-    return NextResponse.json({ error: `فشل استدعاء التحليل (${aiRes.status}): ${errText}` }, { status: 500 });
+  const res = await extractFromImages({ images, prompt, motherId, childId, feature: FEATURE });
+  if (!res.ok) {
+    if (res.needsRotation) return NextResponse.json({ needsRotation: res.needsRotation });
+    return NextResponse.json({ error: res.error }, { status: res.status });
   }
 
-  const aiData = await aiRes.json();
-  await logAiUsage({
-    motherId, childId, feature: FEATURE, model: "claude-sonnet-5",
-    usage: aiData.usage, hadImage: true, attachments: images.length,
-  });
-  // انقطع الرد لبلوغ سقف المخرجات — رسالة الخطأ الخام بالإنجليزي ما تفيد
-  // الأم بشي، ونحن نعرف السبب هنا بدقة.
-  if (aiData.stop_reason === "max_tokens") {
-    console.error("AI response truncated (max_tokens):", JSON.stringify(aiData.usage));
+  const rows = buildRows(res.parsed, child.id);
+
+  // جدول شبه فاضي معناه القراءة فشلت، مو إن الطالب عنده حصتين بالأسبوع.
+  // لو مسحنا القديم وحفظنا هالنتيجة تروح بيانات الأم مقابل لا شيء.
+  if (rows.length < DAYS.length) {
+    console.error("class_schedule read produced too few rows:", rows.length);
     return NextResponse.json(
-      { error: "الجدول طويل وما اكتمل تحليله. جربي صورة أوضح أو قصّيها على جزئين." },
-      { status: 500 }
+      { error: "ما قدرنا نقرأ الجدول كامل من الصورة. تأكدي إنها واضحة وتشمل الجدول كله وجربي مرة ثانية." },
+      { status: 422 }
     );
   }
 
-  const textBlock = (aiData.content || []).find((b) => b.type === "text");
-  if (!textBlock) {
-    console.error("No text block in Anthropic response:", JSON.stringify(aiData));
-    return NextResponse.json({ error: "لم يصل رد نصي من التحليل" }, { status: 500 });
-  }
-
-  // النموذج أحياناً يسبق الـJSON بجملة تمهيدية أو يغلّفه بـ```json.
-  // نقتطع من أول { لآخر } بدل ما نرفض الرد كله بسبب زينة حوله.
-  const raw = textBlock.text.replace(/```json/g, "").replace(/```/g, "").trim();
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  const cleaned = start !== -1 && end > start ? raw.slice(start, end + 1) : raw;
-  let parsed;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch (e) {
-    console.error("Failed to parse AI JSON:", e.message, "raw text:", textBlock.text);
-    // الخطأ التقني بالسجلات، والأم تشوف خطوة تقدر تسويها.
-    return NextResponse.json(
-      { error: "ما قدرنا نقرأ الجدول من الصورة. تأكدي إنها واضحة وكاملة وجربي مرة ثانية." },
-      { status: 500 }
-    );
-  }
-
-  const rows = [];
-  for (const day of DAYS) {
-    const periods = parsed.days?.[day] || [];
-    periods.forEach((p) => {
-      if (!p.subject || !p.period) return;
-      rows.push({
-        child_id: child.id,
-        day,
-        period_number: Number(p.period),
-        subject: p.subject,
-        teacher: p.teacher || null,
-        start_time: p.startTime || null,
-        end_time: p.endTime || null,
-      });
-    });
-  }
+  // نحتفظ بالقديم لين ما ينجح الإدخال — الحذف قبل الإدخال كان يخلّي الأم
+  // بلا جدول إطلاقاً لو فشل الإدخال لأي سبب.
+  const { data: previous } = await sb.from("class_schedule").select("*").eq("child_id", child.id);
 
   await sb.from("class_schedule").delete().eq("child_id", child.id);
-  if (rows.length) {
-    const { error: insErr } = await sb.from("class_schedule").insert(rows);
-    if (insErr) {
-      console.error("class_schedule insert error:", insErr.message);
-      return NextResponse.json({ error: insErr.message }, { status: 400 });
-    }
+  const { error: insErr } = await sb.from("class_schedule").insert(rows);
+  if (insErr) {
+    console.error("class_schedule insert error:", insErr.message);
+    if (previous?.length) await sb.from("class_schedule").insert(previous);
+    return NextResponse.json({ error: "ما قدرنا نحفظ الجدول. جربي مرة ثانية." }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, matchedPeriods: rows.length, imagesProcessed: images.length });
+}
+
+// "12.45" و"١٢:٤٥" و"12:45 م" كلها تجي من الجداول المطبوعة، وكانت تنحفظ
+// كما هي فتنكسر ترتيب الحصص والتذكيرات المبنية عليها.
+function normalizeTime(v) {
+  if (!v) return null;
+  const latin = String(v).replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
+  const m = latin.match(/(\d{1,2})\s*[:.٫]\s*(\d{2})/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  if (h > 23 || Number(m[2]) > 59) return null;
+  return `${h}:${m[2]}`;
+}
+
+// الواجهة تعرض الأيام بمطابقة نصية حرفية، فأي صيغة ثانية ("الإثنين"،
+// "الاربعاء"، "Sunday") كانت تختفي من الجدول بصمت. نرجّع كل صيغة
+// لاسمها المعتمد بدل ما نرمي اليوم كله.
+const DAY_ALIASES = new Map();
+for (const [canonical, variants] of [
+  ["الأحد", ["احد", "sunday", "sun"]],
+  ["الاثنين", ["اثنين", "اتنين", "monday", "mon"]],
+  ["الثلاثاء", ["ثلاثاء", "ثلثاء", "tuesday", "tue", "tues"]],
+  ["الأربعاء", ["اربعاء", "اربعا", "wednesday", "wed"]],
+  ["الخميس", ["خميس", "thursday", "thu", "thur", "thurs"]],
+]) {
+  for (const v of variants) DAY_ALIASES.set(v, canonical);
+}
+
+function canonicalDay(raw) {
+  const s = String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/[ًٌٍَُِّْـ]/g, "")
+    .replace(/^ال/, "")
+    .replace(/\s+/g, "");
+  return DAY_ALIASES.get(s) || null;
+}
+
+function buildRows(parsed, childId) {
+  const rows = [];
+  const seen = new Set();
+  for (const [rawDay, periods] of Object.entries(parsed.days || {})) {
+    const day = canonicalDay(rawDay);
+    if (!day) continue;
+    for (const p of periods || []) {
+      const period = Number(p.period);
+      const subject = String(p.subject || "").trim();
+      // حصة بلا مادة أو برقم خارج المعقول نتيجة قراءة فاشلة، مو بيانات.
+      if (!subject || !Number.isInteger(period) || period < 1 || period > 12) continue;
+      // النموذج أحياناً يكرر نفس الحصة مرتين بنفس اليوم؛ الأولى تكفي.
+      const key = `${day}|${period}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        child_id: childId,
+        day,
+        period_number: period,
+        subject,
+        teacher: String(p.teacher || "").trim() || null,
+        start_time: normalizeTime(p.startTime),
+        end_time: normalizeTime(p.endTime),
+      });
+    }
+  }
+  return rows;
 }
