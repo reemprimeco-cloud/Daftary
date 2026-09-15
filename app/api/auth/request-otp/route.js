@@ -48,6 +48,25 @@ export async function POST(req) {
         { status: 429 }
       );
     }
+    // 60245 = تجاوز حد الرسائل على مستوى الحساب/الخدمة (مو رقم واحد) —
+    // يظهر تحديداً بيوم حملة لما يسجّل مئات بنفس الساعة. الأم ما تقدر تسوي
+    // شي، لكن صاحبة التطبيق تقدر ترفع الحد من Twilio. فنقول لكل طرف الي
+    // يخصه، وننبّه بنوع مستقل عشان ما يختلط بعطل الرصيد.
+    // و20429 = تجاوز عدد الطلبات المتزامنة على واجهة Twilio — نفس السبب
+    // (ازدحام لحظي) ونفس المعالجة.
+    if (e.twilioCode === 60245 || e.twilioCode === 20429) {
+      console.error("otp account limit hit:", maskPhone(to));
+      await alertAdmin(
+        "otp_limit",
+        "⚠️ Twilio أوقف الإرسال: تجاوز الحد",
+        "الحملة تجاوزت حد رسائل Verify (خطأ 60245). ارفعي الحد من إعدادات خدمة Verify أو تواصلي مع دعم Twilio فوراً.",
+        { detail: e.message || "", cooldownMinutes: 15 }
+      );
+      return NextResponse.json(
+        { error: "ضغط عالي على التسجيل هاللحظة. انتظري دقيقة وحاولي مرة ثانية." },
+        { status: 503 }
+      );
+    }
     if (e.twilioCode === 60410 || e.twilioCode === 60200) {
       console.log("otp undeliverable:", maskPhone(to), e.twilioCode);
       return NextResponse.json({ error: "ما قدرنا نرسل الكود لهذا الرقم. تأكدي منه وحاولي مرة ثانية." }, { status: 400 });

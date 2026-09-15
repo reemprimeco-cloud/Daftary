@@ -5,7 +5,9 @@ import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// نداء النموذج ≈ ١٠–٢٠ ث، ومع إعادة محاولتين عند الازدحام (١٫٥ + ٣ ث)
+// الحد الأقصى ≈ ٦٥ ث — فوق الستين القديمة.
+export const maxDuration = 120;
 
 const FEATURE = "upload_class_schedule";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];

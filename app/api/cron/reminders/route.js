@@ -8,11 +8,14 @@ import { sendApns, apnsConfigured } from "@/lib/apns";
 export const runtime = "nodejs";
 // بلا تحديد تصير المهلة ١٠ ثوانٍ، والمسار يرسل لكل ولي أمر عنده تذكير
 // اليوم — فمع نمو المستخدمين ينقطع بالنص: بعضهم يوصله التذكير وبعضهم لا،
-// بصمت وبلا أي خطأ يبان.
-export const maxDuration = 60;
+// بصمت وبلا أي خطأ يبان. كل إرسال ≈ ٠٫٣ ث (اتصال APNs + الطلب + سجل)،
+// فبتوازي ٢٠ يستوعب ~٢٠٬٠٠٠ إرسال بالمهلة — والكرون يشتغل مرة باليوم،
+// فالي يفوت ما يُعاد إلا بكرا.
+export const maxDuration = 300;
 
-// ننفّذ على دفعات متوازية بدل واحد واحد. الحد ١٠ كافٍ ليختصر الوقت لعُشره
-// تقريباً، وبنفس الوقت ما يفتح مئات الاتصالات المتزامنة على Supabase وAPNs.
+// ننفّذ على دفعات متوازية بدل واحد واحد. الحد ٢٠ يختصر الوقت لجزء من
+// عشرين، وبنفس الوقت ما يفتح مئات الاتصالات المتزامنة على Supabase وAPNs.
+const CONCURRENCY = 20;
 async function mapPool(items, limit, fn) {
   const list = [...items];
   const results = [];
@@ -122,7 +125,7 @@ async function sendMemorizationReminders(sb, today) {
     byMother.set(motherId, entry);
   }
 
-  const memoResults = await mapPool([...byMother.entries()], 10, async ([motherId, { count, names }]) => {
+  const memoResults = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, { count, names }]) => {
     // القيد الفريد بـreminder_log على (task_id, kind) وهنا ما فيه مهمة،
     // فنمنع التكرار بفحص إن ما أُرسل شي لنفس ولي الأمر اليوم.
     const { data: already } = await sb
@@ -175,7 +178,7 @@ async function sendRequirementReminders(sb, today, tomorrow) {
     byMother.set(motherId, entry);
   }
 
-  const results = await mapPool([...byMother.entries()], 10, async ([motherId, { items, names }]) => {
+  const results = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, { items, names }]) => {
     const { data: already } = await sb
       .from("reminder_log")
       .select("id")
@@ -275,7 +278,7 @@ export async function GET(req) {
   ];
 
   for (const [rows, kind, textFn] of batches) {
-    const results = await mapPool(rows, 10, async (t) => {
+    const results = await mapPool(rows, CONCURRENCY, async (t) => {
       const { data: exists } = await sb.from("reminder_log").select("id").eq("task_id", t.id).eq("kind", kind).maybeSingle();
       if (exists) return 0;
 

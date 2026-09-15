@@ -67,11 +67,19 @@ export async function POST(req) {
       return NextResponse.json({ error: "الاسم مطلوب", needsName: true }, { status: 400 });
     }
     const { data, error } = await sb.from("mothers").insert({ name: trimmed, phone: to }).select().single();
-    if (error) {
+    if (error?.code === "23505") {
+      // ضغطتان متزامنتان على «تأكيد» تدخلان هنا معاً: الأولى تنشئ الحساب
+      // والثانية تصطدم بقيد الرقم الفريد. الحساب موجود أصلاً — نرجّعه بدل
+      // ما نعرض «تعذّر إنشاء الحساب» لأم حسابها انفتح توّه.
+      const { data: raced } = await sb.from("mothers").select("*").eq("phone", to).maybeSingle();
+      mother = raced;
+    } else if (error) {
       console.error("verify-otp insert failed:", error.message);
       return NextResponse.json({ error: "تعذّر إنشاء الحساب، حاولي مرة ثانية." }, { status: 500 });
+    } else {
+      mother = data;
     }
-    mother = data;
+    if (!mother) return NextResponse.json({ error: "تعذّر إنشاء الحساب، حاولي مرة ثانية." }, { status: 500 });
   }
 
   let token;

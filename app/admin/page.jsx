@@ -26,9 +26,10 @@ async function getStats() {
     sb.from("children").select("*", { count: "exact", head: true }),
     sb.from("tasks").select("*", { count: "exact", head: true }).eq("status", "active"),
     sb.from("class_schedule").select("child_id"),
-    // كان الحد ٢٥ والحسابات تجاوزتها — فكانت القائمة تخفي الباقي بصمت
-    // بلا ما تبيّن إن فيه مخفيين. الحد ٥٠٠ سقف أمان لا غير.
-    sb.from("mothers").select("id,name,phone,created_at").order("created_at", { ascending: false }).limit(500),
+    // كان الحد ٢٥ ثم ٥٠٠ والحسابات تتجاوزها بيوم حملة — فكانت القائمة تخفي
+    // الباقي بصمت. الحد ٢٠٠٠ سقف أمان، والعنوان يبيّن المعروض من الإجمالي
+    // عشان لو انقطعت يوماً يبان الرقم.
+    sb.from("mothers").select("id,name,phone,created_at").order("created_at", { ascending: false }).limit(2000),
     sb.from("children").select("mother_id"),
   ]);
 
@@ -366,7 +367,11 @@ function AdminDashboard({ stats }) {
 
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 0 8px" }}>
           <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>المسجّلات</h2>
-          <span style={{ fontSize: 12, color: "#9CA3AF" }}>{stats.recentMothers.length} حساب · الأحدث أولاً</span>
+          <span style={{ fontSize: 12, color: "#9CA3AF" }}>
+            {stats.recentMothers.length < stats.mothersCount
+              ? `${stats.recentMothers.length} من ${stats.mothersCount} حساب`
+              : `${stats.mothersCount} حساب`} · الأحدث أولاً
+          </span>
         </div>
         {/* ارتفاع محدود مع تمرير: القائمة تطول مع النمو وتدفن كل شي تحتها،
             والترويسة ثابتة عشان الأعمدة تبقى مفهومة وأنتِ تمرّرين. */}
