@@ -17,6 +17,8 @@ export default function CropModal({ src, onDone, onCancel }) {
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
+    // الصورة ما تُرسم قبل mounted (بسبب الـportal)، فلازم نعيد المحاولة بعده
+    if (!mounted) return;
     let cancelled = false;
     let instance = null;
     (async () => {
@@ -38,7 +40,7 @@ export default function CropModal({ src, onDone, onCancel }) {
       instance?.destroy();
       cropperRef.current = null;
     };
-  }, [src]);
+  }, [src, mounted]);
 
   function useSelection() {
     const c = cropperRef.current;
