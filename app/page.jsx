@@ -22,6 +22,7 @@ import {
   resizeDataUrl,
 } from "@/lib/native";
 import { installAuthFetch } from "@/lib/authFetch";
+import CropModal from "./CropModal";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
 import { APP_TIERS, APP_PLAN, arabicDigits } from "@/lib/appPlans";
 
@@ -2602,12 +2603,17 @@ function TeacherView({ children, motherId }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
+  // بعد التصوير أو الاختيار تمر الصورة بشاشة قص: الأم تحدد السؤال فقط
+  // بدل الصفحة كلها. الماسح يقص الصفحة أصلاً فما يحتاجها.
+  const [cropSrc, setCropSrc] = useState(null);
+
   async function handlePickImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = "";
     // صفحة الكتاب فيها خط صغير — نفس دقة رفع الجداول عشان تنقرأ.
     const url = await resizeToDataUrl(file, 1568, false, 0.9);
-    setImage(url);
+    setCropSrc(url);
   }
 
   // بتطبيق آبل نصوّر الواجب مباشرة بالكاميرا الأصلية بدل منتقي الملفات،
@@ -2615,12 +2621,15 @@ function TeacherView({ children, motherId }) {
   const [scanner, setScanner] = useState(false);
   useEffect(() => setScanner(hasDocumentScanner()), []);
 
+  const [pickMenu, setPickMenu] = useState(false);
+
   async function pickImageNative(mode = "camera") {
-    const { url } = mode === "scan" ? await nativeScanDocument() : await nativePickImage("camera");
-    if (url) {
-      hapticLight();
-      setImage(url);
-    }
+    setPickMenu(false);
+    const { url } = mode === "scan" ? await nativeScanDocument() : await nativePickImage(mode);
+    if (!url) return;
+    hapticLight();
+    if (mode === "scan") setImage(url);
+    else setCropSrc(url);
   }
 
   async function send() {
@@ -2861,11 +2870,26 @@ function TeacherView({ children, motherId }) {
         <div ref={bottomRef} />
       </div>
 
+      {cropSrc && <CropModal src={cropSrc} onDone={(u) => { setImage(u); setCropSrc(null); }} onCancel={() => setCropSrc(null)} />}
+
       <div style={{ flexShrink: 0, borderTop: "1px solid #F0EEE8", background: "white", padding: "8px 16px calc(env(safe-area-inset-bottom) + 10px)", display: "flex", flexDirection: "column", gap: 8 }}>
         {/* أكثر سبب لرد «أرسلي صورة أوضح»: ظل اليد على الصفحة. نقولها قبل التصوير. */}
         <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.6 }}>
-          📸 صوّري الصفحة كاملة، بلا ظل على الكتابة، وقرّبي الكاميرا لين تصير الأرقام واضحة.
+          📸 صوّري الصفحة بلا ظل، أو اختاري صورة عالية الجودة من الألبوم — وبعدها حدّدي السؤال بالقص.
         </p>
+        {/* الصورة من ألبوم الجوال أعلى جودة من كاميرا داخل التطبيق، فنعرض
+            الخيارين (والماسح لو متوفر) بقائمة صغيرة بدل الكاميرا مباشرة. */}
+        {native && pickMenu && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => pickImageNative("photos")} style={{ flex: 1, background: "#F1EFFA", color: "#5C4B8C", borderRadius: 12, padding: "10px 8px", fontSize: 13, fontWeight: 800 }}>🖼️ ألبوم الصور</button>
+            <button onClick={() => pickImageNative("camera")} style={{ flex: 1, background: "#F3F4F6", color: "#374151", borderRadius: 12, padding: "10px 8px", fontSize: 13, fontWeight: 800 }}>📷 الكاميرا</button>
+            {/* منتقي الملفات داخل تطبيق آبل يفتح «الملفات» و«الصور» بجودتها الأصلية */}
+            <button onClick={() => { setPickMenu(false); fileRef.current?.click(); }} style={{ flex: 1, background: "#F3F4F6", color: "#374151", borderRadius: 12, padding: "10px 8px", fontSize: 13, fontWeight: 800 }}>📁 ملف</button>
+            {scanner && (
+              <button onClick={() => pickImageNative("scan")} style={{ flex: 1, background: "#F3F4F6", color: "#374151", borderRadius: 12, padding: "10px 8px", fontSize: 13, fontWeight: 800 }}>📄 مسح مستند</button>
+            )}
+          </div>
+        )}
         {image && (
           <div style={{ position: "relative", width: 64, height: 64, borderRadius: 10, overflow: "hidden" }}>
             <img src={image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -2873,12 +2897,7 @@ function TeacherView({ children, motherId }) {
           </div>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          {native && scanner && (
-            <button onClick={() => pickImageNative("scan")} aria-label="مسح مستند" title="مسح مستند" style={{ background: "#F1EFFA", borderRadius: 12, height: 44, padding: "0 10px", fontSize: 12, fontWeight: 800, flexShrink: 0, color: "#5C4B8C", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-              <Icon name="camera" size={18} /> مسح
-            </button>
-          )}
-          <button onClick={() => (native ? pickImageNative("camera") : fileRef.current?.click())} aria-label="إرفاق صورة" style={{ background: "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0, color: "#7B68C4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button onClick={() => (native ? setPickMenu((v) => !v) : fileRef.current?.click())} aria-label="إرفاق صورة" style={{ background: pickMenu ? "#F1EFFA" : "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0, color: "#7B68C4", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {native ? <Icon name="camera" size={22} /> : <TileIcon name="camera" size={24} />}
           </button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePickImage} />

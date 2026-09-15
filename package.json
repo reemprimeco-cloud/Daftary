@@ -24,6 +24,7 @@
     "@capgo/capacitor-document-scanner": "^8.4.4",
     "@capgo/native-purchases": "^8.7.0",
     "@supabase/supabase-js": "2.45.4",
+    "cropperjs": "^1.6.2",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "next": "14.2.35",
