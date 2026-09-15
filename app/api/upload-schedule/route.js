@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { extractFromImages } from "@/lib/visionExtract";
-import { kuwaitTodayStr, kuwaitWeekMap, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
+import { kuwaitWeekMap, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const FEATURE = "upload_homework";
+// القيمة الوحيدة اللي تقبلها القاعدة (tasks_type_check).
+const TASK_TYPES = new Set(["واجب", "حفظ", "اختبار", "مشروع"]);
 
 export async function POST(req) {
   try {
@@ -56,10 +58,10 @@ async function handleUpload(req) {
 
 بالإضافة لذلك، استخرجي كل مطلوبات الحفظ (قرآن كريم أو حديث) بقسم منفصل تماماً عن entries، بهذا الشكل: لكل عنصر حفظ حدّدي kind ("آية" لو قرآن أو "حديث" لو حديث نبوي)، وreference هو نص المرجع بالضبط زي ما هو مكتوب بالخطة (مثل "سورة البقرة من آية ١٠ إلى ١٥" أو "حديث: إنما الأعمال بالنيات")، وdetails لأي ملاحظة إضافية (رقم الصفحة، طريقة التسميع...). لا تخترعي نطاق آيات لو مو مكتوب بالصورة بالضبط.
 
-إذا ظهر رقم صف أو شعبة بوضوح بالصورة، اذكريه بحقل gradeSeen (مثلاً "٣/١") — هذا اختياري وللمرجعية فقط، ولا يمنع استخراج البيانات لو ما ظهر أو كانت الصورة مقصوصة.
+انقلي ما هو مكتوب بالصورة حرفياً: أسماء المواد والمستلزمات ونصوص التفاصيل تُكتب كما هي، بلا تصحيح ولا توحيد ولا اختصار ولا إضافة أي كلمة من عندك. وتكرار نفس المادة أو نفس الغرض أمر طبيعي — انقليه كل مرة كما هو ولا تحذفي أي تكرار.
 
 أرجعي JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع","dueDate":"YYYY-MM-DD أو null","details":"نص اختياري","gradeSeen":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري"}]}`;
+{"entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع","dueDate":"YYYY-MM-DD أو null","details":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري"}]}`;
 
   const res = await extractFromImages({ images, prompt, motherId, childId, feature: FEATURE });
   if (!res.ok) {
@@ -68,7 +70,6 @@ async function handleUpload(req) {
   }
   const parsed = res.parsed;
 
-  const todayStr = kuwaitTodayStr();
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
   const normalizeDueDate = (v) => (typeof v === "string" && DATE_RE.test(v) ? v : null);
   let matchedTasks = 0;
@@ -76,19 +77,15 @@ async function handleUpload(req) {
   let matchedReqs = 0;
   let updatedReqs = 0;
   let matchedMemorization = 0;
-  let skippedOld = 0;
 
   for (const e of parsed.entries || []) {
     const dueDate = normalizeDueDate(e.dueDate);
-    if (dueDate && dueDate < todayStr) {
-      skippedOld++;
-      continue;
-    }
-    let details = e.details || null;
-    if (e.gradeSeen) {
-      details = details ? `${details} (الصف بالصورة: ${e.gradeSeen})` : `الصف بالصورة: ${e.gradeSeen}`;
-    }
-    const type = e.type || "واجب";
+    // التفاصيل تُحفظ كما كتبتها المدرسة بالصورة. كنا نلصق فيها «الصف
+    // بالصورة: ...» فيصير نصاً ما كتبه أحد داخل بيانات الأم.
+    const details = e.details || null;
+    // القاعدة تقبل أربعة أنواع فقط، وأي نوع غيرها كان يفجّر الإدخال
+    // ويضيّع الرفعة كاملة — فنرجع للواجب بدل ما نخسر المهمة.
+    const type = TASK_TYPES.has(e.type) ? e.type : "واجب";
 
     // لو فيه واجب نشط واحد بس بنفس المادة والنوع لهذا الطالب/ة، اعتبريه نفس الواجب
     // وحدّثي تاريخه/تفاصيله بدل إضافة نسخة مكررة (تحافظ على نفس الـ id عشان التذكير المرتبط به يتحدّث بدل ما يتكرر).
@@ -120,10 +117,6 @@ async function handleUpload(req) {
 
   for (const r of parsed.requirements || []) {
     const dueDate = normalizeDueDate(r.dueDate);
-    if (dueDate && dueDate < todayStr) {
-      skippedOld++;
-      continue;
-    }
 
     const { data: existingReqs } = await sb
       .from("requirements")
@@ -170,5 +163,5 @@ async function handleUpload(req) {
     }
   }
 
-  return NextResponse.json({ ok: true, matchedTasks, updatedTasks, matchedReqs, updatedReqs, matchedMemorization, skippedOld, imagesProcessed: images.length });
+  return NextResponse.json({ ok: true, matchedTasks, updatedTasks, matchedReqs, updatedReqs, matchedMemorization, imagesProcessed: images.length });
 }

@@ -87,18 +87,6 @@ async function handleUpload(req) {
   return NextResponse.json({ ok: true, matchedPeriods: rows.length, imagesProcessed: images.length });
 }
 
-// "12.45" و"١٢:٤٥" و"12:45 م" كلها تجي من الجداول المطبوعة، وكانت تنحفظ
-// كما هي فتنكسر ترتيب الحصص والتذكيرات المبنية عليها.
-function normalizeTime(v) {
-  if (!v) return null;
-  const latin = String(v).replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
-  const m = latin.match(/(\d{1,2})\s*[:.٫]\s*(\d{2})/);
-  if (!m) return null;
-  const h = Number(m[1]);
-  if (h > 23 || Number(m[2]) > 59) return null;
-  return `${h}:${m[2]}`;
-}
-
 // الواجهة تعرض الأيام بمطابقة نصية حرفية، فأي صيغة ثانية ("الإثنين"،
 // "الاربعاء"، "Sunday") كانت تختفي من الجدول بصمت. نرجّع كل صيغة
 // لاسمها المعتمد بدل ما نرمي اليوم كله.
@@ -146,8 +134,10 @@ function buildRows(parsed, childId) {
         period_number: period,
         subject,
         teacher: String(p.teacher || "").trim() || null,
-        start_time: normalizeTime(p.startTime),
-        end_time: normalizeTime(p.endTime),
+        // الوقت يُعرض كما هو ولا يدخل بأي حساب، فنحفظه بصيغته المكتوبة
+        // بالجدول ("12.45" تبقى "12.45") بدل ما نوحّدها.
+        start_time: String(p.startTime || "").trim() || null,
+        end_time: String(p.endTime || "").trim() || null,
       });
     }
   }
