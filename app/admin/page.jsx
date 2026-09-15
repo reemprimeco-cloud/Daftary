@@ -12,6 +12,7 @@ import Signups from "./Signups";
 import Errors from "./Errors";
 import Feedback from "./Feedback";
 import AlertTest from "./AlertTest";
+import AdminTabs from "./AdminTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,11 @@ function isAuthed() {
 
 async function getStats() {
   const sb = supabaseAdmin();
-  const [mothersRes, childrenRes, activeTasksRes, scheduleRes, recentMothersRes, allChildrenRes] = await Promise.all([
+  // بداية اليوم بتوقيت الكويت (UTC+3، بلا توقيت صيفي) — لعدّ تسجيلات اليوم
+  const kuwaitMidnight = new Date(Math.floor((Date.now() + 3 * 3600e3) / 86400e3) * 86400e3 - 3 * 3600e3).toISOString();
+  const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+
+  const [mothersRes, childrenRes, activeTasksRes, scheduleRes, recentMothersRes, allChildrenRes, todayRes, subsRes] = await Promise.all([
     sb.from("mothers").select("*", { count: "exact", head: true }),
     sb.from("children").select("*", { count: "exact", head: true }),
     sb.from("tasks").select("*", { count: "exact", head: true }).eq("status", "active"),
@@ -32,6 +37,8 @@ async function getStats() {
     // عشان لو انقطعت يوماً يبان الرقم.
     sb.from("mothers").select("id,name,phone,created_at").order("created_at", { ascending: false }).limit(2000),
     sb.from("children").select("mother_id"),
+    sb.from("mothers").select("*", { count: "exact", head: true }).gte("created_at", kuwaitMidnight),
+    sb.from("app_subscriptions").select("mother_id,period_end,max_students").eq("plan", "active").gte("period_end", today),
   ]);
 
   const withSchedule = new Set((scheduleRes.data || []).map((r) => r.child_id)).size;
@@ -39,13 +46,19 @@ async function getStats() {
   (allChildrenRes.data || []).forEach((c) => {
     childrenByMother[c.mother_id] = (childrenByMother[c.mother_id] || 0) + 1;
   });
+  const subByMother = Object.fromEntries((subsRes.data || []).map((s) => [s.mother_id, s]));
 
   return {
     mothersCount: mothersRes.count || 0,
     childrenCount: childrenRes.count || 0,
     activeTasks: activeTasksRes.count || 0,
     withSchedule,
-    recentMothers: (recentMothersRes.data || []).map((m) => ({ ...m, childrenCount: childrenByMother[m.id] || 0 })),
+    signupsToday: todayRes.count || 0,
+    recentMothers: (recentMothersRes.data || []).map((m) => ({
+      ...m,
+      childrenCount: childrenByMother[m.id] || 0,
+      subscription: subByMother[m.id] || null,
+    })),
     usage: await getUsage(sb, childrenRes.count || 0),
     subscriptions: await getSubscriptionStats(sb),
   };
@@ -167,6 +180,7 @@ const FEATURE_LABELS = {
   ai_teacher: "المعلم الذكي",
   upload_homework: "رفع الواجبات",
   upload_class_schedule: "رفع جدول الحصص",
+  orientation_probe: "فحص اتجاه الصورة",
 };
 
 export default async function AdminPage() {
@@ -184,8 +198,10 @@ function StatCard({ label, value, color }) {
   );
 }
 
-const usd = (n) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
-const kwd = (n) => `${(n * 0.307).toFixed(2)} د.ك`; // تقريبي، للمقارنة بسعر الاشتراك
+// الفوترة بالدولار (Anthropic) والعرض بالدينار عشان يُقارن بسعر الاشتراك
+// مباشرة. سعر التحويل ثابت تقريبي (الدينار مربوط بسلة عملات ويتحرك قليلاً).
+const USD_TO_KWD = 0.307;
+const kwd = (n) => { const v = n * USD_TO_KWD; return `${v.toFixed(v < 1 ? 3 : 2)} د.ك`; };
 
 function UsageSection({ usage }) {
   if (!usage) {
@@ -206,8 +222,8 @@ function UsageSection({ usage }) {
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-        <StatCard label="الإجمالي" value={usd(usage.total)} color={{ bg: "#F1EFFA", text: "#5C4B8C" }} />
-        <StatCard label="آخر ٣٠ يوم" value={usd(usage.month)} color={{ bg: "#FDF3E7", text: "#8C6027" }} />
+        <StatCard label="الإجمالي" value={kwd(usage.total)} color={{ bg: "#F1EFFA", text: "#5C4B8C" }} />
+        <StatCard label="آخر ٣٠ يوم" value={kwd(usage.month)} color={{ bg: "#FDF3E7", text: "#8C6027" }} />
         <StatCard label="للطالب/ة بالعام الدراسي" value={kwd(usage.perChildYear)} color={{ bg: "#EBF7F1", text: "#2F6E56" }} />
       </div>
 
@@ -225,16 +241,16 @@ function UsageSection({ usage }) {
             <tr key={f.feature} style={{ borderTop: "1px solid #F3F4F6" }}>
               <td style={{ padding: "10px", fontWeight: 700 }}>{FEATURE_LABELS[f.feature] || f.feature}</td>
               <td style={{ padding: "10px" }}>{f.calls}</td>
-              <td style={{ padding: "10px", color: "#6B7280" }}>{usd(f.perCall)}</td>
-              <td style={{ padding: "10px", fontWeight: 700 }}>{usd(f.cost)}</td>
+              <td style={{ padding: "10px", color: "#6B7280" }}>{kwd(f.perCall)}</td>
+              <td style={{ padding: "10px", fontWeight: 700 }}>{kwd(f.cost)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
       <p style={{ margin: "12px 0 0", fontSize: 11, color: "#9CA3AF", lineHeight: 1.7 }}>
-        «للطالب/ة بالعام الدراسي» تقدير: متوسط التكلفة للطالب النشط مضروباً في ٩ أشهر.
-        كل ما طالت فترة القياس صار الرقم أدق — وبفترة قصيرة يتأثر كثيراً بأيام الذروة.
+        كل الأرقام بالدينار الكويتي بسعر تحويل تقريبي (١ دولار = ٠٫٣٠٧ د.ك). «للطالب/ة بالعام الدراسي» تقدير:
+        متوسط التكلفة للطالب النشط مضروباً في ٩ أشهر — كل ما طالت فترة القياس صار الرقم أدق.
       </p>
     </div>
   );
@@ -331,83 +347,130 @@ function ProductBreakdown({ title, rows }) {
 }
 
 function AdminDashboard({ stats }) {
+  const subs = stats.subscriptions;
+  const tabs = [
+    { key: "today", label: "اليوم", badge: stats.signupsToday },
+    { key: "list", label: "المسجّلات", badge: stats.mothersCount },
+    { key: "subs", label: "الاشتراكات", badge: subs.appAccess.activeCount },
+    { key: "cost", label: "التكلفة" },
+    { key: "comms", label: "التواصل" },
+    { key: "tools", label: "أدوات" },
+  ];
+  const paywallOn = appPaywallEnabled();
+
   return (
-    <div dir="rtl" className="app-scroll" style={{ minHeight: "100%", background: "#FAF7F2", padding: "24px 16px calc(env(safe-area-inset-bottom) + 24px)" }}>
+    <div dir="rtl" className="app-scroll" style={{ minHeight: "100%", background: "#FAF7F2", padding: "0 16px calc(env(safe-area-inset-bottom) + 24px)" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 20, color: "#5C4B8C", fontWeight: 800 }}>لوحة تحكم دفتري</h1>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#9CA3AF" }}>نظرة عامة على استخدام التطبيق</p>
+        {/* الشريط ثابت: الاسم وحالة الاشتراك وزرّا التحديث والخروج تبقى
+            ظاهرة مهما نزلتِ — حالة الاشتراك بالذات هي أهم شي يوم الحملة. */}
+        <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#FAF7F2", padding: "calc(env(safe-area-inset-top) + 14px) 0 8px", minHeight: 64 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <h1 style={{ margin: 0, fontSize: 19, color: "#5C4B8C", fontWeight: 800 }}>لوحة دفتري</h1>
+              {/* تُقرأ من متغير البيئة بالخادم — المكان الوحيد الي يبيّن فعلاً
+                  هل الاشتراك مُلزم للجميع الحين أو لا. */}
+              <span title={paywallOn ? "" : "APP_PAYWALL_ENABLED غير مضبوط بـVercel"} style={{ fontSize: 11.5, fontWeight: 800, padding: "4px 10px", borderRadius: 999, background: paywallOn ? "#F0FDF4" : "#FEF2F2", color: paywallOn ? "#166534" : "#B91C1C" }}>
+                {paywallOn ? "الاشتراك مُلزم ✓" : "⚠️ الاشتراك معطّل"}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <RefreshPage />
+              <AdminLogoutButton />
+            </div>
           </div>
-          <RefreshPage />
-            <AdminLogoutButton />
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
-          <StatCard label="أولياء الأمور المسجّلين" value={stats.mothersCount} color={{ bg: "#F1EFFA", text: "#5C4B8C" }} />
-          <StatCard label="الطلاب المسجّلين" value={stats.childrenCount} color={{ bg: "#EBF7F1", text: "#2F6E56" }} />
-          <StatCard label="واجبات نشطة" value={stats.activeTasks} color={{ bg: "#FDF3E7", text: "#8C6027" }} />
-          <StatCard label="عندهم جدول حصص" value={stats.withSchedule} color={{ bg: "#EBF4FA", text: "#31607C" }} />
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "8px 0 16px" }}>
+          <StatCard label="تسجيلات اليوم" value={stats.signupsToday} color={{ bg: "#FDF3E7", text: "#8C6027" }} />
+          <StatCard label="المسجّلات" value={stats.mothersCount} color={{ bg: "#F1EFFA", text: "#5C4B8C" }} />
+          <StatCard label="الطلاب" value={stats.childrenCount} color={{ bg: "#EBF7F1", text: "#2F6E56" }} />
+          <StatCard label="اشتراكات فعّالة" value={subs.appAccess.activeCount} color={{ bg: "#EBF4FA", text: "#31607C" }} />
         </div>
 
-        <UsageSection usage={stats.usage} />
+        <AdminTabs
+          tabs={tabs}
+          panels={{
+            today: (
+              <>
+                <Signups />
+                <Errors />
+              </>
+            ),
+            list: <MothersTable stats={stats} />,
+            subs: <SubscriptionsSection subscriptions={subs} />,
+            cost: <UsageSection usage={stats.usage} />,
+            comms: (
+              <>
+                <Broadcast />
+                <Feedback />
+              </>
+            ),
+            tools: (
+              <>
+                <AlertTest />
+                <AppleNotificationTest />
+                <div style={{ background: "white", borderRadius: 16, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)", fontSize: 12.5, color: "#6B7280", lineHeight: 1.8 }}>
+                  واجبات نشطة: <strong>{stats.activeTasks}</strong> · طلاب عندهم جدول حصص: <strong>{stats.withSchedule}</strong>
+                </div>
+              </>
+            ),
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 
-        <SubscriptionsSection subscriptions={stats.subscriptions} />
+const th = { textAlign: "right", padding: "10px 12px", color: "#9CA3AF", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" };
+const td = { padding: "10px 12px", color: "#6B7280" };
 
-        <Errors />
-
-        <Signups />
-
-        <Feedback />
-
-        <Broadcast />
-
-        <AlertTest />
-
-        <AppleNotificationTest />
-
-        {/* حالة الجدار المدفوع تُقرأ من متغير البيئة بالخادم — ما ينشاف من
-            الكود ولا من قاعدة البيانات، فهذا المكان الوحيد الي يبيّن فعلاً
-            هل الاشتراك مُلزم للجميع الحين أو لا. */}
-        <p style={{ margin: "0 0 14px", fontSize: 12.5, fontWeight: 800, padding: "8px 12px", borderRadius: 10,
-          background: appPaywallEnabled() ? "#F0FDF4" : "#FEF2F2", color: appPaywallEnabled() ? "#166534" : "#B91C1C" }}>
-          {appPaywallEnabled() ? "الاشتراك مُلزم للجميع من أول دخول ✓" : "⚠️ الاشتراك معطّل (APP_PAYWALL_ENABLED غير مضبوط) — التطبيق مجاني للكل"}
-        </p>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 0 8px" }}>
-          <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>المسجّلات</h2>
-          <span style={{ fontSize: 12, color: "#9CA3AF" }}>
-            {stats.recentMothers.length < stats.mothersCount
-              ? `${stats.recentMothers.length} من ${stats.mothersCount} حساب`
-              : `${stats.mothersCount} حساب`} · الأحدث أولاً
-          </span>
-        </div>
-        {/* ارتفاع محدود مع تمرير: القائمة تطول مع النمو وتدفن كل شي تحتها،
-            والترويسة ثابتة عشان الأعمدة تبقى مفهومة وأنتِ تمرّرين. */}
-        <div style={{ background: "white", borderRadius: 16, padding: 4, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 20, overflowX: "auto", maxHeight: 460, overflowY: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead style={{ position: "sticky", top: 0, background: "white", zIndex: 1 }}>
-              <tr>
-                <th style={{ textAlign: "right", padding: "10px 12px", color: "#9CA3AF", fontWeight: 700, fontSize: 12 }}>الاسم</th>
-                <th style={{ textAlign: "right", padding: "10px 12px", color: "#9CA3AF", fontWeight: 700, fontSize: 12 }}>الجوال</th>
-                <th style={{ textAlign: "right", padding: "10px 12px", color: "#9CA3AF", fontWeight: 700, fontSize: 12 }}>الطلاب</th>
-                <th style={{ textAlign: "right", padding: "10px 12px", color: "#9CA3AF", fontWeight: 700, fontSize: 12 }}>تاريخ التسجيل</th>
+function MothersTable({ stats }) {
+  const subscribed = stats.recentMothers.filter((m) => m.subscription).length;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 0 8px", gap: 8, flexWrap: "wrap" }}>
+        <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>المسجّلات</h2>
+        <span style={{ fontSize: 12, color: "#9CA3AF" }}>
+          {stats.recentMothers.length < stats.mothersCount
+            ? `${stats.recentMothers.length} من ${stats.mothersCount} حساب`
+            : `${stats.mothersCount} حساب`} · {subscribed} مشتركة · الأحدث أولاً
+        </span>
+      </div>
+      {/* ارتفاع محدود مع تمرير، والترويسة ثابتة عشان الأعمدة تبقى مفهومة. */}
+      <div style={{ background: "white", borderRadius: 16, padding: 4, boxShadow: "0 1px 3px rgba(0,0,0,.06)", marginBottom: 20, overflowX: "auto", maxHeight: "65vh", overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead style={{ position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+            <tr>
+              <th style={th}>الاسم</th>
+              <th style={th}>الجوال</th>
+              <th style={th}>الطلاب</th>
+              <th style={th}>الاشتراك</th>
+              <th style={th}>التسجيل</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.recentMothers.map((m) => (
+              <tr key={m.id} style={{ borderTop: "1px solid #F3F4F6" }}>
+                <td style={{ ...td, fontWeight: 700, color: "#1F2937" }}>{m.name}</td>
+                <td dir="ltr" style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{m.phone}</td>
+                <td style={td}>{m.childrenCount}</td>
+                <td style={{ ...td, whiteSpace: "nowrap" }}>
+                  {m.subscription ? (
+                    <span style={{ background: "#F0FDF4", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 800 }}>
+                      {m.subscription.max_students >= 9999 ? "مجاني دائم" : `مشتركة · ${m.subscription.max_students}`}
+                    </span>
+                  ) : (
+                    <span style={{ color: "#C7C2D4" }}>—</span>
+                  )}
+                </td>
+                <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDate(m.created_at)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {stats.recentMothers.map((m) => (
-                <tr key={m.id} style={{ borderTop: "1px solid #F3F4F6" }}>
-                  <td style={{ padding: "10px 12px", fontWeight: 700 }}>{m.name}</td>
-                  <td dir="ltr" style={{ padding: "10px 12px", color: "#6B7280", textAlign: "right" }}>{m.phone}</td>
-                  <td style={{ padding: "10px 12px", color: "#6B7280" }}>{m.childrenCount}</td>
-                  <td style={{ padding: "10px 12px", color: "#6B7280" }}>{fmtDate(m.created_at)}</td>
-                </tr>
-              ))}
-              {stats.recentMothers.length === 0 && (
-                <tr><td colSpan={4} style={{ padding: 20, textAlign: "center", color: "#9CA3AF" }}>ما فيه مستخدمين بعد</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {stats.recentMothers.length === 0 && (
+              <tr><td colSpan={5} style={{ padding: 20, textAlign: "center", color: "#9CA3AF" }}>ما فيه مستخدمين بعد</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
