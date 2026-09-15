@@ -362,7 +362,7 @@ function getSubjectIconFile(subject) {
 // كتل رقمية، والمتصفح يرتّب الكتل من اليمين لليسار — فيقرأ ولي الأمر العدد
 // معكوساً. نفس علة «الصف ٦/٣». نعزل العدد كله بكتلة واحدة اتجاهها يسار.
 // النمط يمسك التجميع الثلاثي فقط، فقائمة مثل «٣ ، ٤ ، ٥» تبقى كما هي.
-const GROUPED_NUMBER_RE = /[٠-٩\d]{1,3}(?:[ ,،][٠-٩\d]{3})+/g;
+const GROUPED_NUMBER_RE = /[٠-٩\d]{1,3}(?:[ ,،٬][٠-٩\d]{3})+/g;
 function renderWithNumbers(text) {
   const s = String(text ?? "");
   const out = [];
