@@ -357,6 +357,24 @@ function getSubjectIconFile(subject) {
   return null;
 }
 
+// عدد مكتوب بمجموعات (٤١٠ ٠٧٢ ٠١٠ أو 410,072,010) يصير بالنص العربي عدة
+// كتل رقمية، والمتصفح يرتّب الكتل من اليمين لليسار — فيقرأ ولي الأمر العدد
+// معكوساً. نفس علة «الصف ٦/٣». نعزل العدد كله بكتلة واحدة اتجاهها يسار.
+// النمط يمسك التجميع الثلاثي فقط، فقائمة مثل «٣ ، ٤ ، ٥» تبقى كما هي.
+const GROUPED_NUMBER_RE = /[٠-٩\d]{1,3}(?:[ ,،][٠-٩\d]{3})+/g;
+function renderWithNumbers(text) {
+  const s = String(text ?? "");
+  const out = [];
+  let last = 0;
+  for (const m of s.matchAll(GROUPED_NUMBER_RE)) {
+    if (m.index > last) out.push(s.slice(last, m.index));
+    out.push(<span key={m.index} dir="ltr" style={{ unicodeBidi: "isolate", whiteSpace: "nowrap" }}>{m[0]}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) out.push(s.slice(last));
+  return out;
+}
+
 function fmtDate(dateStr) {
   if (!dateStr) return "";
   return new Date(dateStr + "T00:00:00").toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" });
@@ -2812,7 +2830,7 @@ function TeacherView({ children, motherId }) {
                 background: m.role === "user" ? "#B7A6E8" : "#F3F2FA",
                 color: m.role === "user" ? "white" : "#374151",
               }}>
-                {m.content}
+                {renderWithNumbers(m.content)}
                 {m.had_image && (
                   <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
                     <TileIcon name="camera" size={14} />
