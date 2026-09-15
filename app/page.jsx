@@ -2472,11 +2472,6 @@ function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, o
           <h2 style={{ margin: 0, fontSize: 21, fontWeight: 800, color: "#1F2937", lineHeight: 1.4 }}>
             اشتراك دفتري السنوي
           </h2>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.75, color: "#6B7280" }}>
-            {studentsCount > 0
-              ? `اشتركي لمتابعة الجداول والواجبات والتذكيرات لكل أبنائك (${arabicDigits(studentsCount)} ${studentsCount === 1 ? "طالب/ة" : "طلاب"}).`
-              : "اختاري الباقة حسب عدد أبنائك، وبعدها أضيفيهم وارفعي جداولهم مباشرة."}
-          </p>
         </div>
 
         <SubscriptionTiersPicker studentsCount={studentsCount} subscription={subscription} motherId={motherId} onUnlocked={onUnlocked} />
