@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
+import { jobIdFrom, openJob, closeJob } from "@/lib/uploadJobs";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -13,17 +14,23 @@ const FEATURE = "upload_class_schedule";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 
 export async function POST(req) {
+  const body = await req.json().catch(() => ({}));
+  const motherId = req.headers.get("x-mother-id");
+  // النتيجة تُسجَّل على معرّف المهمة مهما صار بالاتصال — راجع lib/uploadJobs.js
+  const jobId = jobIdFrom(body);
+  await openJob(jobId, motherId, "upload-class-schedule");
+  let res;
   try {
-    return await handleUpload(req);
+    res = await handleUpload(body, motherId);
   } catch (e) {
     console.error("upload-class-schedule unexpected error:", e);
-    return NextResponse.json({ error: "خطأ غير متوقع: " + e.message }, { status: 500 });
+    res = NextResponse.json({ error: "خطأ غير متوقع: " + e.message }, { status: 500 });
   }
+  await closeJob(jobId, motherId, res);
+  return res;
 }
 
-async function handleUpload(req) {
-  const { childId, images } = await req.json();
-  const motherId = req.headers.get("x-mother-id");
+async function handleUpload({ childId, images }, motherId) {
   if (!motherId || !childId || !images?.length) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }

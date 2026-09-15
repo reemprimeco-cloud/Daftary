@@ -22,6 +22,7 @@ import {
   resizeDataUrl,
 } from "@/lib/native";
 import { installAuthFetch } from "@/lib/authFetch";
+import { postUpload } from "@/lib/uploadRequest";
 import CropModal from "./CropModal";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
 import { APP_TIERS, APP_PLAN, arabicDigits } from "@/lib/appPlans";
@@ -1754,15 +1755,8 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
     const body = selectChild
       ? { motherId, childId: effectiveChildId, images: payload }
       : { motherId, school, images: payload };
-    const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await res.json();
-    if (!res.ok) {
-      // الخطوات العملية تضيع لو مرّرنا النص وحده — نعلّقها على الخطأ نفسه.
-      const err = new Error(data.error);
-      err.tips = data.tips || [];
-      throw err;
-    }
-    return data;
+    // يصمد لانقطاع الاتصال أثناء التحليل الطويل — راجع lib/uploadRequest.js
+    return postUpload(endpoint, body);
   }
 
   async function run() {

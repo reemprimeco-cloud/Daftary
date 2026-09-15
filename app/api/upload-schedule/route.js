@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { extractFromImages } from "@/lib/visionExtract";
+import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
 import { kuwaitNow, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
+import { jobIdFrom, openJob, closeJob } from "@/lib/uploadJobs";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -16,12 +17,20 @@ const TASK_TYPES = new Set(["واجب", "حفظ", "اختبار", "مشروع"])
 const DAY_INDEX = { "الأحد": 0, "الاثنين": 1, "الثلاثاء": 2, "الأربعاء": 3, "الخميس": 4, "الجمعة": 5, "السبت": 6 };
 
 export async function POST(req) {
+  const body = await req.json().catch(() => ({}));
+  const motherId = req.headers.get("x-mother-id");
+  // النتيجة تُسجَّل على معرّف المهمة مهما صار بالاتصال — راجع lib/uploadJobs.js
+  const jobId = jobIdFrom(body);
+  await openJob(jobId, motherId, "upload-schedule");
+  let res;
   try {
-    return await handleUpload(req);
+    res = await handleUpload(body, motherId);
   } catch (e) {
     console.error("upload-schedule unexpected error:", e);
-    return NextResponse.json({ error: "خطأ غير متوقع: " + e.message }, { status: 500 });
+    res = NextResponse.json({ error: "خطأ غير متوقع: " + e.message }, { status: 500 });
   }
+  await closeJob(jobId, motherId, res);
+  return res;
 }
 
 // الخطة الأسبوعية تُنشر قبل بداية أسبوعها — الخميس أو الجمعة أو السبت —
@@ -49,9 +58,7 @@ function dateForDayName(rawDay) {
   return d.toISOString().slice(0, 10);
 }
 
-async function handleUpload(req) {
-  const { childId, images } = await req.json();
-  const motherId = req.headers.get("x-mother-id");
+async function handleUpload({ childId, images }, motherId) {
   if (!motherId || !childId || !images?.length) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }
@@ -96,6 +103,16 @@ async function handleUpload(req) {
     return NextResponse.json({ error: res.error, tips: res.tips }, { status: res.status });
   }
   const parsed = res.parsed;
+
+  // قراءة ما طلعت أي شيء (شوهد ١٨:٣٨ — رد من ٢٤ رمزاً لصورة خطة) كانت ترجع
+  // «نجاح» بصفر واجبات، فتظن الأم إن الرفع تم. نقولها صراحةً.
+  if (!parsed.entries?.length && !parsed.requirements?.length && !parsed.memorization?.length) {
+    console.error(`${FEATURE}: empty extraction for ${images.length} image(s)`);
+    return NextResponse.json(
+      { error: "ما قدرنا نطلع أي واجب أو اختبار أو مستلزمات من الصورة — لازم ترفعين صورة بجودة أفضل.", tips: QUALITY_TIPS },
+      { status: 422 }
+    );
+  }
 
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
   const resolveDue = (e) => (typeof e.dueDate === "string" && DATE_RE.test(e.dueDate) ? e.dueDate : dateForDayName(e.dueDay));
