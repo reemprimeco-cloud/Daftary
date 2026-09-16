@@ -1101,6 +1101,11 @@ function Onboarding({ onDone }) {
           <img src="/logo.png" alt="دفتري" style={{ width: 132, height: 132, borderRadius: 30, margin: "0 auto 14px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
           <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
           <p style={{ color: "#6B7280", fontSize: 13, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
+          {/* سطر ترويجي للتجربة المجانية (قرار ١٦ سبتمبر) — يوضّح من أول شاشة
+              إن التسجيل ما يطلب دفعاً فوراً، بدون وعد بمدة زمنية محددة. */}
+          <p style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: "10px 0 0", background: "#FFF7E6", color: "#8C6027", fontWeight: 800, fontSize: 12.5, padding: "7px 14px", borderRadius: 999 }}>
+            🎁 جرّبي مجاناً: طالب واحد + جدول حصص + خطة أسبوعية، بلا اشتراك
+          </p>
         </div>
         <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>ولي الأمر</label>
