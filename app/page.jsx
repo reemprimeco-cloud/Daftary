@@ -1014,13 +1014,20 @@ function InstallPrompt() {
 function Onboarding({ onDone }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  // step: "phone" = إدخال الاسم والرقم، "code" = إدخال كود التحقق
+  // step: "phone" (اسم ورقم) → "password" (رقم سري لحساب سبق تحديده) أو
+  // "code" (كود التحقق، مرة واحدة لكل رقم) → "setPassword" (اختياري بعد
+  // أول كود ناجح، عشان الدخول القادم يصير بلا كود ولا تكلفة).
   const [step, setStep] = useState("phone");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resendIn, setResendIn] = useState(0);
   const canSubmit = name.trim().length > 1 && /^[0-9]{8}$/.test(phone.trim());
+  // نتيجة الكود الناجح (ولي الأمر + الجلسة) نخزّنها هنا لين تنتهي خطوة
+  // الرقم السري (اختيارية) — عشان onDone يُنادى مرة وحدة بالنهاية.
+  const [verified, setVerified] = useState(null);
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
 
   // عدّاد تنازلي قبل ما نسمح بإعادة الإرسال — Twilio يحدّها بـ٥ مرات كل ١٠ دقائق،
   // فنمنع المستخدمة من حرق محاولاتها بالضغط المتكرر.
@@ -1047,14 +1054,21 @@ function Onboarding({ onDone }) {
       : err.message;
   }
 
-  async function sendCode(isResend = false) {
+  // bypassPassword=true لما تضغط «نسيت الرقم السري» — تجبر إرسال الكود
+  // حتى لو عندها رقم سري محدّد أصلاً.
+  async function sendCode(isResend = false, bypassPassword = false) {
     setBusy(true);
     setError("");
     try {
-      await post("/api/auth/request-otp", { phone: phone.trim(), resend: isResend === true });
-      setStep("code");
-      setCode("");
-      setResendIn(30);
+      const data = await post("/api/auth/request-otp", { phone: phone.trim(), resend: isResend === true, bypassPassword });
+      if (data.channel === "password") {
+        setStep("password");
+        setPassword("");
+      } else {
+        setStep("code");
+        setCode("");
+        setResendIn(30);
+      }
     } catch (err) {
       setError(friendly(err));
     } finally {
@@ -1071,11 +1085,79 @@ function Onboarding({ onDone }) {
         phone: phone.trim(),
         code: code.trim(),
       });
+      if (data.needsPassword) {
+        // خطوة اختيارية — الحساب مسجَّل دخول فعلياً، بس نعرض فرصة تحديد
+        // رقم سري قبل ما نكمّل، عشان الدخول القادم يصير بلا كود.
+        setVerified(data);
+        setStep("setPassword");
+        setBusy(false);
+      } else {
+        onDone(data.mother, data.token);
+      }
+    } catch (err) {
+      setError(friendly(err));
+      setBusy(false);
+    }
+  }
+
+  async function submitPassword() {
+    setBusy(true);
+    setError("");
+    try {
+      const data = await post("/api/auth/login-password", { phone: phone.trim(), password });
       onDone(data.mother, data.token);
     } catch (err) {
       setError(friendly(err));
       setBusy(false);
     }
+  }
+
+  async function saveNewPassword() {
+    if (password.trim().length < 4) { setError("الرقم السري لازم يكون ٤ أحرف/أرقام على الأقل"); return; }
+    if (password !== password2) { setError("الرقمان غير متطابقين"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${verified.token}` },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "تعذّر الحفظ");
+      onDone(verified.mother, verified.token);
+    } catch (err) {
+      setError(friendly(err));
+      setBusy(false);
+    }
+  }
+
+  if (step === "password") {
+    return (
+      <PasswordLoginScreen
+        password={password}
+        setPassword={setPassword}
+        busy={busy}
+        error={error}
+        onSubmit={submitPassword}
+        onForgot={() => sendCode(false, true)}
+        onBack={() => { setStep("phone"); setError(""); setPassword(""); }}
+      />
+    );
+  }
+
+  if (step === "setPassword") {
+    return (
+      <SetPasswordScreen
+        password={password}
+        setPassword={setPassword}
+        password2={password2}
+        setPassword2={setPassword2}
+        busy={busy}
+        error={error}
+        onSave={saveNewPassword}
+        onSkip={() => onDone(verified.mother, verified.token)}
+      />
+    );
   }
 
   if (step === "code") {
@@ -1187,6 +1269,90 @@ function VerifyCodeScreen({ phone, code, setCode, busy, error, resendIn, onSubmi
         <p style={{ color: "#9CA3AF", fontSize: 11.5, margin: "14px 0 0", lineHeight: 1.7, textAlign: "center" }}>
           ما وصلك واتساب؟ بنرسله رسالة نصية تلقائياً خلال ثواني
         </p>
+      </div>
+    </div>
+  );
+}
+
+// دخول برقم سري — يظهر بدل خطوة الكود لرقم سبق أن حدّد رقماً سرياً، فما
+// فيه انتظار رسالة ولا تكلفة Twilio.
+function PasswordLoginScreen({ password, setPassword, busy, error, onSubmit, onForgot, onBack }) {
+  const canSubmit = password.trim().length >= 4 && !busy;
+  return (
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 40 }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <img src="/logo.png" alt="دفتري" style={{ width: 100, height: 100, borderRadius: 24, margin: "0 auto 14px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
+          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 21, fontWeight: 800 }}>أدخلي رقمك السري</h1>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0" }}>مرحباً بعودتك 🤍</p>
+        </div>
+
+        <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="الرقم السري"
+            autoComplete="current-password"
+            style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "12px", fontSize: 18, textAlign: "center", direction: "ltr", marginBottom: 14 }}
+            onKeyDown={(e) => { if (e.key === "Enter" && canSubmit) onSubmit(); }}
+          />
+          <button disabled={!canSubmit} onClick={onSubmit} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
+            {busy ? "جاري الدخول..." : "دخول"}
+          </button>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 }}>{error}</p>}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, gap: 8 }}>
+            <button onClick={onBack} disabled={busy} style={{ background: "none", color: "#6B7280", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
+              تغيير الرقم
+            </button>
+            <button onClick={onForgot} disabled={busy} style={{ background: "none", color: "#7B68C4", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
+              نسيت الرقم السري؟
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// خطوة اختيارية بعد أول كود ناجح — تحديد رقم سري يغني عن الكود بالمرات
+// القادمة. قابلة للتخطي: الحساب دخل أصلاً بنجاح الكود.
+function SetPasswordScreen({ password, setPassword, password2, setPassword2, busy, error, onSave, onSkip }) {
+  return (
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 40 }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <span style={{ fontSize: 40 }}>🔒</span>
+          <h1 style={{ color: "#5C4B8C", margin: "8px 0 0", fontSize: 20, fontWeight: 800 }}>حدّدي رقماً سرياً</h1>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>عشان دخولك القادم — حتى من جهاز جديد — يصير بلا كود</p>
+        </div>
+
+        <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="رقم سري جديد (٤ أحرف/أرقام على الأقل)"
+            autoComplete="new-password"
+            style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 10, direction: "ltr", textAlign: "center" }}
+          />
+          <input
+            type="password"
+            value={password2}
+            onChange={(e) => setPassword2(e.target.value)}
+            placeholder="أعيدي كتابته"
+            autoComplete="new-password"
+            style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 14, direction: "ltr", textAlign: "center" }}
+          />
+          <button disabled={busy} onClick={onSave} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: busy ? 0.6 : 1, marginBottom: 8 }}>
+            {busy ? "جاري الحفظ..." : "حفظ"}
+          </button>
+          <button disabled={busy} onClick={onSkip} style={{ width: "100%", padding: 10, background: "none", color: "#6B7280", fontWeight: 700, fontSize: 13, minHeight: 40 }}>
+            تخطي الآن
+          </button>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "6px 0 0", lineHeight: 1.7, textAlign: "center" }}>{error}</p>}
+        </div>
       </div>
     </div>
   );
@@ -3466,6 +3632,67 @@ function appAccessSummary(access) {
   return { status: "", color: "#5C4B8C", bg: "#F1EFFA", detail: "", action: "عرض الباقات" };
 }
 
+// تحديد أو تغيير الرقم السري من صفحة الحساب — لمن تخطّاها بالتسجيل، أو
+// حابة تغيّره. fetch العادي (مو fetch(...) اليدوي) لأن installAuthFetch
+// يرفق التوكن تلقائياً هنا (بخلاف شاشة التسجيل قبل تسجيل الدخول).
+function PasswordSetting({ ios }) {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    if (password.trim().length < 4) { setError("الرقم السري لازم يكون ٤ أحرف/أرقام على الأقل"); return; }
+    if (password !== password2) { setError("الرقمان غير متطابقين"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "تعذّر الحفظ");
+      setSaved(true);
+      setPassword("");
+      setPassword2("");
+      setTimeout(() => { setOpen(false); setSaved(false); }, 1200);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const rowStyle = ios
+    ? { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "12px 16px", background: "none", color: "#000" }
+    : { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", width: "100%", background: "none", color: "#374151" };
+  const inputStyle = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, marginBottom: 8, direction: "ltr", textAlign: "center" };
+
+  return (
+    <div style={ios ? undefined : { borderBottom: "1px solid #F5F3EF" }}>
+      <button onClick={() => setOpen((v) => !v)} className={ios ? "ios-row" : undefined} style={rowStyle}>
+        <span style={{ fontSize: ios ? 17 : 14.5, fontWeight: ios ? 400 : 700, display: "flex", alignItems: "center", gap: 9 }}>
+          {!ios && <TileIcon name="lock" size={25} />}
+          الرقم السري للدخول
+        </span>
+        <span style={{ color: ios ? "#C7C2D4" : "#C7C2D4", fontSize: 16 }}>{open ? "︿" : "‹"}</span>
+      </button>
+      {open && (
+        <div style={{ padding: ios ? "0 16px 14px" : "0 18px 16px" }}>
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: "#9CA3AF", lineHeight: 1.7 }}>
+            دخول قادم بجوالك ورقمك السري بلا كود، حتى من جهاز جديد.
+          </p>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رقم سري جديد" autoComplete="new-password" style={inputStyle} />
+          <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="أعيدي كتابته" autoComplete="new-password" style={inputStyle} />
+          <button onClick={save} disabled={busy} style={{ width: "100%", padding: 11, borderRadius: 12, background: saved ? "#22C55E" : "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13.5, minHeight: 42, opacity: busy ? 0.6 : 1 }}>
+            {saved ? "تم الحفظ ✓" : busy ? "جاري الحفظ..." : "حفظ"}
+          </button>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: "8px 0 0", lineHeight: 1.7 }}>{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared, onManageSubscription }) {
   const phone = (mother.phone || "").replace(/^\+965/, "");
   const [native, setNative] = useState(false);
@@ -3552,6 +3779,10 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
           </div>
 
           <div className="ios-group">
+            <PasswordSetting ios />
+          </div>
+
+          <div className="ios-group">
             <button onClick={onLogout} className="ios-row" style={{ color: "#7B68C4" }}>تسجيل الخروج</button>
           </div>
 
@@ -3632,6 +3863,10 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             <span style={{ fontSize: 14.5, fontWeight: 700, color: "#374151" }}>الإصدار</span>
             <span style={{ fontSize: 13.5, color: "#9CA3AF", direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>
           </div>
+        </div>
+
+        <div style={{ background: "white", borderRadius: 18, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
+          <PasswordSetting />
         </div>
 
         <button onClick={onLogout} style={{ background: "white", borderRadius: 18, padding: "15px 18px", textAlign: "right", fontSize: 14.5, fontWeight: 700, color: "#374151", boxShadow: "0 1px 3px rgba(0,0,0,.05)", width: "100%" }}>

@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { cancelPendingVerification, isReviewPhone, maskPhone, normalizeKuwaitPhone, twilioVerify } from "@/lib/otp";
 import { alertAdmin } from "@/lib/opsAlert";
+import { supabaseAdmin } from "@/lib/supabase";
 
 // إرسال كود التحقق على واتساب، مع تحويل تلقائي لرسالة نصية لو ما وصل واتساب
 // (المستخدمة ما عندها واتساب، أو التسليم فشل). Twilio Verify يتكفّل بتوليد
 // الكود وانتهاء صلاحيته وحد المحاولات — ما نخزّن أي كود عندنا.
 export async function POST(req) {
-  let phone, resend;
+  let phone, resend, bypassPassword;
   try {
-    ({ phone, resend } = await req.json());
+    ({ phone, resend, bypassPassword } = await req.json());
   } catch {
     return NextResponse.json({ error: "طلب غير صالح" }, { status: 400 });
   }
@@ -22,6 +23,17 @@ export async function POST(req) {
   // المراجع ما يقدر يدخل التطبيق أصلاً (سبب رفض تحت قاعدة 2.1).
   if (isReviewPhone(to)) {
     return NextResponse.json({ ok: true, channel: "review" });
+  }
+
+  // رقم سبق أن حدّد رقماً سرياً: ندخلها بالجوال + الرقم السري بلا كود ولا
+  // تكلفة Twilio — إلا لو طلبت صراحةً «نسيت الرقم السري» (bypassPassword).
+  // الكود يبقى إلزامياً مرة واحدة فقط لكل رقم لمنع حسابات وهمية تستهلك
+  // التجربة المجانية (راجع CLAUDE.md، قرار ١٦ سبتمبر).
+  if (!bypassPassword) {
+    const { data: mother } = await supabaseAdmin().from("mothers").select("password_hash").eq("phone", to).maybeSingle();
+    if (mother?.password_hash) {
+      return NextResponse.json({ ok: true, channel: "password" });
+    }
   }
 
   // عند إعادة الإرسال نلغي المعلّق عشان يتولّد كود جديد بدل تكرار القديم
