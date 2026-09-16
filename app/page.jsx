@@ -3764,11 +3764,11 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span className="ios-chevron">›</span>
             </a>
             <a href="mailto:reemprimeco@gmail.com" className="ios-row">
-              <span>تواصلي معنا</span>
+              <span>تواصل معانا (ايميل)</span>
               <span className="ios-chevron">›</span>
             </a>
             <a href={WHATSAPP_URL} target="_blank" rel="noreferrer" className="ios-row">
-              <span>واتساب — أسرع رد</span>
+              <span>تواصل معانا (واتساب)</span>
               <span className="ios-chevron">›</span>
             </a>
             <PushTestRow />
@@ -3848,14 +3848,14 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
           <a href="mailto:reemprimeco@gmail.com" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
               <TileIcon name="mail" size={25} />
-              تواصلي معنا
+              تواصل معانا (ايميل)
             </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
           <a href={WHATSAPP_URL} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
               <TileIcon name="whatsapp" size={25} />
-              واتساب — أسرع رد
+              تواصل معانا (واتساب)
             </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
