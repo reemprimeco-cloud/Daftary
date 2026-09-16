@@ -49,7 +49,7 @@ export async function GET(req) {
 
   // عدد المواعيد بكرا لكل ولي أمر — استعلام واحد للجميع بدل واحد لكل أم.
   const { data: dueRows } = await sb
-    .from("tasks").select("child_id").eq("status", "active").eq("due_date", tomorrow);
+    .from("tasks").select("child_id").eq("status", "active").neq("type", "درس").eq("due_date", tomorrow);
   const childMother = new Map((children || []).map((c) => [c.id, c.mother_id]));
   const dueByMother = new Map();
   for (const t of dueRows || []) {

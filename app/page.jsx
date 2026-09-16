@@ -51,6 +51,8 @@ const TYPE_META = {
   "حفظ": { done: "تم الحفظ" },
   "اختبار": { done: "تم المذاكرة" },
   "مشروع": { done: "تم" },
+  // محتوى المنهج خلال الأسبوع — الأم تعلّمه «تمت المراجعة»، وبلا أي تذكير
+  "درس": { done: "تمت المراجعة" },
 };
 const TABS = [
   { key: "dashboard", label: "الرئيسية" },
@@ -1243,6 +1245,7 @@ function PlanRow({ task, onToggle, onOpen }) {
             {task.type === "اختبار" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#FEE2E2", color: "#B91C1C", borderRadius: 999, padding: "2px 8px" }}>اختبار</span>}
             {task.type === "مشروع" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#DBEAFE", color: "#1D4ED8", borderRadius: 999, padding: "2px 8px" }}>مشروع</span>}
             {task.type === "حفظ" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#EDE9FE", color: "#5B21B6", borderRadius: 999, padding: "2px 8px" }}>حفظ</span>}
+            {task.type === "درس" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#E0F2F1", color: "#0F766E", borderRadius: 999, padding: "2px 8px" }}>درس</span>}
           </p>
           {/* النص كما كُتب بالخطة حرفياً — بلا تلخيص ولا تعديل */}
           {task.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: done ? "#B0B3BA" : "#6B7280", lineHeight: 1.65, whiteSpace: "pre-line" }}>{renderWithNumbers(task.details)}</p>}
@@ -1311,13 +1314,17 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   if (sunday) {
     for (let i = 0; i < 7; i++) {
       const date = addDays(sunday, i);
-      const items = all.filter((t) => t.due_date === date && show(t));
+      const items = all.filter((t) => t.type !== "درس" && t.due_date === date && show(t));
       if (items.length) groups.push({ key: date, label: FULL_DAY_NAMES[i], sub: shortDate(date), items, tone: "day" });
     }
   }
-  const upcoming = all.filter((t) => t.due_date && saturday && t.due_date > saturday && show(t));
+  // «درس» = محتوى المنهج خلال الأسبوع، مو تكليفاً بموعد — قسمه لحاله بدل ما
+  // يظهر تحت يوم كأنه تسليم. الأم تعلّمه «تمت المراجعة» وما يجيها عنه تذكير.
+  const lessons = all.filter((t) => t.type === "درس" && show(t));
+  if (lessons.length) groups.push({ key: "lessons", label: "دروس الأسبوع (المنهج)", items: lessons, tone: "lesson" });
+  const upcoming = all.filter((t) => t.type !== "درس" && t.due_date && saturday && t.due_date > saturday && show(t));
   if (upcoming.length) groups.push({ key: "upcoming", label: "بعد هذا الأسبوع", items: upcoming, tone: "upcoming" });
-  const undated = all.filter((t) => !t.due_date && show(t));
+  const undated = all.filter((t) => t.type !== "درس" && !t.due_date && show(t));
   if (undated.length) groups.push({ key: "undated", label: "بدون تاريخ محدد", items: undated, tone: "undated" });
 
   const chips = [["all", "الكل"], ["open", "غير مكتمل"], ["done", "مكتمل"], ["exam", "اختبارات"]];
@@ -1377,8 +1384,8 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
 
         {groups.map((g) => (
           <div key={g.key} style={{ background: "white", borderRadius: 18, overflow: "hidden", border: "1px solid #EEEDE8" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: g.tone === "undated" ? "#FEF3C7" : g.tone === "upcoming" ? "#EBF4FA" : color.bg }}>
-              <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: g.tone === "undated" ? "#92400E" : g.tone === "upcoming" ? "#31607C" : color.text }}>{g.label}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: g.tone === "undated" ? "#FEF3C7" : g.tone === "upcoming" ? "#EBF4FA" : g.tone === "lesson" ? "#E0F2F1" : color.bg }}>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: g.tone === "undated" ? "#92400E" : g.tone === "upcoming" ? "#31607C" : g.tone === "lesson" ? "#0F766E" : color.text }}>{g.label}</p>
               {g.sub && <span style={{ fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>{g.sub}</span>}
               <span style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 800, color: groupDone(g.items) === g.items.length ? "#15803D" : "#6B7280", background: "white", borderRadius: 999, padding: "3px 9px" }}>
                 {groupDone(g.items) === g.items.length ? "✓ " : ""}{groupDone(g.items)} من {g.items.length}

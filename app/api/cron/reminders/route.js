@@ -21,6 +21,38 @@ const KIND_TITLES = {
   task_day_before: "تذكير تسليم غداً",
   task_today: "موعد التسليم اليوم",
 };
+const GROUP_TITLES = {
+  exam_day_before: "اختبارات غداً",
+  exam_today: "اختبارات اليوم",
+  new_task: "واجبات جديدة",
+  task_day_before: "تسليم غداً",
+  task_today: "تسليم اليوم",
+};
+
+// «واجبان» / «٥ واجبات» / «١٢ واجباً» — عربية سليمة بدل «5 واجب».
+function countTasks(n) {
+  if (n === 2) return "واجبان";
+  if (n <= 10) return `${n} واجبات`;
+  return `${n} واجباً`;
+}
+
+// نص الإشعار المجمّع: المواد بأسمائها كما بالخطة (والنوع لو مو واجباً عادياً)،
+// ولكل طالب/ة سطر لو الأم عندها أكثر من واحد بنفس الإشعار.
+function groupedText(tasks, kind, groupFn) {
+  const byChild = new Map();
+  for (const t of tasks) {
+    const name = t.children?.name || "";
+    if (!byChild.has(name)) byChild.set(name, []);
+    byChild.get(name).push(t);
+  }
+  const label = (t) => (kind.startsWith("exam") || t.type === "واجب" ? t.subject : `${t.subject} (${t.type})`);
+  if (byChild.size === 1) {
+    const [name, list] = [...byChild.entries()][0];
+    return groupFn(name, list.map(label).join("، "), list.length);
+  }
+  const lines = [...byChild.entries()].map(([name, list]) => `${name}: ${list.map(label).join("، ")}`);
+  return groupFn("أبنائك", `\n${lines.join("\n")}`, tasks.length);
+}
 
 // المحفوظات ما لها موعد بقاعدة البيانات (مرجع وحالة إنجاز فقط)، وغالباً
 // تجي ضمن الخطة الأسبوعية بلا تاريخ محدد — فما نقدر نذكّر «قبل الموعد
@@ -145,6 +177,9 @@ export async function GET(req) {
     .from("tasks")
     .select("*, children(mother_id, name)")
     .eq("status", "active")
+    // «درس» = محتوى المنهج بالخطة الأسبوعية، ما له موعد تسليم ولا يحتاج
+    // تنبيهاً — التذكير للواجب والاختبار والمشروع والحفظ فقط.
+    .neq("type", "درس")
     .not("due_date", "is", null)
     .gte("created_at", new Date(Date.now() - 26 * 3600 * 1000).toISOString());
 
@@ -155,6 +190,7 @@ export async function GET(req) {
     .from("tasks")
     .select("*, children(mother_id, name)")
     .neq("type", "اختبار")
+    .neq("type", "درس")
     .eq("due_date", tomorrow)
     .eq("status", "active");
 
@@ -165,33 +201,40 @@ export async function GET(req) {
     .from("tasks")
     .select("*, children(mother_id, name)")
     .neq("type", "اختبار")
+    .neq("type", "درس")
     .eq("due_date", today)
     .eq("status", "active");
 
   let sent = 0;
   const batches = [
-    [examsTomorrow || [], "exam_day_before", (t) => `⏰ تذكير: اختبار ${t.subject} لـ ${t.children.name} غداً — وقت المذاكرة 📚`],
-    [examsToday || [], "exam_today", (t) => `⏰ اليوم اختبار ${t.subject} لـ ${t.children.name} — بالتوفيق 🌟`],
-    [freshTasks || [], "new_task", (t) => `📝 واجب جديد لـ ${t.children.name}: ${t.subject} (${t.type}) — الموعد ${t.due_date}`],
-    [tasksTomorrow || [], "task_day_before", (t) => `⏰ تذكير: ${t.subject} (${t.type}) لـ ${t.children.name} موعد تسليمه غداً`],
-    [tasksToday || [], "task_today", (t) => `📝 اليوم موعد تسليم ${t.subject} لـ ${t.children.name}`],
+    [examsTomorrow || [], "exam_day_before", (t) => `⏰ تذكير: اختبار ${t.subject} لـ ${t.children.name} غداً — وقت المذاكرة 📚`, (who, list) => `⏰ غداً اختبارات لـ ${who}: ${list} — وقت المذاكرة 📚`],
+    [examsToday || [], "exam_today", (t) => `⏰ اليوم اختبار ${t.subject} لـ ${t.children.name} — بالتوفيق 🌟`, (who, list) => `⏰ اليوم اختبارات لـ ${who}: ${list} — بالتوفيق 🌟`],
+    [freshTasks || [], "new_task", (t) => `📝 واجب جديد لـ ${t.children.name}: ${t.subject} (${t.type}) — الموعد ${t.due_date}`, (who, list, n) => `📝 ${countTasks(n)} جديدة لـ ${who}: ${list}`],
+    [tasksTomorrow || [], "task_day_before", (t) => `⏰ تذكير: ${t.subject} (${t.type}) لـ ${t.children.name} موعد تسليمه غداً`, (who, list, n) => `⏰ غداً موعد تسليم ${countTasks(n)} لـ ${who}: ${list}`],
+    [tasksToday || [], "task_today", (t) => `📝 اليوم موعد تسليم ${t.subject} لـ ${t.children.name}`, (who, list, n) => `📝 اليوم موعد تسليم ${countTasks(n)} لـ ${who}: ${list}`],
   ];
 
-  for (const [rows, kind, textFn] of batches) {
-    const results = await mapPool(rows, CONCURRENCY, async (t) => {
-      const { data: exists } = await sb.from("reminder_log").select("id").eq("task_id", t.id).eq("kind", kind).maybeSingle();
-      if (exists) return 0;
+  // إشعار واحد لكل ولي أمر لكل نوع، مو إشعار لكل واجب: خطة فيها خمسة واجبات
+  // ليوم الخميس كانت تطلّع خمسة إشعارات متتالية بنفس الدقيقة (طلب صاحبة
+  // التطبيق ١٦ سبتمبر). التكرار يبقى ممنوعاً بسجل reminder_log لكل واجب.
+  for (const [rows, kind, textFn, groupFn] of batches) {
+    if (!rows.length) continue;
+    const { data: logged } = await sb.from("reminder_log").select("task_id").eq("kind", kind).in("task_id", rows.map((t) => t.id));
+    const already = new Set((logged || []).map((r) => r.task_id));
+    const byMother = new Map();
+    for (const t of rows) {
+      const motherId = t.children?.mother_id;
+      if (!motherId || already.has(t.id)) continue;
+      if (!byMother.has(motherId)) byMother.set(motherId, []);
+      byMother.get(motherId).push(t);
+    }
 
-      // معرّف ولي الأمر جاي أصلاً مع الطالب/ة بالاستعلام، فما نحتاج استعلاماً
-      // كاملاً عن صف الأم لكل تذكير — كان استعلاماً ضائعاً بالكامل.
-      const motherId = t.children.mother_id;
-      if (!motherId) return 0;
-
-      const text = textFn(t);
-      const title = KIND_TITLES[kind] || "دفتري";
+    const results = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, tasks]) => {
+      const text = tasks.length === 1 ? textFn(tasks[0]) : groupedText(tasks, kind, groupFn);
+      const title = tasks.length === 1 ? KIND_TITLES[kind] || "دفتري" : GROUP_TITLES[kind] || KIND_TITLES[kind] || "دفتري";
       if (!(await deliverToMother(sb, motherId, title, text))) return 0;
-      await sb.from("reminder_log").insert({ mother_id: motherId, task_id: t.id, kind });
-      return 1;
+      await sb.from("reminder_log").insert(tasks.map((t) => ({ mother_id: motherId, task_id: t.id, kind })));
+      return tasks.length;
     });
     sent += results.reduce((a, b) => a + b, 0);
   }
