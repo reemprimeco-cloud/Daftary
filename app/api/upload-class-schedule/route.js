@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
 import { jobIdFrom, openJob, closeJob } from "@/lib/uploadJobs";
+import { markTrialUploadUsed } from "@/lib/appEntitlements";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -97,6 +98,10 @@ async function handleUpload({ childId, images }, motherId) {
     if (previous?.length) await sb.from("class_schedule").insert(previous);
     return NextResponse.json({ error: "ما قدرنا نحفظ الجدول. جربي مرة ثانية." }, { status: 500 });
   }
+
+  // التجربة المجانية تُستهلك هنا فقط — بعد نجاح الحفظ فعلياً، لا عند مجرد
+  // المحاولة. آمنة النداء حتى لو الأم مشتركة أصلاً (راجع appEntitlements.js).
+  await markTrialUploadUsed(motherId, "schedule");
 
   return NextResponse.json({ ok: true, matchedPeriods: rows.length, imagesProcessed: images.length });
 }

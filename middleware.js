@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSessionToken } from "@/lib/session";
-import { hasAppAccess } from "@/lib/appEntitlements";
+import { hasAppAccess, isTrialExempt } from "@/lib/appEntitlements";
 
 // حارس مركزي لمسارات الـ API. قبله كانت كل المسارات مفتوحة: أي أحد يعرف معرّف
 // ولي أمر يقدر يقرأ ويعدّل بياناته. نتحقق هنا مرة وحدة بدل ما نكرر الفحص في
@@ -33,6 +33,10 @@ const APP_PAYWALL_EXEMPT_PREFIXES = [
   // البلاغ عن خلل لازم يشتغل حتى لو الحساب محجوب — بل هذي أهم حالة نبي
   // نعرف عنها: أم محجوبة تواجه مشكلة ولا تقدر توصلنا بشي.
   "/api/error-report",
+  // استعلام حالة رفعة سابقة — محصور بصاحبته أصلاً (مصفّى بـmother_id
+  // الموثوق)، فحجبه عن غير المشتركة لا يمنع شيئاً ويكسر تجربة رفع الجدول
+  // المجانية (lib/uploadRequest.js يستعلم عنه لو انقطع الاتصال).
+  "/api/upload-jobs/",
 ];
 
 // عرض الأبناء وحذف طالب/ة يبقيان مسموحين دائماً حتى لو الحساب محجوب —
@@ -53,6 +57,8 @@ async function checkAppPaywall(req, motherId) {
 
   const access = await hasAppAccess(motherId);
   if (access.allowed) return null;
+  // التجربة المجانية لمرة واحدة (قرار ١٦ سبتمبر) — راجع lib/appEntitlements.js
+  if (isTrialExempt(access, req.method, req.nextUrl.pathname)) return null;
 
   return NextResponse.json(
     { error: "الاشتراك بالتطبيق منتهي أو غير مفعّل", paywall: true, phase: access.phase },

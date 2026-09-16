@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { redistributePool } from "@/lib/entitlements";
-import { hasAppAccess } from "@/lib/appEntitlements";
+import { hasAppAccess, childAddAllowedByTrial } from "@/lib/appEntitlements";
 
 export async function GET(req) {
   const motherId = req.nextUrl.searchParams.get("motherId");
@@ -23,7 +23,10 @@ export async function POST(req) {
   const access = await hasAppAccess(motherId);
   const max = access.subscription?.max_students;
   if (access.phase === "enforced" || max != null) {
-    if ((access.studentsCount || 0) + 1 > (max ?? 0)) {
+    // التجربة المجانية (قرار ١٦ سبتمبر): طالب أول بلا اشتراك — middleware.js
+    // يمرّر هالطلب فعلاً عبر isTrialExempt، وهذا فحص دفاعي ثانٍ بنفس القاعدة.
+    const freeTrial = childAddAllowedByTrial(access);
+    if (!freeTrial && (access.studentsCount || 0) + 1 > (max ?? 0)) {
       return NextResponse.json(
         { error: "باقتك الحالية ما تغطي طالباً/ة إضافياً. رقّي الباقة أولاً.", paywall: true },
         { status: 402 }
