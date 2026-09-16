@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
-import { kuwaitNow, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
+import { kuwaitNow, kuwaitTodayLabel, kuwaitYear, kuwaitWeekMap } from "@/lib/kuwaitDate";
 import { jobIdFrom, openJob, closeJob } from "@/lib/uploadJobs";
 import { markTrialUploadUsed } from "@/lib/appEntitlements";
 
@@ -240,5 +240,20 @@ async function handleUpload({ childId, images }, motherId) {
   // المحاولة. آمنة النداء حتى لو الأم مشتركة أصلاً (راجع appEntitlements.js).
   await markTrialUploadUsed(motherId, "plan");
 
+  // رفعة خطة جديدة = فرصة تنظيف: المنجز من أسابيع فاتت (أو بلا تاريخ أصلاً
+  // — عبارات نسبية مثل «نهاية الفصل الدراسي») ما له داعٍ يبقى بالواجهة
+  // للأبد. المُنجز غير المرتبط بتاريخ ما يختفي من نفسه أبداً بخلاف المؤرَّخ،
+  // فكان يتراكم بالرئيسية مع كل رفعة. الحذف نهائي وللمنجز فقط — غير المنجز
+  // (حتى لو قديم) يبقى كما هو، ما نضيّع شي الأم ما خلصته بعد.
+  await cleanupCompletedBeforeThisWeek(sb, child.id);
+
   return NextResponse.json({ ok: true, matchedTasks, updatedTasks, matchedReqs, updatedReqs, matchedMemorization, imagesProcessed: images.length });
+}
+
+async function cleanupCompletedBeforeThisWeek(sb, childId) {
+  const { sunday } = kuwaitWeekMap();
+  await sb.from("tasks").delete().eq("child_id", childId).eq("status", "done").or(`due_date.is.null,due_date.lt.${sunday}`);
+  // التسميع ما له تاريخ استحقاق بالقاعدة أصلاً، فكل منجز منه (من أي وقت
+  // مضى) يعتبر «قديم» بمجرد رفع خطة جديدة.
+  await sb.from("memorization").delete().eq("child_id", childId).eq("done", true);
 }
