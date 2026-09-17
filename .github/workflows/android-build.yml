@@ -54,12 +54,21 @@ jobs:
           name: daftary-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
+      - name: Check for release signing secret
+        id: keystore_check
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Decode release keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: steps.keystore_check.outputs.present == 'true'
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/daftary-release.keystore"
 
       - name: Build signed release AAB + APK
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: steps.keystore_check.outputs.present == 'true'
         working-directory: android
         env:
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/daftary-release.keystore
@@ -69,14 +78,14 @@ jobs:
         run: ./gradlew bundleRelease assembleRelease --no-daemon
 
       - name: Upload release AAB artifact
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: steps.keystore_check.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: daftary-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload release APK artifact
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: steps.keystore_check.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: daftary-release-apk
