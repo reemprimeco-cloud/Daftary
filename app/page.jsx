@@ -686,6 +686,13 @@ export default function Home() {
     setRequirements((prev) => prev.filter((r) => r.id !== id));
   }
 
+  async function handleClearBought(childId) {
+    if (!confirm("مسح كل المستلزمات المُشتراة لهذا الطالب/ة؟")) return;
+    const res = await fetch("/api/requirements/clear-bought", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ childId, motherId: mother.id }) });
+    if (!res.ok) { alert("تعذّر المسح، حاولي مرة ثانية."); return; }
+    setRequirements((prev) => prev.filter((r) => !(r.child_id === childId && r.bought)));
+  }
+
   if (loading || (mother && (!schools || !dataLoaded))) {
     return (
       <>
@@ -817,7 +824,7 @@ export default function Home() {
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
               children.map((c) => (
-                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onDeleteReq={handleDeleteReq} />
+                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onDeleteReq={handleDeleteReq} onClearBought={handleClearBought} />
               ))
             )}
           </div>
@@ -1596,8 +1603,21 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   );
 }
 
-function RequirementsCard({ child, items, onToggle, onDeleteReq }) {
+// دائرة ✓ للمستلزمات — دائرة كاملة (بخلاف مربّع الخطة الأسبوعية)، بمساحة
+// لمس ٤٤ بكسل.
+function CircleCheck({ checked, onClick, label }) {
+  return (
+    <button onClick={onClick} aria-label={label} aria-pressed={checked} style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", flexShrink: 0, padding: 0 }}>
+      <span style={{ width: 26, height: 26, borderRadius: "50%", border: checked ? "none" : "2px solid #C9C6D6", background: checked ? "#22C55E" : "white", display: "flex", alignItems: "center", justifyContent: "center", transition: "background .15s" }}>
+        {checked && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>}
+      </span>
+    </button>
+  );
+}
+
+function RequirementsCard({ child, items, onToggle, onDeleteReq, onClearBought }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
+  const boughtCount = items.filter((r) => r.bought).length;
   return (
     <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, background: color.bg }}>
@@ -1606,18 +1626,21 @@ function RequirementsCard({ child, items, onToggle, onDeleteReq }) {
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{items.length} طلب</p>
         </div>
+        {boughtCount > 0 && (
+          <button onClick={() => onClearBought(child.id)} style={{ fontSize: 12, padding: "7px 12px", borderRadius: 10, fontWeight: 700, background: "white", color: color.text, flexShrink: 0 }}>
+            مسح الكل ({boughtCount})
+          </button>
+        )}
       </div>
       <div style={{ background: "white", padding: 12 }}>
         {items.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا توجد طلبات حالياً</p>}
         {items.map((r) => (
-          <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F3F4F6", gap: 8 }}>
+          <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid #F3F4F6", gap: 4 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: r.bought ? "#9CA3AF" : "#374151", textDecoration: r.bought ? "line-through" : "none" }}>{r.item}</p>
               <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{fmtDate(r.due_date)}</p>
             </div>
-            <button onClick={() => onToggle(r.id)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: r.bought ? "#F0FDF4" : color.soft, color: r.bought ? "#166534" : color.text, flexShrink: 0 }}>
-              {r.bought ? "تم الشراء" : "تحديد كمُشترى"}
-            </button>
+            <CircleCheck checked={r.bought} onClick={() => onToggle(r.id)} label={r.bought ? "إرجاعه لغير مُشترى" : "تحديد كمُشترى"} />
             <button onClick={() => onDeleteReq(r.id)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 16, width: 24, height: 24, flexShrink: 0, padding: 0 }}>×</button>
           </div>
         ))}
