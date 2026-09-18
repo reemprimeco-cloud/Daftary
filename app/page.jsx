@@ -464,6 +464,7 @@ export default function Home() {
   const [showUpload, setShowUpload] = useState(false);
   const [showUploadSchedule, setShowUploadSchedule] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [editingCell, setEditingCell] = useState(null); // { child, day, period, entry } — entry فاضي لو خانة جديدة
   const [showProfile, setShowProfile] = useState(false);
   const [showSubscriptionManage, setShowSubscriptionManage] = useState(false);
   const [openTask, setOpenTask] = useState(null);
@@ -663,13 +664,15 @@ export default function Home() {
     setOpenTask(null);
   }
 
-  async function handleUpdateTaskDate(taskId, dueDate) {
-    const res = await fetch(`/api/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dueDate, motherId: mother.id }) });
+  // تحديث جزئي أو كامل لواجب موجود — تاريخ فقط (السطر القديم) أو مادة/نوع/
+  // تفاصيل/تاريخ معاً (التعديل الكامل من TaskModal). يرمي عند الفشل عشان
+  // الشاشة تعرض رسالة الخطأ وتبقى مفتوحة بدل ما تقفل بصمت.
+  async function handleUpdateTask(taskId, updates) {
+    const res = await fetch(`/api/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "تعذّر حفظ التاريخ");
+      throw new Error(data.error || "تعذّر حفظ التعديلات");
     }
-    setOpenTask(null);
     await loadAll(mother.id);
   }
 
@@ -687,6 +690,15 @@ export default function Home() {
     setRequirements((prev) => prev.filter((r) => r.id !== id));
   }
 
+  async function handleUpdateReq(id, updates) {
+    const res = await fetch(`/api/requirements/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "تعذّر حفظ التعديلات");
+    }
+    setRequirements((prev) => prev.map((r) => (r.id === id ? { ...r, item: updates.item ?? r.item, due_date: "dueDate" in updates ? updates.dueDate : r.due_date } : r)));
+  }
+
   async function handleClearBought(childId) {
     if (!confirm("مسح كل المستلزمات المُشتراة لهذا الطالب/ة؟")) return;
     const res = await fetch("/api/requirements/clear-bought", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ childId, motherId: mother.id }) });
@@ -701,6 +713,28 @@ export default function Home() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { alert(data.error || "تعذّرت إضافة الواجب، حاولي مرة ثانية."); return; }
     setShowAddTask(false);
+    await loadAll(mother.id);
+  }
+
+  // تعديل خانة بجدول الحصص — إضافة (POST) لو الخانة فاضية أو تحديث (PATCH)
+  // لو فيها حصة أصلاً. اليوم ورقم الحصة يحددان الخانة نفسها فما يتغيّران.
+  async function handleSaveScheduleCell(entryId, payload) {
+    const res = entryId
+      ? await fetch(`/api/class-schedule/${entryId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      : await fetch("/api/class-schedule", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "تعذّر حفظ الحصة");
+    }
+    setEditingCell(null);
+    await loadAll(mother.id);
+  }
+
+  async function handleDeleteScheduleCell(entryId) {
+    if (!confirm("حذف هذه الحصة من الجدول؟")) return;
+    const res = await fetch(`/api/class-schedule/${entryId}`, { method: "DELETE" });
+    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    setEditingCell(null);
     await loadAll(mother.id);
   }
 
@@ -836,7 +870,7 @@ export default function Home() {
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
               children.map((c) => (
-                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onDeleteReq={handleDeleteReq} onClearBought={handleClearBought} />
+                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onDeleteReq={handleDeleteReq} onClearBought={handleClearBought} onUpdateReq={handleUpdateReq} />
               ))
             )}
           </div>
@@ -851,7 +885,7 @@ export default function Home() {
                   <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ رفع/تحديث الجدول</button>
                 </div>
                 {children.map((c) => (
-                  <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} />
+                  <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} onCellClick={(day, period, entry) => setEditingCell({ child: c, day, period, entry })} />
                 ))}
               </>
             )}
@@ -898,6 +932,17 @@ export default function Home() {
 
       {showAddChild && <AddChildModal schools={schools} nextColorIdx={children.length} onClose={() => setShowAddChild(false)} onSave={handleAddChild} />}
       {showAddTask && planChild && <AddTaskModal child={planChild} onClose={() => setShowAddTask(false)} onSave={handleAddTask} />}
+      {editingCell && (
+        <EditScheduleCellModal
+          child={editingCell.child}
+          day={editingCell.day}
+          period={editingCell.period}
+          entry={editingCell.entry}
+          onClose={() => setEditingCell(null)}
+          onSave={handleSaveScheduleCell}
+          onDelete={handleDeleteScheduleCell}
+        />
+      )}
       {editingChild && (
         <AddChildModal
           schools={schools}
@@ -934,7 +979,7 @@ export default function Home() {
           onDone={() => loadAll(mother.id)}
         />
       )}
-      {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateDate={handleUpdateTaskDate} />}
+      {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateTask={handleUpdateTask} />}
       {showProfile && (
         <ProfileView
           mother={mother}
@@ -1472,6 +1517,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   const color = PALETTE[child.color_idx % PALETTE.length];
   const [filter, setFilter] = useState("all");
   const [memo, setMemo] = useState([]);
+  const [editingMemo, setEditingMemo] = useState(null);
 
   useEffect(() => {
     fetch(`/api/memorization?childId=${child.id}&motherId=${motherId}`)
@@ -1484,6 +1530,24 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
     hapticLight();
     const res = await fetch(`/api/memorization/${id}/toggle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
     if (!res.ok) setMemo(flip);
+  }
+
+  async function saveMemo(id, updates) {
+    const res = await fetch(`/api/memorization/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "تعذّر حفظ التعديلات");
+    }
+    setMemo((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
+    setEditingMemo(null);
+  }
+
+  async function deleteMemo(id) {
+    if (!confirm("حذف هذا العنصر من الحفظ نهائياً؟")) return;
+    const res = await fetch(`/api/memorization/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    setMemo((prev) => prev.filter((m) => m.id !== id));
+    setEditingMemo(null);
   }
 
   // ترتيب السطور داخل اليوم = ترتيب استخراجها من الخطة (created_at)، فلا
@@ -1602,19 +1666,78 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
             <div style={{ padding: "0 12px" }}>
               {memoShown.map((m) => (
                 <div key={m.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "8px 0", borderTop: "1px solid #F3F2EE" }}>
-                  <div style={{ flex: 1, minWidth: 0, padding: "4px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <button onClick={() => setEditingMemo(m)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: "4px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
                     <SubjectIcon subject={m.kind === "حديث" ? "التربية الإسلامية" : "القرآن الكريم"} size={34} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: m.done ? "#9CA3AF" : "#1F2937", textDecoration: m.done ? "line-through" : "none" }}>{m.kind === "حديث" ? "حديث" : "القرآن الكريم"} · {m.reference}</p>
                       {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: m.done ? "#B0B3BA" : "#6B7280", lineHeight: 1.65 }}>{m.details}</p>}
                     </div>
-                  </div>
+                  </button>
                   <CheckBox checked={m.done} label={m.done ? "إرجاعه لغير مكتمل" : "تم"} onClick={() => toggleMemo(m.id)} />
                 </div>
               ))}
             </div>
           </div>
         )}
+        {editingMemo && <EditMemoModal item={editingMemo} onClose={() => setEditingMemo(null)} onSave={saveMemo} onDelete={deleteMemo} />}
+    </div>
+  );
+}
+
+// تعديل عنصر حفظ/تسميع — النوع (آية/حديث) والمرجع والتفاصيل، مستخدَمة من
+// شاشتي الحفظ (الخطة الأسبوعية وتبويب الحفظ والدرجات).
+function EditMemoModal({ item, onClose, onSave, onDelete }) {
+  const [kind, setKind] = useState(item.kind);
+  const [reference, setReference] = useState(item.reference || "");
+  const [details, setDetails] = useState(item.details || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const canSave = reference.trim().length > 0 && !saving;
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(item.id, { kind, reference: reference.trim(), details: details.trim() || null });
+    } catch (e) {
+      setError(e.message || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
+        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 17 }}>تعديل الحفظ</h2>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+        </div>
+        <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>النوع</label>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              {["آية", "حديث"].map((v) => (
+                <button key={v} onClick={() => setKind(v)} style={{ flex: 1, padding: 9, borderRadius: 12, border: `1px solid ${kind === v ? "#B7A6E8" : "#E5E7EB"}`, background: kind === v ? "#F1EFFA" : "white", color: kind === v ? "#5C4B8C" : "#6B7280", fontWeight: 700 }}>{v === "آية" ? "قرآن" : "حديث"}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>المرجع</label>
+            <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="مثال: سورة البقرة ١-٥" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>التفاصيل (اختياري)</label>
+            <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={3} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+            {saving ? "جارِ الحفظ..." : "حفظ التعديلات"}
+          </button>
+          <button onClick={() => onDelete(item.id)} style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+            حذف
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1631,9 +1754,10 @@ function CircleCheck({ checked, onClick, label }) {
   );
 }
 
-function RequirementsCard({ child, items, onToggle, onDeleteReq, onClearBought }) {
+function RequirementsCard({ child, items, onToggle, onDeleteReq, onClearBought, onUpdateReq }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const boughtCount = items.filter((r) => r.bought).length;
+  const [editingItem, setEditingItem] = useState(null);
   return (
     <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, background: color.bg }}>
@@ -1652,20 +1776,76 @@ function RequirementsCard({ child, items, onToggle, onDeleteReq, onClearBought }
         {items.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا توجد طلبات حالياً</p>}
         {items.map((r) => (
           <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid #F3F4F6", gap: 4 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <button onClick={() => setEditingItem(r)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: r.bought ? "#9CA3AF" : "#374151", textDecoration: r.bought ? "line-through" : "none" }}>{r.item}</p>
               <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{fmtDate(r.due_date)}</p>
-            </div>
+            </button>
             <CircleCheck checked={r.bought} onClick={() => onToggle(r.id)} label={r.bought ? "إرجاعه لغير مُشترى" : "تحديد كمُشترى"} />
             <button onClick={() => onDeleteReq(r.id)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 16, width: 24, height: 24, flexShrink: 0, padding: 0 }}>×</button>
           </div>
         ))}
       </div>
+      {editingItem && (
+        <EditRequirementModal
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSave={async (id, updates) => { await onUpdateReq(id, updates); setEditingItem(null); }}
+          onDelete={(id) => { onDeleteReq(id); setEditingItem(null); }}
+        />
+      )}
     </div>
   );
 }
 
-function ScheduleCard({ child, schedule, onUpload }) {
+// تعديل اسم المستلزم أو تاريخه — يفتح بالضغط على نص الطلب بالقائمة.
+function EditRequirementModal({ item, onClose, onSave, onDelete }) {
+  const [name, setName] = useState(item.item || "");
+  const [dueDate, setDueDate] = useState(item.due_date || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const canSave = name.trim().length > 0 && !saving;
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(item.id, { item: name.trim(), dueDate: dueDate || null });
+    } catch (e) {
+      setError(e.message || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
+        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 17 }}>تعديل الطلب</h2>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+        </div>
+        <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>اسم المستلزم</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>التاريخ المطلوب (اختياري)</label>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+            {saving ? "جارِ الحفظ..." : "حفظ التعديلات"}
+          </button>
+          <button onClick={() => onDelete(item.id)} style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+            حذف
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const maxPeriod = schedule.reduce((max, s) => Math.max(max, s.period_number), 0);
   const grid = {};
@@ -1745,7 +1925,8 @@ function ScheduleCard({ child, schedule, onUpload }) {
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا يوجد جدول حصص مضاف بعد</p>
         ) : (
           <>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, color: "#9CA3AF" }}>اضغطي أي خانة للتعديل</span>
             <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
               {exporting ? (
                 "جاري التصدير..."
@@ -1783,7 +1964,7 @@ function ScheduleCard({ child, schedule, onUpload }) {
                     const dayPal = PALETTE[di % PALETTE.length];
                     const entry = grid[`${d}-${p}`];
                     return (
-                      <td key={d} style={{ padding: "6px 3px", textAlign: "center", background: dayPal.bg, borderRadius: 8, verticalAlign: entry ? "top" : "middle" }}>
+                      <td key={d} onClick={() => onCellClick(d, p, entry || null)} style={{ padding: "6px 3px", textAlign: "center", background: dayPal.bg, borderRadius: 8, verticalAlign: entry ? "top" : "middle", cursor: "pointer" }}>
                         {entry ? (
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
                             <div style={{ position: "relative" }}>
@@ -1801,7 +1982,7 @@ function ScheduleCard({ child, schedule, onUpload }) {
                             )}
                           </div>
                         ) : (
-                          <span style={{ color: dayPal.text, opacity: 0.4 }}>—</span>
+                          <span style={{ color: dayPal.text, opacity: 0.35, fontWeight: 800 }}>+</span>
                         )}
                       </td>
                     );
@@ -1869,24 +2050,96 @@ function ScheduleCard({ child, schedule, onUpload }) {
   );
 }
 
-function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpdateDate }) {
+// تعديل أو إضافة حصة بخانة معيّنة من جدول الحصص — اليوم ورقم الحصة ثابتان
+// (يحددان مكان الخانة)، والمادة/المعلّم/الوقت هي المُعدَّلة يدوياً.
+function EditScheduleCellModal({ child, day, period, entry, onClose, onSave, onDelete }) {
+  const color = PALETTE[child.color_idx % PALETTE.length];
+  const [subject, setSubject] = useState(entry?.subject || "");
+  const [teacher, setTeacher] = useState(entry?.teacher || "");
+  const [startTime, setStartTime] = useState(entry?.start_time || "");
+  const [endTime, setEndTime] = useState(entry?.end_time || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const canSave = subject.trim().length > 0 && !saving;
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(entry?.id || null, { childId: child.id, day, periodNumber: period, subject: subject.trim(), teacher: teacher.trim() || null, startTime: startTime.trim() || null, endTime: endTime.trim() || null });
+    } catch (e) {
+      setError(e.message || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
+        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 17 }}>{entry ? "تعديل الحصة" : "إضافة حصة"} — {day} · الحصة {period}</h2>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+        </div>
+        <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>المادة</label>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="مثال: رياضيات" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>المعلّم/ـة (اختياري)</label>
+            <input value={teacher} onChange={(e) => setTeacher(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>وقت البداية</label>
+              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>وقت النهاية</label>
+              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+            </div>
+          </div>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+            {saving ? "جارِ الحفظ..." : "حفظ"}
+          </button>
+          {entry && (
+            <button onClick={() => onDelete(entry.id)} style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+              حذف هذه الحصة
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpdateTask }) {
   const meta = TYPE_META[task.type] || TYPE_META["واجب"];
+  const TYPES = ["واجب", "اختبار", "مشروع", "حفظ", "درس"];
+  const [editing, setEditing] = useState(false);
+  const [subject, setSubject] = useState(task.subject || "");
+  const [type, setType] = useState(task.type);
+  const [details, setDetails] = useState(task.details || "");
   const [dateValue, setDateValue] = useState(task.due_date || "");
   const [saving, setSaving] = useState(false);
-  const [dateError, setDateError] = useState("");
-  const dateChanged = dateValue !== (task.due_date || "");
+  const [error, setError] = useState("");
+  const changed = subject.trim() !== (task.subject || "") || type !== task.type || (details.trim() || "") !== (task.details || "") || dateValue !== (task.due_date || "");
   // داخل التطبيق التذكيرات تُجدول تلقائياً على الجهاز (syncTaskReminders)، وملف
   // الـ .ics ما ينفتح أصلاً داخل WebView — فنخفي الزر ونخليه بنسخة الويب بس.
   const [native, setNative] = useState(false);
   useEffect(() => setNative(isNativeApp()), []);
 
-  async function saveDate() {
+  async function save() {
+    if (!subject.trim()) { setError("المادة مطلوبة"); return; }
     setSaving(true);
-    setDateError("");
+    setError("");
     try {
-      await onUpdateDate(task.id, dateValue || null);
+      await onUpdateTask(task.id, { subject: subject.trim(), type, details: details.trim() || null, dueDate: dateValue || null });
+      onClose();
     } catch (e) {
-      setDateError(e.message || "تعذّر حفظ التاريخ، حاولي مرة ثانية.");
+      setError(e.message || "تعذّر حفظ التعديلات، حاولي مرة ثانية.");
+    } finally {
       setSaving(false);
     }
   }
@@ -1895,44 +2148,78 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
     <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, borderRadius: "24px 24px 0 0", padding: "22px 22px calc(env(safe-area-inset-bottom) + 22px)", maxHeight: "85vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 22, color: color.text }}><TypeGlyph type={task.type} native={typeof window !== "undefined" && isNativeApp()} size={22} /></span>
             <h3 style={{ margin: "4px 0 2px", color: color.text, fontSize: 18 }}>{task.subject}</h3>
             <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>{task.type} · {task.due_date ? fmtDate(task.due_date) : "بدون تاريخ محدد"}</p>
           </div>
+          {!editing && (
+            <button onClick={() => setEditing(true)} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <TileIcon name="pencil" size={15} />
+                تعديل
+              </span>
+            </button>
+          )}
           <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36, flexShrink: 0 }}>×</button>
         </div>
-        {task.details && <div style={{ background: color.bg, borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 13 }}>{task.details}</div>}
 
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>تاريخ الاستحقاق</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 16 }} />
-            <button onClick={saveDate} disabled={saving || !dateChanged} style={{ padding: "9px 16px", borderRadius: 12, background: color.solid, color: "white", fontWeight: 700, fontSize: 13, opacity: (saving || !dateChanged) ? 0.5 : 1, flexShrink: 0 }}>
-              {saving ? "..." : "حفظ التاريخ"}
-            </button>
+        {editing ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>النوع</label>
+              <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                {TYPES.map((v) => (
+                  <button key={v} onClick={() => setType(v)} style={{ flex: 1, minWidth: 60, padding: 8, borderRadius: 10, border: `1px solid ${type === v ? "#B7A6E8" : "#E5E7EB"}`, background: type === v ? "#F1EFFA" : "white", color: type === v ? "#5C4B8C" : "#6B7280", fontWeight: 700, fontSize: 12.5 }}>{v}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>المادة</label>
+              <input value={subject} onChange={(e) => setSubject(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>التفاصيل</label>
+              <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={3} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, resize: "vertical", fontFamily: "inherit" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>تاريخ الاستحقاق</label>
+              <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+            </div>
+            {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setEditing(false); setSubject(task.subject || ""); setType(task.type); setDetails(task.details || ""); setDateValue(task.due_date || ""); setError(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#F3F4F6", color: "#6B7280", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+                إلغاء
+              </button>
+              <button onClick={save} disabled={saving || !changed} style={{ flex: 2, padding: 12, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: (saving || !changed) ? 0.5 : 1 }}>
+                {saving ? "جارِ الحفظ..." : "حفظ التعديلات"}
+              </button>
+            </div>
           </div>
-          {dateError && <p style={{ color: "#B91C1C", fontSize: 12, margin: "6px 0 0" }}>{dateError}</p>}
-        </div>
-
-        {task.due_date && !dateChanged && !native && (
-          <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
-            <TileIcon name="bell" size={20} />
-            إضافة تذكير (قبل يوم)
-          </a>
-        )}
-        {task.status === "done" ? (
-          <button onClick={() => onMarkDone(task.id, false)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
-            إرجاعه لغير مكتمل
-          </button>
         ) : (
-          <button onClick={() => onMarkDone(task.id, true)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
-            {meta.done}
-          </button>
+          <>
+            {task.details && <div style={{ background: color.bg, borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 13 }}>{task.details}</div>}
+
+            {task.due_date && !native && (
+              <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
+                <TileIcon name="bell" size={20} />
+                إضافة تذكير (قبل يوم)
+              </a>
+            )}
+            {task.status === "done" ? (
+              <button onClick={() => onMarkDone(task.id, false)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
+                إرجاعه لغير مكتمل
+              </button>
+            ) : (
+              <button onClick={() => onMarkDone(task.id, true)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
+                {meta.done}
+              </button>
+            )}
+            <button onClick={() => onDelete(task.id)} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+              حذف الواجب (دخل غلط)
+            </button>
+          </>
         )}
-        <button onClick={() => onDelete(task.id)} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
-          حذف الواجب (دخل غلط)
-        </button>
       </div>
     </div>
   );
@@ -3417,6 +3704,7 @@ function ProgressView({ children, motherId }) {
 function MemorizationSection({ child, motherId }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editingMemo, setEditingMemo] = useState(null);
 
   function load() {
     setLoading(true);
@@ -3434,22 +3722,41 @@ function MemorizationSection({ child, motherId }) {
     if (!res.ok) load();
   }
 
+  async function saveMemo(id, updates) {
+    const res = await fetch(`/api/memorization/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "تعذّر حفظ التعديلات");
+    }
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...updates } : it)));
+    setEditingMemo(null);
+  }
+
+  async function deleteMemo(id) {
+    if (!confirm("حذف هذا العنصر من الحفظ نهائياً؟")) return;
+    const res = await fetch(`/api/memorization/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    setItems((prev) => prev.filter((it) => it.id !== id));
+    setEditingMemo(null);
+  }
+
   if (loading) return <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>...جاري التحميل</p>;
   if (items.length === 0) return <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>ما فيه مطلوبات حفظ حالياً لـ{child.name} — تُستخرج تلقائياً من صور الخطة الأسبوعية.</p>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {items.map((it) => (
-        <label key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: it.done ? "#F7F7F5" : "white", border: "1px solid #EEEDE8", cursor: "pointer" }}>
+        <div key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: it.done ? "#F7F7F5" : "white", border: "1px solid #EEEDE8" }}>
           <input type="checkbox" checked={it.done} onChange={() => handleToggle(it.id)} style={{ marginTop: 3, width: 18, height: 18, accentColor: "#B7A6E8", flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <button onClick={() => setEditingMemo(it)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
             <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: it.done ? "#9CA3AF" : "#374151", textDecoration: it.done ? "line-through" : "none", display: "flex", alignItems: "center", gap: 5 }}>
               {typeof window !== "undefined" && isNativeApp() ? <Icon name="memorize" size={14} style={{ color: "#7B68C4" }} /> : <TileIcon name="memorize" size={17} />} {it.reference}
             </p>
             {it.details && <p style={{ margin: "3px 0 0", fontSize: 12, color: "#9CA3AF" }}>{it.details}</p>}
-          </div>
-        </label>
+          </button>
+        </div>
       ))}
+      {editingMemo && <EditMemoModal item={editingMemo} onClose={() => setEditingMemo(null)} onSave={saveMemo} onDelete={deleteMemo} />}
     </div>
   );
 }
