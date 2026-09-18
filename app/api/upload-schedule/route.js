@@ -17,6 +17,21 @@ const FEATURE = "upload_homework";
 // درجة ثقة النموذج بكل معلومة حساسة — «unclear» تطلع للأم بعلامة تنبيه
 // بشاشة المراجعة عشان تحددها بنفسها بدل ما يخمّنها البرنامج.
 const CONFIDENCE = new Set(["confirmed", "inferred", "unclear"]);
+// هل الخطة مكتوب عليها صف/شعبة غير صف الطالب/ة المختار؟ نقارن فقط لما
+// يكون الرقم مكتوباً صراحةً بالصورة — الغائب ما يولّد تنبيهاً، وإلا صار
+// كل جدول بلا صف مكتوب يطلع تحذيراً كاذباً ويفقد التنبيه قيمته.
+export function gradeMismatch(planFor, child) {
+  const grade = Number(planFor?.grade);
+  if (!Number.isInteger(grade) || grade < 1 || grade > 12) return null;
+  if (grade === child.grade) return null;
+  return { planGrade: grade, childGrade: child.grade, childName: child.name };
+}
+
+// رقم آية: عدد صحيح موجب معقول فقط — وأي شي غيره يبقى null بدل ما يُخمَّن.
+const ayahNumber = (v) => {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 && n <= 300 ? n : null;
+};
 const cleanConfidence = (c) => {
   if (!c || typeof c !== "object") return null;
   const out = {};
@@ -103,6 +118,8 @@ async function handleUpload({ childId, images }, motherId) {
 3) لو مذكورة عبارة نسبية بلا يوم ولا تاريخ (مثل "نهاية الفصل الدراسي" أو "الأسبوع الثامن")، لا تخترعي موعداً — خلّي الاثنين null، واكتبي العبارة كما هي بحقل dueText، وكذلك بحقل details (مثلاً "تسليم: نهاية الفصل الدراسي").
 4) لو المهمة بلا أي موعد ولا يوم ولا عبارة (مجرد صف مادة داخل خطة أسبوعية)، خلّي dueDate وdueDay وdueText كلها null — الخادم يربطها بأسبوع الخطة.
 
+صاحب الخطة: لو الصورة مكتوب فيها صراحةً لمن هذي الخطة، اكتبيه بحقل planFor: grade رقم الصف بالأرقام الإنجليزية (الصف الرابع = 4)، وsection رقم الشعبة لو مذكور، وstudentName اسم الطالب/ة لو مكتوب، وschool اسم المدرسة لو مكتوب. أي واحد منها غير مكتوب بالصورة اتركيه null — لا تستنتجيه من المحتوى ولا من صعوبة المواد، فهذا الحقل يُستخدم للتنبيه لو رُفعت الخطة لطالب غير صاحبها.
+
 مدى الخطة: لو الصورة تذكر صراحةً مدى أسبوع الخطة (مثل "من الاثنين ٢٠٢٦/٩/١٤ إلى الخميس ٢٠٢٦/٩/١٧")، اكتبي تاريخ آخر يوم بالمدى بحقل weekEnd بصيغة YYYY-MM-DD؛ وإلا null.
 
 نفس المادة قد تتكرر بأيام مختلفة (واجب رياضيات الأحد وواجب رياضيات الأربعاء) — هذي مهمتان منفصلتان، اكتبي كل واحدة على حدة بيومها.
@@ -112,6 +129,13 @@ async function handleUpload({ childId, images }, motherId) {
 استخرجي أيضاً أي طلبات أو مستلزمات مدرسية إن وُجدت (بنفس منطق الموعد أعلاه لو كان لها موعد، وإلا null).
 
 بالإضافة لذلك، استخرجي كل مطلوبات الحفظ (قرآن كريم أو حديث) بقسم منفصل تماماً عن entries، بهذا الشكل: لكل عنصر حفظ حدّدي kind ("آية" لو قرآن أو "حديث" لو حديث نبوي)، وreference هو نص المرجع بالضبط زي ما هو مكتوب بالخطة (مثل "سورة البقرة من آية ١٠ إلى ١٥" أو "حديث: إنما الأعمال بالنيات")، وdetails لأي ملاحظة إضافية (رقم الصفحة، طريقة التسميع...). لا تخترعي نطاق آيات لو مو مكتوب بالصورة بالضبط.
+
+ولكل عنصر حفظ أضيفي هذي الحقول المنظّمة، وكلها اختيارية تتركينها null لو مو مكتوبة صراحةً بالصورة:
+- surah: اسم السورة كما كُتب بالصورة (بلا كلمة "سورة")، للقرآن فقط.
+- fromAyah وtoAyah: رقمَي أول وآخر آية بالأرقام الإنجليزية (1 و10). لو مذكورة آية وحدة فقط اكتبي نفس الرقم بالاثنين. لو النطاق مو مكتوب اتركيهما null — لا تخمّني.
+- reciteDay أو reciteDate: موعد التسميع لو مذكور، بنفس منطق المواعيد أعلاه (اسم يوم بـreciteDay، أو تاريخ صريح YYYY-MM-DD بـreciteDate). لو ما فيه موعد اتركيهما null.
+
+وللمستلزمات: لو كان الغرض مرتبطاً بوضوح بمادة أو مشروع مذكور بنفس الصورة (مثل "مشروع اللغة الإنجليزية: إحضار لوحة وصور")، اكتبي اسم تلك المادة بحقل relatedSubject بالضبط كما كتبتِها بـsubject بقائمة entries. لو الربط مو واضح أو الغرض عام (مثل قائمة مستلزمات أول العام) اتركيه null — لا تربطي بالتخمين.
 
 انقلي ما هو مكتوب بالصورة حرفياً: أسماء المواد والمستلزمات ونصوص التفاصيل تُكتب كما هي، بلا تصحيح ولا توحيد ولا اختصار ولا إضافة أي كلمة من عندك. وتكرار نفس المادة أو نفس الغرض أمر طبيعي — انقليه كل مرة كما هو ولا تحذفي أي تكرار.
 
@@ -124,7 +148,7 @@ async function handleUpload({ childId, images }, motherId) {
 القيمة "unclear" مطلوبة ومفيدة ولا تُعدّ خطأً — ولي الأمر هو من يحدّدها بنفسه. لا تخمّني أبداً لمجرد تجنّبها، وخصوصاً بموعد الاختبار وموعد التسليم.
 
 أرجعي JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"weekEnd":"YYYY-MM-DD أو null","entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع|درس","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","details":"نص اختياري","sourceText":"النص الأصلي بالصورة","confidence":{"subject":"confirmed|inferred|unclear","type":"confirmed|inferred|unclear","due":"confirmed|inferred|unclear"}}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","sourceText":"النص الأصلي بالصورة"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري","sourceText":"النص الأصلي بالصورة"}]}`;
+{"planFor":{"grade":null,"section":null,"studentName":null,"school":null},"weekEnd":"YYYY-MM-DD أو null","entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع|درس","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","details":"نص اختياري","sourceText":"النص الأصلي بالصورة","confidence":{"subject":"confirmed|inferred|unclear","type":"confirmed|inferred|unclear","due":"confirmed|inferred|unclear"}}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","sourceText":"النص الأصلي بالصورة","relatedSubject":"اسم المادة المرتبطة أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري","sourceText":"النص الأصلي بالصورة","surah":"اسم السورة أو null","fromAyah":null,"toAyah":null,"reciteDay":"اسم اليوم أو null","reciteDate":"YYYY-MM-DD أو null"}]}`;
 
   const res = await extractFromImages({ images, prompt, motherId, childId, feature: FEATURE });
   if (!res.ok) {
@@ -179,16 +203,40 @@ async function handleUpload({ childId, images }, motherId) {
       }))
       .filter((e) => e.subject),
     requirements: (parsed.requirements || [])
-      .map((r) => ({ item: String(r.item || "").trim(), dueDate: resolveDue(r), dueText: r.dueText || null, sourceText: r.sourceText || null }))
+      .map((r) => ({
+        item: String(r.item || "").trim(),
+        dueDate: resolveDue(r),
+        dueText: r.dueText || null,
+        sourceText: r.sourceText || null,
+        relatedSubject: r.relatedSubject ? String(r.relatedSubject).trim() || null : null,
+      }))
       .filter((r) => r.item),
     memorization: (parsed.memorization || [])
-      .map((m) => ({ kind: m.kind === "حديث" ? "حديث" : "آية", reference: String(m.reference || "").trim(), details: m.details || null, sourceText: m.sourceText || null }))
+      .map((m) => ({
+        kind: m.kind === "حديث" ? "حديث" : "آية",
+        reference: String(m.reference || "").trim(),
+        details: m.details || null,
+        sourceText: m.sourceText || null,
+        surah: m.surah ? String(m.surah).trim() || null : null,
+        fromAyah: ayahNumber(m.fromAyah),
+        toAyah: ayahNumber(m.toAyah),
+        // موعد التسميع: تاريخ صريح ثم اسم يوم — وبلا موعد يبقى null. ما
+        // نستخدم resolveDue هنا لأن فيها رجوع لآخر يوم بالخطة، وهذا يعطي
+        // كل حفظ بلا موعد تاريخاً مخترعاً ويحوّل تذكيره من السبت والثلاثاء
+        // لتذكير موعد ما ذكرته المدرسة أصلاً.
+        reciteOn: isDate(m.reciteDate) ? m.reciteDate : dateForDayName(m.reciteDay),
+      }))
       .filter((m) => m.reference),
   };
 
   // مسودة معلّقة سابقة لنفس الطالب/ة ما لها معنى بعد رفعة جديدة — الأم
   // تراجع الأحدث. نلغيها بدل ما تتراكم مسودات تتنافس على نفس البيانات.
   await sb.from("upload_drafts").update({ status: "discarded" }).eq("child_id", child.id).eq("status", "pending");
+
+  // تنبيه اختيار طالب/ة غير صاحب الخطة (شوهد بالإنتاج ١٨ سبتمبر: رُفعت
+  // خطة الصف الرابع على طالب بالصف السادس وما طلع أي تنبيه). ما نمنع
+  // الرفع — الأم قد ترفع خطة مشتركة أو صورة ما فيها صف — بس نقولها.
+  const mismatch = gradeMismatch(parsed.planFor, child);
 
   // الصورة الأصلية تُحفظ أسبوعاً عشان تقدر الأم ترجع لها من «عرض المصدر».
   const sourceId = await storeSourceImages(sb, { motherId, childId: child.id, images });
@@ -208,6 +256,7 @@ async function handleUpload({ childId, images }, motherId) {
     draftId: draft.id,
     childId: child.id,
     sourceId,
+    mismatch,
     items,
     summary: summarize(items),
     imagesProcessed: images.length,

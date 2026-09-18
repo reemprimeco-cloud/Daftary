@@ -1705,6 +1705,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
                     <SubjectIcon subject={m.kind === "حديث" ? "التربية الإسلامية" : "القرآن الكريم"} size={34} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: m.done ? "#9CA3AF" : "#1F2937", textDecoration: m.done ? "line-through" : "none" }}>{m.kind === "حديث" ? "حديث" : "القرآن الكريم"} · {m.reference}</p>
+                      {m.recite_on && !m.done && <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: 800, color: "#5B21B6" }}>موعد التسميع: {fmtDate(m.recite_on)}</p>}
                       {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: m.done ? "#B0B3BA" : "#6B7280", lineHeight: 1.65 }}>{m.details}</p>}
                     </div>
                   </button>
@@ -2833,6 +2834,16 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
       </div>
 
       <div className="app-scroll" style={{ flex: 1, padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {draft.mismatch && (
+          <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 16, padding: 14 }}>
+            <p style={{ margin: 0, fontWeight: 900, fontSize: 14.5, color: "#B91C1C", lineHeight: 1.8 }}>
+              ⚠️ الخطة مكتوب عليها الصف {draft.mismatch.planGrade}، و{draft.mismatch.childName} بالصف {draft.mismatch.childGrade}
+            </p>
+            <p style={{ margin: "6px 0 0", fontSize: 12.5, color: "#7F1D1D", lineHeight: 1.8 }}>
+              تأكدي إنك اخترتِ الطالب/ة الصحيح قبل الاعتماد. لو الخطة فعلاً له، كملي عادي.
+            </p>
+          </div>
+        )}
         <div style={{ background: "white", borderRadius: 16, padding: 14, border: "1px solid #EEEDE8" }}>
           <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: "#1F2937" }}>
             تم العثور على {countLabel(total, "عنصر", "عنصران", "عناصر")} لـ {child?.name || "الطالب/ة"}
@@ -2915,7 +2926,10 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                   <button onClick={() => setOpenRow(openRow === `r${i}` ? null : `r${i}`)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
                     <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>{r.item}</p>
-                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280" }}>{r.dueDate ? fmtDate(r.dueDate) : r.dueText || "بدون موعد"}</p>
+                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280" }}>
+                      {r.dueDate ? fmtDate(r.dueDate) : r.dueText || "بدون موعد"}
+                      {r.relatedSubject && <span style={{ color: "#8C6027", fontWeight: 700 }}> · لـ {r.relatedSubject}</span>}
+                    </p>
                   </button>
                   <button onClick={() => removeRow("requirements", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
                 </div>
@@ -2945,6 +2959,11 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                   <button onClick={() => setOpenRow(openRow === `m${i}` ? null : `m${i}`)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
                     <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>{m.kind === "حديث" ? "حديث" : "قرآن"} · {m.reference}</p>
+                    {(m.surah || m.fromAyah || m.reciteOn) && (
+                      <p style={{ margin: "3px 0 0", fontSize: 12, color: "#5B21B6", fontWeight: 700 }}>
+                        {[m.surah && `سورة ${m.surah}`, m.fromAyah && `آية ${m.fromAyah}${m.toAyah && m.toAyah !== m.fromAyah ? ` إلى ${m.toAyah}` : ""}`, m.reciteOn && `تسميع ${fmtDate(m.reciteOn)}`].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
                     {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280" }}>{m.details}</p>}
                   </button>
                   <button onClick={() => removeRow("memorization", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
@@ -2960,6 +2979,26 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
                     <div>
                       <span style={label}>المرجع</span>
                       <input value={m.reference || ""} onChange={(e) => setRow("memorization", i, { reference: e.target.value })} style={field} />
+                    </div>
+                    {m.kind !== "حديث" && (
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ flex: 2 }}>
+                          <span style={label}>السورة</span>
+                          <input value={m.surah || ""} onChange={(e) => setRow("memorization", i, { surah: e.target.value || null })} style={field} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <span style={label}>من آية</span>
+                          <input type="number" inputMode="numeric" value={m.fromAyah ?? ""} onChange={(e) => setRow("memorization", i, { fromAyah: e.target.value ? Number(e.target.value) : null })} style={field} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <span style={label}>إلى آية</span>
+                          <input type="number" inputMode="numeric" value={m.toAyah ?? ""} onChange={(e) => setRow("memorization", i, { toAyah: e.target.value ? Number(e.target.value) : null })} style={field} />
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <span style={label}>موعد التسميع (اختياري)</span>
+                      <input type="date" value={m.reciteOn || ""} onChange={(e) => setRow("memorization", i, { reciteOn: e.target.value || null })} style={field} />
                     </div>
                   </div>
                 )}

@@ -70,7 +70,10 @@ async function sendMemorizationReminders(sb, today) {
   const { data: pending } = await sb
     .from("memorization")
     .select("id, children(mother_id, name)")
-    .eq("done", false);
+    .eq("done", false)
+    // اللي له موعد تسميع مكتوب ياخذ تذكير موعده (قبله بيوم ويومه) —
+    // لو دخل هنا كمان صار عنه تذكيران بنفس الأسبوع.
+    .is("recite_on", null);
 
   const byMother = new Map();
   for (const m of pending || []) {
@@ -102,6 +105,52 @@ async function sendMemorizationReminders(sb, today) {
     return 1;
   });
   return memoResults.reduce((a, b) => a + b, 0);
+}
+
+// التسميع اللي مكتوب له موعد بالخطة ياخذ نفس قاعدة بقية المواعيد: تذكير
+// قبله بيوم وتذكير يومه. اللي بلا موعد يبقى على تذكير السبت والثلاثاء فوق.
+// مجمّع لكل أم (reminder_log.task_id يخص المهام، فنمنع التكرار باليوم).
+async function sendRecitationReminders(sb, today, tomorrow) {
+  let sent = 0;
+  for (const [date, kind, title, phrase] of [
+    [tomorrow, "recitation_day_before", "تسميع غداً", "غداً موعد تسميع"],
+    [today, "recitation_today", "تسميع اليوم", "اليوم موعد تسميع"],
+  ]) {
+    const { data: due } = await sb
+      .from("memorization")
+      .select("reference, children(mother_id, name)")
+      .eq("done", false)
+      .eq("recite_on", date);
+
+    const byMother = new Map();
+    for (const m of due || []) {
+      const motherId = m.children?.mother_id;
+      if (!motherId) continue;
+      const entry = byMother.get(motherId) || { refs: [], names: new Set() };
+      entry.refs.push(m.reference);
+      entry.names.add(m.children.name);
+      byMother.set(motherId, entry);
+    }
+
+    const results = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, { refs, names }]) => {
+      const { data: already } = await sb
+        .from("reminder_log")
+        .select("id")
+        .eq("mother_id", motherId)
+        .eq("kind", kind)
+        .gte("sent_at", `${today}T00:00:00+03:00`)
+        .limit(1);
+      if (already?.length) return 0;
+
+      const who = names.size === 1 ? [...names][0] : "أبنائك";
+      const text = `🕌 ${phrase} ${who}: ${refs.join("، ")}`;
+      if (!(await deliverToMother(sb, motherId, title, text))) return 0;
+      await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind });
+      return refs.length;
+    });
+    sent += results.reduce((a, b) => a + b, 0);
+  }
+  return sent;
 }
 
 // المستلزمات كانت تُستخرج من الصور وتنعرض بالبرنامج، لكن ما كان لها أي
@@ -241,6 +290,7 @@ export async function GET(req) {
   }
 
   sent += await sendRequirementReminders(sb, today, tomorrow);
+  sent += await sendRecitationReminders(sb, today, tomorrow);
   sent += await sendMemorizationReminders(sb, today);
 
   // تنظيف صور المصدر المنتهية (أسبوع من الرفع) — معلّق على كرون يومي موجود
