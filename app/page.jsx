@@ -2732,11 +2732,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>{title}</p>
       </div>
       <div className="app-scroll" style={{ padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 14 }}>
-        {hint && (
-          <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12.5, fontWeight: 700, lineHeight: 1.6 }}>
-            {hint}
-          </div>
-        )}
+        {hint && <HintBanner id={`upload:${endpoint}`} style={{ fontSize: 12.5, lineHeight: 1.6 }}>{hint}</HintBanner>}
         <div>
           <label style={{ fontSize: 13, fontWeight: 700 }}>هذي الصور من مدرسة:</label>
           <select value={school} onChange={(e) => { setSchool(e.target.value); setChildId(""); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
@@ -2888,6 +2884,33 @@ function SourceImageModal({ sourceId, onClose }) {
 }
 
 // «عنصر / عنصران / ٥ عناصر» — عربية سليمة بدل «5 عنصر».
+// الشريط الأصفر اللي يشرح فكرة الشاشة: مفيد أول مرة، ويصير حشواً بعد ما
+// تحفظه الأم عن ظهر قلب (طلب صاحبة التطبيق ١٨ سبتمبر). ✕ تقفله ويبقى
+// مقفولاً — القرار محفوظ بالجهاز لكل شريط على حدة بمفتاحه.
+// ملاحظة: هذا للشرح فقط. رسائل الحالة (خلص الرصيد، الباقة ما تغطي عدد
+// الأبناء) تبقى بلا ✕ لأن إخفاءها يخفي مشكلة قائمة لازم تعرفها.
+function HintBanner({ id, children, style }) {
+  const key = `daftary_hint_${id}`;
+  const [closed, setClosed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem(key) === "1"; } catch { return false; }
+  });
+  if (closed) return null;
+  function close() {
+    setClosed(true);
+    try { localStorage.setItem(key, "1"); } catch {}
+  }
+  return (
+    <div style={{ position: "relative", background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, paddingInlineEnd: 36, fontSize: 12, fontWeight: 700, lineHeight: 1.7, ...style }}>
+      {children}
+      <button onClick={close} aria-label="إغلاق الشرح"
+        style={{ position: "absolute", top: 2, insetInlineEnd: 2, background: "none", color: "#B08A4F", fontSize: 18, lineHeight: 1, width: 32, height: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        ×
+      </button>
+    </div>
+  );
+}
+
 function countLabel(n, one, two, plural) {
   if (n === 1) return one;
   if (n === 2) return two;
@@ -3340,6 +3363,13 @@ function PermissionsBanner() {
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [needsSettings, setNeedsSettings] = useState(false);
+  // ✕ تقفل الشريط — بس نحفظ معها «وش كان ناقصاً» وقت الإقفال: لو تغيّر
+  // الناقص بعدين (مثلاً الصور انمنعت وهي مسموحة قبل) يرجع يظهر، فما
+  // نخفي عنها سبباً جديداً لتعطّل الرفع أو التذكيرات.
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try { return localStorage.getItem("daftary_hint_perm") || ""; } catch { return ""; }
+  });
 
   const check = useCallbackRef(async () => {
     setState(await permissionStatus());
@@ -3359,6 +3389,8 @@ function PermissionsBanner() {
   if (state.notifications !== "granted") missing.push("notifications");
   if (state.photos !== "granted") missing.push("photos");
   if (!missing.length) return null;
+  const signature = missing.join(",");
+  if (dismissed === signature) return null;
 
   const label =
     missing.length === 2 ? "الإشعارات والصور"
@@ -3407,6 +3439,13 @@ function PermissionsBanner() {
           {busy ? "..." : "تفعيل"}
         </button>
       )}
+      <button
+        onClick={() => { setDismissed(signature); try { localStorage.setItem("daftary_hint_perm", signature); } catch {} }}
+        aria-label="إغلاق"
+        style={{ background: "none", color: "#B08A4F", fontSize: 18, lineHeight: 1, width: 28, height: 28, padding: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        ×
+      </button>
     </div>
   );
 }
@@ -4067,9 +4106,9 @@ function TeacherView({ children, motherId }) {
           </div>
         )}
 
-        <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 700, lineHeight: 1.6 }}>
+        <HintBanner id="teacher" style={{ lineHeight: 1.6 }}>
           اسألي عن أي واجب أو درس بمنهج {child ? `الصف ${child.grade}` : "ابنك/ابنتك"} — تقدرين ترفقين صورة الواجب مباشرة، والمعلم الذكي يستعين بمواد وزارة التربية الرسمية لما تكون متوفرة.
-        </div>
+        </HintBanner>
 
         {quota && (quota.remainingTotal || 0) > 0 && (
           <button
@@ -4237,7 +4276,7 @@ function ProgressView({ children, motherId, classSchedule = [] }) {
       {child && (section === "notes" ? (
         <TeacherNotesSection child={child} motherId={motherId} subjects={subjects} />
       ) : (
-        <GradesSection child={child} motherId={motherId} />
+        <GradesSection child={child} motherId={motherId} subjects={subjects} />
       ))}
     </div>
   );
@@ -4338,10 +4377,10 @@ function TeacherNotesSection({ child, motherId, subjects }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
+      <HintBanner id="teacher-notes">
         ملاحظات المعلم للطالب من اجتماع أولياء الأمور — اكتبي كل ملاحظة بمادتها
         وفترتها، وبنهاية السنة تشوفين تطوّر {child.name} فترة بفترة بمكان واحد.
-      </div>
+      </HintBanner>
 
       <div style={{ background: "white", borderRadius: 14, border: "1px solid #EEEDE8", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
         <textarea
@@ -4466,15 +4505,24 @@ function EditTeacherNoteModal({ item, subjects, onClose, onSave, onDelete }) {
   );
 }
 
-function GradesSection({ child, motherId }) {
+function GradesSection({ child, motherId, subjects = [] }) {
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  // المادة قائمة من جدول حصص الطالب/ة + خيار كتابة مادة ثانية، والفترة
+  // بنفس تفاصيل ملاحظات المعلم (قرار صاحبة التطبيق ١٨ سبتمبر).
   const [subject, setSubject] = useState("");
+  const [customSubject, setCustomSubject] = useState("");
+  const [period, setPeriod] = useState(TERMS[0]);
+  const [customPeriod, setCustomPeriod] = useState("");
   const [score, setScore] = useState("");
   const [maxScore, setMaxScore] = useState("");
   const [examName, setExamName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const finalSubject = subject === "__other" ? customSubject.trim() : subject;
+  const finalPeriod = period === "__other" ? customPeriod.trim() : period;
+  const canAdd = !!finalSubject && !!score && !!maxScore && !saving;
 
   function load() {
     setLoading(true);
@@ -4487,15 +4535,15 @@ function GradesSection({ child, motherId }) {
   useEffect(load, [child.id, motherId]);
 
   async function handleAdd() {
-    if (!subject.trim() || !score || !maxScore) return;
+    if (!canAdd) return;
     setSaving(true);
     const res = await fetch("/api/grades", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ motherId, childId: child.id, subject, score, maxScore, examName }),
+      body: JSON.stringify({ motherId, childId: child.id, subject: finalSubject, score, maxScore, examName, period: finalPeriod }),
     });
     if (res.ok) {
-      setSubject(""); setScore(""); setMaxScore(""); setExamName("");
+      setSubject(""); setCustomSubject(""); setScore(""); setMaxScore(""); setExamName("");
       setShowAdd(false);
       load();
     }
@@ -4522,14 +4570,28 @@ function GradesSection({ child, motherId }) {
 
       {showAdd && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 12, background: "#FAFAF8", border: "1px solid #EEEDE8" }}>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="المادة (مثال: الرياضيات)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+          <select value={subject} onChange={(e) => setSubject(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, background: "white" }}>
+            <option value="">اختاري المادة…</option>
+            {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+            <option value="__other">مادة ثانية (اكتبيها)</option>
+          </select>
+          {subject === "__other" && (
+            <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+          )}
+          <select value={period} onChange={(e) => setPeriod(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, background: "white" }}>
+            {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+            <option value="__other">فترة ثانية (اكتبيها)</option>
+          </select>
+          {period === "__other" && (
+            <input value={customPeriod} onChange={(e) => setCustomPeriod(e.target.value)} placeholder="اسم الفترة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <input value={score} onChange={(e) => setScore(e.target.value)} placeholder="الدرجة" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
             <span style={{ alignSelf: "center", color: "#9CA3AF" }}>من</span>
             <input value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="الدرجة الكلية" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
           </div>
           <input value={examName} onChange={(e) => setExamName(e.target.value)} placeholder="اسم الاختبار (اختياري)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
-          <button disabled={saving || !subject.trim() || !score || !maxScore} onClick={handleAdd} style={{ padding: 10, borderRadius: 10, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13, opacity: saving || !subject.trim() || !score || !maxScore ? 0.5 : 1 }}>
+          <button disabled={!canAdd} onClick={handleAdd} style={{ padding: 10, borderRadius: 10, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13, opacity: canAdd ? 1 : 0.5 }}>
             {saving ? "جاري الحفظ..." : "حفظ الدرجة"}
           </button>
         </div>
@@ -4552,7 +4614,10 @@ function GradesSection({ child, motherId }) {
               </div>
               {entries.map((e) => (
                 <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 12.5, color: "#6B7280" }}>
-                  <span>{e.exam_name || "اختبار"} — {e.score}/{e.max_score}</span>
+                  <span>
+                    {e.exam_name || "اختبار"} — {e.score}/{e.max_score}
+                    {e.period && <span style={{ color: "#9CA3AF" }}> · {e.period}</span>}
+                  </span>
                   <button onClick={() => handleDelete(e.id)} style={{ background: "none", color: "#D1785A", fontSize: 12 }}>حذف</button>
                 </div>
               ))}

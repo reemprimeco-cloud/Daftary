@@ -23,7 +23,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   const body = await req.json();
-  const { childId, subject, score, maxScore, examName } = body;
+  const { childId, subject, score, maxScore, examName, period } = body;
   const motherId = req.headers.get("x-mother-id");
   if (!motherId || !childId || !subject?.trim() || score == null || !maxScore) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
@@ -45,7 +45,10 @@ export async function POST(req) {
       subject: subject.trim(),
       score: scoreNum,
       max_score: maxNum,
+      // العمود القديم: عدد صحيح يُحسب من الشهر، ما يُقرأ بأي مكان
       term: kuwaitTerm(),
+      // الفترة اللي اختارتها الأم أو كتبتها بنفسها — هذي اللي تُعرض
+      period: period?.trim() || null,
       exam_name: examName?.trim() || null,
     })
     .select()
