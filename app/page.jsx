@@ -339,6 +339,8 @@ const SUBJECT_ICON_MAP = [
   { file: "art", keywords: ["فنية", "رسم"] },
   { file: "music", keywords: ["موسيقى", "نشيد"] },
   { file: "computer", keywords: ["حاسوب", "حاسب", "كمبيوتر", "تقنية"] },
+  // مادة بمدرسة عجيل وعبدالله (الصف السادس) — طلبتها صاحبة التطبيق بأيقونة برق
+  { file: "electricity", keywords: ["كهرب"] },
 ];
 const PE_COLORS = [
   { value: "#3B82F6", label: "أزرق" },
@@ -502,6 +504,9 @@ const SUBJECT_ICONS = {
   ) },
   music: { color: "#DB65A4", glyph: () => (
     <path d="M18.6 2.6 8.9 4.65v10.1a3.35 3.35 0 1 0 1.9 3.02V8.1l5.9-1.25v5.55a3.35 3.35 0 1 0 1.9 3.02z" fill="#fff" />
+  ) },
+  electricity: { color: "#E0A526", glyph: () => (
+    <path d="M13.9 2.2 6.3 13.05a.8.8 0 0 0 .65 1.26h3.62l-1.5 7.35a.42.42 0 0 0 .75.33l7.85-11.02a.8.8 0 0 0-.65-1.27h-3.75l1.45-7.2a.42.42 0 0 0-.75-.3Z" fill="#fff" />
   ) },
   computer: { color: "#3CA69E", glyph: (c) => (
     <>
@@ -899,14 +904,17 @@ export default function Home() {
 
   return (
     <div dir="rtl" className="app-root" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {/* بالوضع الأفقي ما فيه إلا ~٣٩٠ بكسل ارتفاع: الترحيب والعنوان
+          والتاريخ مكدّسين كانوا ياكلون ثلث الشاشة. الأصناف هنا تخلي
+          globals.css يصفّهم بسطر واحد مضغوط لما تنقلب الشاشة. */}
       {native ? (
-        <div className="ios-navbar" style={{ padding: "calc(env(safe-area-inset-top) + 4px) 16px 10px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+        <div className="ios-navbar">
+          <div className="ios-navbar-row">
             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              <button onClick={() => setShowProfile(true)} aria-label="حسابي" style={{ background: "none", padding: 0, minHeight: 44, display: "flex", alignItems: "center", flexShrink: 0 }}>
-                <img src="/logo.png" alt="" style={{ width: 32, height: 32, borderRadius: 8 }} />
+              <button onClick={() => setShowProfile(true)} aria-label="حسابي" className="ios-navbar-logo" style={{ background: "none", padding: 0, display: "flex", alignItems: "center", flexShrink: 0 }}>
+                <img src="/logo.png" alt="" />
               </button>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً، {mother.name}</span>
+              <span className="ios-navbar-greeting">مرحباً، {mother.name}</span>
             </div>
             {view === "dashboard" && (
               <button onClick={() => setShowUpload(true)} className="ios-btn-plain" style={{ fontWeight: 600, flexShrink: 0 }}>
@@ -914,15 +922,17 @@ export default function Home() {
               </button>
             )}
           </div>
-          <h1 className="ios-large-title">{TABS.find((t) => t.key === view)?.label}</h1>
-          <p style={{ margin: "2px 0 0", fontSize: 15, color: "#8E8E93", letterSpacing: "-0.01em" }}>
-            {new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}
-          </p>
+          <div className="ios-navbar-titles">
+            <h1 className="ios-large-title">{TABS.find((t) => t.key === view)?.label}</h1>
+            <p className="ios-navbar-date">
+              {new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}
+            </p>
+          </div>
         </div>
       ) : (
-        <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(6px)", padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0EEE8" }}>
+        <div className="web-header" style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0EEE8" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <img src="/logo.png" alt="دفتري" style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0 }} />
+            <img src="/logo.png" alt="دفتري" className="web-header-logo" style={{ borderRadius: 14, flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً، {mother.name}</p>
               <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
@@ -4769,12 +4779,16 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
   if (native) {
     return (
       <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#F2F2F7", display: "flex", flexDirection: "column" }}>
-        <div className="ios-navbar" style={{ padding: "calc(env(safe-area-inset-top) + 4px) 16px 8px" }}>
-          <button onClick={onClose} className="ios-navbar-back">
-            <span style={{ fontSize: 22, lineHeight: 1 }}>›</span>
-            <span>رجوع</span>
-          </button>
-          <h1 className="ios-large-title">حسابي</h1>
+        <div className="ios-navbar">
+          <div className="ios-navbar-row" style={{ justifyContent: "flex-start" }}>
+            <button onClick={onClose} className="ios-navbar-back">
+              <span style={{ fontSize: 22, lineHeight: 1 }}>›</span>
+              <span>رجوع</span>
+            </button>
+          </div>
+          <div className="ios-navbar-titles">
+            <h1 className="ios-large-title">حسابي</h1>
+          </div>
         </div>
 
         <div className="app-scroll" style={{ flex: 1, padding: "18px 16px calc(env(safe-area-inset-bottom) + 24px)", display: "flex", flexDirection: "column", gap: 22 }}>

@@ -28,6 +28,14 @@ body {
 
 * {
   -webkit-tap-highlight-color: transparent;
+  /* تكبير النص التلقائي بـWebKit (text autosizing): لما تنقلب الشاشة
+     للعرض تتوسّع الكتل فيكبّر WebKit الخط من عنده، ولما ترجع الشاشة
+     للطول ما يرجّعه — فيبقى الخط كبيراً (شوهد بالإنتاج ١٨ سبتمبر).
+     القاعدة كانت على html و body وحدهما، وهي وراثية نظرياً، لكن
+     body عندنا position:fixed وWebKit يحسب التكبير لكل كتلة على حدة
+     فينفلت منها. نفرضها على كل عنصر عشان ما تبقى ثغرة. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .app-scroll {
@@ -146,6 +154,23 @@ input:focus, select:focus, textarea:focus {
   margin: 0;
   line-height: 1.15;
 }
+/* المقاسات الافتراضية (الوضع الرأسي) — كانت نمطاً سطرياً بـpage.jsx،
+   انتقلت هنا عشان استعلام الوضع الأفقي يقدر يغلبها. */
+.ios-navbar { padding: calc(env(safe-area-inset-top) + 4px) 16px 10px; }
+.ios-navbar-row { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+.ios-navbar-logo { min-height: 44px; }
+.ios-navbar-logo img { width: 32px; height: 32px; border-radius: 8px; display: block; }
+.ios-navbar-greeting {
+  font-size: 15px; font-weight: 700; color: #1C1C1E;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ios-navbar-titles { min-width: 0; }
+
+/* ترويسة نسخة الويب (بلا .ios-native) — نفس الفكرة: المقاسات هنا عشان
+   استعلام الوضع الأفقي يقدر يضغطها. */
+.web-header { padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; }
+.web-header-logo { width: 48px; height: 48px; }
+.ios-navbar-date { margin: 2px 0 0; font-size: 15px; color: #8E8E93; letter-spacing: -0.01em; }
 
 /* ————— القوائم المجمّعة (شكل الإعدادات) ————— */
 .ios-group {
@@ -277,3 +302,55 @@ input:focus, select:focus, textarea:focus {
 }
 .splash-logo { animation: daftary-pulse 1.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .splash-logo { animation: none; } }
+
+/* ==========================================================================
+   الجوال بالوضع الأفقي — الارتفاع ينزل لـ~٣٩٠ بكسل بدل ٨٤٤
+   ==========================================================================
+   بالوضع الرأسي الشريط العلوي (ترحيب + عنوان كبير + تاريخ) وشريط التبويبات
+   ياخذون ~٢٢٠ بكسل، وهذا ربع الشاشة الطويلة — مقبول. أول ما تنقلب الشاشة
+   صاروا ياكلون أكثر من نصف الارتفاع وما يبقى للمحتوى إلا سطران (شوهد
+   بالإنتاج ١٨ سبتمبر بكل التبويبات). هنا نضغط الشريطين ونصفّ العنوان
+   والتاريخ بسطر واحد جنب الترحيب بدل ما يتكدّسون.
+
+   الشرط orientation + max-height معاً: الأيباد بالوضع الأفقي ارتفاعه ٧٠٠+
+   فما ينطبق عليه شي، ويبقى بمقاساته المريحة. */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* ————— الشريط العلوي: سطر واحد ————— */
+  .ios-navbar {
+    display: flex;
+    align-items: center;
+    column-gap: 12px;
+    padding: calc(env(safe-area-inset-top) + 2px) calc(env(safe-area-inset-right) + 14px) 4px calc(env(safe-area-inset-left) + 14px);
+  }
+  /* بالعربي أول عنصر هو الأيمن: العنوان أولاً ثم الترحيب وزر الرفع */
+  .ios-navbar-titles {
+    order: 0;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: baseline;
+    column-gap: 8px;
+  }
+  .ios-navbar-row { order: 1; flex: 1 1 auto; min-width: 0; min-height: 34px; }
+  .ios-large-title { font-size: 19px; letter-spacing: -0.02em; }
+  .ios-navbar-date { margin: 0; font-size: 11px; }
+  .ios-navbar-greeting { font-size: 12.5px; }
+  .ios-navbar-logo { min-height: 34px; }
+  .ios-navbar-logo img { width: 24px; height: 24px; border-radius: 6px; }
+  .ios-navbar-back { font-size: 15px; min-height: 34px; }
+  /* زر «رفع جدول» ارتفاعه ٤٤ افتراضياً فيشدّ الشريط كله لفوق */
+  .ios-navbar .ios-btn-plain { min-height: 30px; font-size: 14px; }
+
+  /* ————— شريط التبويبات ————— */
+  .ios-tabbar button { min-height: 34px; padding: 3px 0 1px; gap: 1px; font-size: 9px; }
+  .ios-tabbar svg { width: 19px; height: 19px; }
+
+  /* نسخة الويب بنفس الضغط */
+  .web-header { padding: calc(env(safe-area-inset-top) + 4px) calc(env(safe-area-inset-right) + 14px) 4px calc(env(safe-area-inset-left) + 14px); }
+  .web-header-logo { width: 30px; height: 30px; border-radius: 9px; }
+
+  /* حافة الشاشة تحت النتوء بالوضع الأفقي — المحتوى ما ينقص منه شي */
+  .app-scroll {
+    padding-right: env(safe-area-inset-right);
+    padding-left: env(safe-area-inset-left);
+  }
+}
