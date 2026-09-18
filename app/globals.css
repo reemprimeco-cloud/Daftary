@@ -348,6 +348,12 @@ input:focus, select:focus, textarea:focus {
   .web-header { padding: calc(env(safe-area-inset-top) + 4px) calc(env(safe-area-inset-right) + 14px) 4px calc(env(safe-area-inset-left) + 14px); }
   .web-header-logo { width: 30px; height: 30px; border-radius: 9px; }
 
+  /* عمود القراءة: بالوضع الأفقي تصير الكتل بعرض ٨٤٤ بكسل، وهذا سطر طويل
+     متعب للقراءة أصلاً — وهو نفسه اللي يشغّل «تكبير النص التلقائي» بـWebKit
+     (يكبّر الفقرات الطويلة داخل الكتل العريضة). تحديد العرض يصلح الاثنين
+     معاً: تنسيق أنظف وبلا سبب للتكبير. */
+  .app-scroll > * { max-width: 700px; margin-inline: auto; }
+
   /* حافة الشاشة تحت النتوء بالوضع الأفقي — المحتوى ما ينقص منه شي */
   .app-scroll {
     padding-right: env(safe-area-inset-right);

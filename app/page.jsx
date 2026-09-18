@@ -600,6 +600,29 @@ export default function Home() {
   const [dataLoaded, setDataLoaded] = useState(false);
   const scrollRef = useRef(null);
 
+  // WebKit «يكبّر النص تلقائياً» بالفقرات الطويلة داخل كتل عريضة، والتكبير
+  // اللي يحسبه بالوضع الأفقي يعلق حتى بعد ما ترجع الشاشة للطول — فتبان
+  // الخطوط كبيرة (شوهد بالإنتاج بشاشتي المعلم الذكي والحفظ والدرجات:
+  // فقرة حجمها ١٢ بكسل تنرسم بضعف الحجم). قفل الخاصية بـCSS ما كفى لأن
+  // القيمة المحسوبة ما تُعاد بعد الدوران، فنجبره يعيد حسابها: نبدّل قيمة
+  // الخاصية ونرجّعها بالإطار التالي بعد كل دوران.
+  useEffect(() => {
+    const root = document.documentElement;
+    let frame = 0;
+    const recompute = () => {
+      cancelAnimationFrame(frame);
+      root.style.webkitTextSizeAdjust = "100.001%";
+      frame = requestAnimationFrame(() => { root.style.webkitTextSizeAdjust = "100%"; });
+    };
+    window.addEventListener("orientationchange", recompute);
+    window.addEventListener("resize", recompute);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("orientationchange", recompute);
+      window.removeEventListener("resize", recompute);
+    };
+  }, []);
+
   useEffect(() => {
     installAuthFetch();
     setNative(isNativeApp());
