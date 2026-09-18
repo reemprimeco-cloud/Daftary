@@ -289,7 +289,7 @@ function SubscriptionsSection({ subscriptions }) {
             <tr style={{ textAlign: "right", color: "#9CA3AF", fontSize: 12 }}>
               <th style={{ padding: "8px 10px" }}>النوع</th>
               <th style={{ padding: "8px 10px" }}>ولي الأمر</th>
-              <th style={{ padding: "8px 10px" }}>الجوال</th>
+              <th style={{ padding: "8px 10px" }}>الموبايل</th>
               <th style={{ padding: "8px 10px" }}>الباقة</th>
               <th style={{ padding: "8px 10px" }}>المتجر</th>
               <th style={{ padding: "8px 10px" }}>المبلغ</th>
@@ -442,7 +442,7 @@ function MothersTable({ stats }) {
           <thead style={{ position: "sticky", top: 0, background: "white", zIndex: 1 }}>
             <tr>
               <th style={th}>الاسم</th>
-              <th style={th}>الجوال</th>
+              <th style={th}>الموبايل</th>
               <th style={th}>الطلاب</th>
               <th style={th}>الاشتراك</th>
               <th style={th}>التسجيل</th>

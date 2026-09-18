@@ -35,7 +35,7 @@ export default function PrivacyPage() {
         <Section title="البيانات التي نجمعها">
           <p style={p}>نجمع فقط البيانات اللازمة لتشغيل التطبيق:</p>
           <ul style={ul}>
-            <li style={li}><strong>بيانات ولي الأمر:</strong> الاسم ورقم الجوال.</li>
+            <li style={li}><strong>بيانات ولي الأمر:</strong> الاسم ورقم الموبايل.</li>
             <li style={li}><strong>بيانات الطالب/ة:</strong> الاسم، المدرسة، المحافظة، الصف والشعبة، الجنس، وصورة اختيارية تضيفينها بنفسك.</li>
             <li style={li}><strong>البيانات الدراسية:</strong> الواجبات والاختبارات والمشاريع، المتطلبات المدرسية، جدول الحصص، مطلوبات الحفظ، ودرجات الاختبارات التي تدخلينها.</li>
             <li style={li}><strong>الصور:</strong> صور جداول الواجبات أو صفحات الواجب التي تصوّرينها أو ترفعينها للتحليل.</li>
@@ -81,7 +81,7 @@ export default function PrivacyPage() {
             <li style={li}><strong>Supabase</strong> — تخزين قاعدة البيانات.</li>
             <li style={li}><strong>Vercel</strong> — استضافة التطبيق والموقع.</li>
             <li style={li}><strong>Anthropic</strong> — خدمة الذكاء الاصطناعي.</li>
-            <li style={li}><strong>Twilio</strong> — إرسال رمز التحقق برسالة نصية عند تسجيل الدخول (يصلها رقم جوالك فقط).</li>
+            <li style={li}><strong>Twilio</strong> — إرسال رمز التحقق برسالة نصية عند تسجيل الدخول (يصلها رقم موبايلك فقط).</li>
             <li style={li}><strong>آبل</strong> — توصيل الإشعارات لجهازك، والتحقق من عمليات الشراء داخل التطبيق.</li>
             <WebPaymentProvider />
             <li style={li}><strong>وزارة التربية الكويتية</strong> — مكتبتها الإلكترونية العامة (elibrary.moe.edu.kw) للاستعانة بنماذج الاختبارات والمراجعات الرسمية عند الإجابة على أسئلة المعلم الذكي.</li>

@@ -16,7 +16,7 @@ export async function POST(req) {
 
   const to = normalizeKuwaitPhone(phone);
   if (!to) {
-    return NextResponse.json({ error: "رقم الجوال غير صحيح" }, { status: 400 });
+    return NextResponse.json({ error: "رقم الموبايل غير صحيح" }, { status: 400 });
   }
 
   // رقم مراجعة آبل: ما نرسل شي، الكود ثابت من إعدادات السيرفر. بدون هذا المخرج

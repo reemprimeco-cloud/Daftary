@@ -1105,7 +1105,7 @@ function InstallPrompt() {
           {platform === "ios" ? "حمّلي تطبيق دفتري" : "أضيفي دفتري للشاشة الرئيسية"}
         </p>
         <p style={{ margin: 0, fontSize: 11, color: "#6B7280" }}>
-          {platform === "ios" ? "تجربة أسرع وإشعارات فورية" : "وصول أسرع من شاشة جوالك مباشرة"}
+          {platform === "ios" ? "تجربة أسرع وإشعارات فورية" : "وصول أسرع من شاشة موبايلك مباشرة"}
         </p>
       </div>
       {platform === "ios" ? (
@@ -1304,7 +1304,7 @@ function Onboarding({ onDone }) {
         <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>ولي الأمر</label>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسمك الكامل" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 12 }} />
-          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>رقم الجوال</label>
+          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>رقم الموبايل</label>
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
             <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
             {/* لوحة أرقام بدل لوحة الحروف — والتنظيف يقبل اللصق بمسافات أو
@@ -3094,7 +3094,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
         ) : !canBuy ? (
           <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
-            الاشتراك يتم من تطبيق دفتري على جوالك. نزّله وسجّل دخولك بنفس رقمك،
+            الاشتراك يتم من تطبيق دفتري على موبايلك. نزّله وسجّل دخولك بنفس رقمك،
             وبيوصلك رصيدك على نفس الحساب.
           </div>
         ) : subscribed ? (
@@ -3257,7 +3257,7 @@ function PermissionsBanner() {
         <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#8C6027" }}>فعّلي {label}</p>
         <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#A07C43", lineHeight: 1.6 }}>
           {blocked || needsSettings
-            ? `من إعدادات جوالك ← دفتري ← فعّلي ${label}`
+            ? `من إعدادات موبايلك ← دفتري ← فعّلي ${label}`
             : "عشان يوصلك تذكير الواجبات، ويشتغل رفع صور الجداول"}
         </p>
       </div>
@@ -3280,7 +3280,7 @@ function PickErrorNotice({ error }) {
   const isCamera = error.source === "camera";
   const text =
     error.reason === "denied"
-      ? `دفتري ما عنده إذن يوصل ${isCamera ? "للكاميرا" : "لصورك"}. افتحي إعدادات جوالك ← دفتري ← ${isCamera ? "الكاميرا" : "الصور"} وفعّلي الإذن، ثم ارجعي وجربي.`
+      ? `دفتري ما عنده إذن يوصل ${isCamera ? "للكاميرا" : "لصورك"}. افتحي إعدادات موبايلك ← دفتري ← ${isCamera ? "الكاميرا" : "الصور"} وفعّلي الإذن، ثم ارجعي وجربي.`
       : error.reason === "unavailable"
       ? "هذي الميزة تحتاج آخر إصدار من التطبيق. حدّثيه من آب ستور وجربي مرة ثانية."
       : "صار خلل فني وما انفتحت الصور. جربي تقفلين التطبيق وتفتحينه من جديد.";
@@ -3524,7 +3524,7 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
         <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
       ) : platform !== "store" && !canPayByCard ? (
         <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
-          الاشتراك يتم من تطبيق دفتري على جوالك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
+          الاشتراك يتم من تطبيق دفتري على موبايلك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
         </div>
       ) : (
         APP_TIERS.map((t) => (
@@ -4479,7 +4479,7 @@ function PasswordSetting({ ios }) {
       {open && (
         <div style={{ padding: ios ? "0 16px 14px" : "0 18px 16px" }}>
           <p style={{ margin: "0 0 8px", fontSize: 12, color: "#9CA3AF", lineHeight: 1.7 }}>
-            دخول قادم بجوالك ورقمك السري بلا كود، حتى من جهاز جديد.
+            دخول قادم بموبايلك ورقمك السري بلا كود، حتى من جهاز جديد.
           </p>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رقم سري جديد" autoComplete="new-password" style={inputStyle} />
           <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="أعيدي كتابته" autoComplete="new-password" style={inputStyle} />
@@ -4571,7 +4571,7 @@ function FamilySetting({ ios }) {
 
               {data.canInvite && (
                 <div style={{ marginTop: 10 }}>
-                  <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم جوال ولي الأمر الثاني" inputMode="numeric"
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم موبايل ولي الأمر الثاني" inputMode="numeric"
                     style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, marginBottom: 8, direction: "ltr", textAlign: "center" }} />
                   <button onClick={invite} disabled={busy || phone.trim().length < 8} style={{ width: "100%", padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13.5, minHeight: 42, opacity: busy || phone.trim().length < 8 ? 0.5 : 1 }}>
                     {busy ? "..." : "إرسال الدعوة"}
@@ -4893,7 +4893,7 @@ function DeleteAccountButton({ mother, onDeleted, ios }) {
       <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "#B91C1C" }}>حذف الحساب نهائياً</p>
       <p style={{ margin: "6px 0 10px", fontSize: 12.5, lineHeight: 1.75, color: "#7F1D1D" }}>
         سيُحذف حسابك وكل بيانات أبنائك (الواجبات، المتطلبات، الجدول، الحفظ، الدرجات، ومحادثات المعلم الذكي) نهائياً
-        وبدون إمكانية استرجاع. لتأكيد الحذف، اكتبي رقم جوالك ({lastEight}):
+        وبدون إمكانية استرجاع. لتأكيد الحذف، اكتبي رقم موبايلك ({lastEight}):
       </p>
       <input
         value={confirmPhone}

@@ -22,7 +22,7 @@ export async function POST(req) {
   const sb = supabaseAdmin();
   const { data: mother } = await sb.from("mothers").select("*").eq("phone", to).maybeSingle();
   // رسالة موحّدة لرقم غير موجود ولرقم سري غلط — ما نسرّب إذا الرقم مسجَّل.
-  const wrongMsg = { error: "رقم الجوال أو الرقم السري غير صحيح" };
+  const wrongMsg = { error: "رقم الموبايل أو الرقم السري غير صحيح" };
   if (!mother || !mother.password_hash) return NextResponse.json(wrongMsg, { status: 401 });
 
   const lock = loginLockStatus(mother);

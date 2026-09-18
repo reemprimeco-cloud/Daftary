@@ -14,7 +14,7 @@ export async function POST(req) {
   }
 
   const to = normalizeKuwaitPhone(phone);
-  if (!to) return NextResponse.json({ error: "رقم الجوال غير صحيح" }, { status: 400 });
+  if (!to) return NextResponse.json({ error: "رقم الموبايل غير صحيح" }, { status: 400 });
   if (!/^\d{4,10}$/.test(String(code || "").trim())) {
     return NextResponse.json({ error: "الكود غير صحيح" }, { status: 400 });
   }

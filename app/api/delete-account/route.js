@@ -24,7 +24,7 @@ export async function POST(req) {
 
   const normalize = (v) => (v || "").replace(/[^0-9]/g, "").slice(-8);
   if (normalize(mother.phone) !== normalize(phone)) {
-    return NextResponse.json({ error: "رقم الجوال غير مطابق للحساب" }, { status: 403 });
+    return NextResponse.json({ error: "رقم الموبايل غير مطابق للحساب" }, { status: 403 });
   }
 
   // بعائلة فيها وليّا أمر، الحذف يختلف حسب الدور:
