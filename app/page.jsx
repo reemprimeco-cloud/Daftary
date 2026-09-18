@@ -54,10 +54,12 @@ const TYPE_META = {
   // محتوى المنهج خلال الأسبوع — الأم تعلّمه «تمت المراجعة»، وبلا أي تذكير
   "درس": { done: "تمت المراجعة" },
 };
+// «المتطلبات» انضم لتبويب «جدول الحصص» بتبويب واحد «الطلبات والجداول»
+// (طلب صاحبة التطبيق) — يفرّغ خانة بالشريط السفلي لميزة مستقبلية
+// (المشاريع)، والتبديل بين القسمين بمفتاح داخلي (scheduleSubTab بالأسفل).
 const TABS = [
   { key: "dashboard", label: "الرئيسية" },
-  { key: "requirements", label: "المتطلبات" },
-  { key: "schedule", label: "جدول الحصص" },
+  { key: "schedule", label: "الطلبات والجداول" },
   { key: "progress", label: "الحفظ والدرجات" },
   { key: "teacher", label: "المعلم الذكي" },
 ];
@@ -459,6 +461,8 @@ export default function Home() {
   const [feedbackDue, setFeedbackDue] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [view, setView] = useState("dashboard");
+  // التبديل داخل تبويب «الطلبات والجداول» بين قسم الجداول وقسم الطلبات
+  const [scheduleSubTab, setScheduleSubTab] = useState("schedule");
   const [showAddChild, setShowAddChild] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -864,22 +868,40 @@ export default function Home() {
               </>
             )}
           </div>
-        ) : view === "requirements" ? (
-          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-            {children.length === 0 ? (
-              <EmptyState onAdd={() => setShowAddChild(true)} />
-            ) : (
-              children.map((c) => (
-                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onDeleteReq={handleDeleteReq} onClearBought={handleClearBought} onUpdateReq={handleUpdateReq} />
-              ))
-            )}
-          </div>
         ) : view === "schedule" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
             {children.length === 0 ? (
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
               <>
+                {native ? (
+                  <div className="ios-segmented">
+                    <button onClick={() => setScheduleSubTab("schedule")} data-active={scheduleSubTab === "schedule"}>الجداول</button>
+                    <button onClick={() => setScheduleSubTab("requirements")} data-active={scheduleSubTab === "requirements"}>الطلبات</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setScheduleSubTab("schedule")} style={{ flex: 1, padding: 10, borderRadius: 12, background: scheduleSubTab === "schedule" ? "#B7A6E8" : "#F3F4F6", color: scheduleSubTab === "schedule" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <TileIcon name="schedule" size={17} />
+                        الجداول
+                      </span>
+                    </button>
+                    <button onClick={() => setScheduleSubTab("requirements")} style={{ flex: 1, padding: 10, borderRadius: 12, background: scheduleSubTab === "requirements" ? "#B7A6E8" : "#F3F4F6", color: scheduleSubTab === "requirements" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <TileIcon name="requirements" size={17} />
+                        الطلبات
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {scheduleSubTab === "requirements" ? (
+                  children.map((c) => (
+                    <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onDeleteReq={handleDeleteReq} onClearBought={handleClearBought} onUpdateReq={handleUpdateReq} />
+                  ))
+                ) : (
+                  <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "#9CA3AF" }}>جدول الحصص الأسبوعي</span>
                   <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ رفع/تحديث الجدول</button>
@@ -887,6 +909,8 @@ export default function Home() {
                 {children.map((c) => (
                   <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} onCellClick={(day, period, entry) => setEditingCell({ child: c, day, period, entry })} />
                 ))}
+                  </>
+                )}
               </>
             )}
           </div>
