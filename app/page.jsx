@@ -66,7 +66,7 @@ const TYPE_META = {
 const TABS = [
   { key: "dashboard", label: "الرئيسية" },
   { key: "schedule", label: "الطلبات والجداول" },
-  { key: "progress", label: "الحفظ والدرجات" },
+  { key: "progress", label: "المتابعة والدرجات" },
   { key: "teacher", label: "المعلم الذكي" },
 ];
 
@@ -602,22 +602,33 @@ export default function Home() {
 
   // WebKit «يكبّر النص تلقائياً» بالفقرات الطويلة داخل كتل عريضة، والتكبير
   // اللي يحسبه بالوضع الأفقي يعلق حتى بعد ما ترجع الشاشة للطول — فتبان
-  // الخطوط كبيرة (شوهد بالإنتاج بشاشتي المعلم الذكي والحفظ والدرجات:
+  // الخطوط كبيرة (شوهد بالإنتاج بشاشتي المعلم الذكي والمتابعة والدرجات:
   // فقرة حجمها ١٢ بكسل تنرسم بضعف الحجم). قفل الخاصية بـCSS ما كفى لأن
   // القيمة المحسوبة ما تُعاد بعد الدوران، فنجبره يعيد حسابها: نبدّل قيمة
   // الخاصية ونرجّعها بالإطار التالي بعد كل دوران.
   useEffect(() => {
     const root = document.documentElement;
-    let frame = 0;
+    const vp = document.querySelector('meta[name="viewport"]');
+    const base = vp?.getAttribute("content") || "";
+    let timer = 0;
     const recompute = () => {
-      cancelAnimationFrame(frame);
+      clearTimeout(timer);
       root.style.webkitTextSizeAdjust = "100.001%";
-      frame = requestAnimationFrame(() => { root.style.webkitTextSizeAdjust = "100%"; });
+      // وبعد الدوران من العرض للطول يبقى WebKit على مقياس عرض الوضع
+      // الأفقي، فتطلع الشاشة مكبّرة وتحتاج تصغيراً يدوياً كل مرة. تثبيت
+      // maximum-scale=1 للحظة يرجّع العرض «fit» بالضبط، ثم نرجّع الوسم
+      // كما كان عشان التكبير اليدوي يبقى متاحاً لضعاف البصر — القرار
+      // القديم بـlayout.jsx كان تركه مفتوحاً عمداً، وما نبي نلغيه.
+      if (vp && base) vp.setAttribute("content", `${base}, maximum-scale=1`);
+      timer = setTimeout(() => {
+        root.style.webkitTextSizeAdjust = "100%";
+        if (vp && base) vp.setAttribute("content", base);
+      }, 400);
     };
     window.addEventListener("orientationchange", recompute);
     window.addEventListener("resize", recompute);
     return () => {
-      cancelAnimationFrame(frame);
+      clearTimeout(timer);
       window.removeEventListener("orientationchange", recompute);
       window.removeEventListener("resize", recompute);
     };
@@ -1866,7 +1877,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
 }
 
 // تعديل عنصر حفظ/تسميع — النوع (آية/حديث) والمرجع والتفاصيل، مستخدَمة من
-// شاشتي الحفظ (الخطة الأسبوعية وتبويب الحفظ والدرجات).
+// الخطة الأسبوعية — العارض الوحيد للحفظ بعد ما انشال تبويبه.
 function EditMemoModal({ item, onClose, onSave, onDelete }) {
   const [kind, setKind] = useState(item.kind);
   const [reference, setReference] = useState(item.reference || "");
@@ -4282,7 +4293,7 @@ function ProgressView({ children, motherId, classSchedule = [] }) {
   );
 }
 
-// قسم الحفظ المستقل انشال من تبويب «الحفظ والدرجات» (قرار صاحبة التطبيق
+// قسم الحفظ المستقل انشال من تبويب «المتابعة والدرجات» (قرار صاحبة التطبيق
 // ١٨ سبتمبر) وحلّت محله «ملاحظات المعلم». الحفظ نفسه ما تأثر: يبقى ظاهراً
 // بالخطة الأسبوعية بالرئيسية مع علامة الإنجاز وزر التعديل، ويُستخرج من
 // الصور كما هو، وتذكيراته شغالة — التبويب كان يكرّر ما هو موجود أصلاً.
@@ -4497,7 +4508,7 @@ function EditTeacherNoteModal({ item, subjects, onClose, onSave, onDelete }) {
         <button onClick={submit} disabled={busy || !note.trim() || !finalSubject} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14.5, minHeight: 46, opacity: busy || !note.trim() || !finalSubject ? 0.5 : 1 }}>
           {busy ? "..." : "حفظ التعديلات"}
         </button>
-        <button onClick={() => onDelete(item.id)} style={{ width: "100%", padding: 10, borderRadius: 12, background: "none", color: "#B91C1C", fontWeight: 700, fontSize: 13 }}>
+        <button onClick={() => onDelete(item.id)} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
           حذف الملاحظة
         </button>
       </div>
