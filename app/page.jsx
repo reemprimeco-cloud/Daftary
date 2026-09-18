@@ -2153,6 +2153,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
   const meta = TYPE_META[task.type] || TYPE_META["واجب"];
   const TYPES = ["واجب", "اختبار", "مشروع", "حفظ", "درس"];
   const [editing, setEditing] = useState(false);
+  const [showSource, setShowSource] = useState(false);
   const [subject, setSubject] = useState(task.subject || "");
   const [type, setType] = useState(task.type);
   const [details, setDetails] = useState(task.details || "");
@@ -2235,6 +2236,12 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
           <>
             {task.details && <div style={{ background: color.bg, borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 13 }}>{task.details}</div>}
             {task.source_text && <div style={{ marginBottom: 14 }}><SourceText text={task.source_text} /></div>}
+            {task.source_id && (
+              <button onClick={() => setShowSource(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10 }}>
+                <TileIcon name="camera" size={18} />
+                عرض المصدر (الصورة الأصلية)
+              </button>
+            )}
 
             {task.due_date && !native && (
               <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
@@ -2257,6 +2264,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
           </>
         )}
       </div>
+      {showSource && <SourceImageModal sourceId={task.source_id} onClose={() => setShowSource(false)} />}
     </div>
   );
 }
@@ -2691,6 +2699,44 @@ function SourceText({ text, compact }) {
   );
 }
 
+// «عرض المصدر»: الصورة اللي جاء منها البند. الصور تُحفظ أسبوعاً ثم تُحذف،
+// فبعدها يطلع سبب واضح بدل شاشة فاضية.
+function SourceImageModal({ sourceId, onClose }) {
+  const [urls, setUrls] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/sources/${sourceId}`)
+      .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
+      .then(({ ok, data }) => {
+        if (!alive) return;
+        if (ok) setUrls(data.urls || []);
+        else setError(data.error || "تعذّر فتح الصورة.");
+      })
+      .catch(() => alive && setError("تعذّر فتح الصورة."));
+    return () => { alive = false; };
+  }, [sourceId]);
+
+  return (
+    // stopPropagation إجباري: هذي الشاشة تُعرض داخل شاشة الواجب، وبدونه
+    // الضغط على × أو الخلفية يوصل لغطاء شاشة الواجب فيقفلها هي كمان.
+    <div dir="rtl" onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,.85)", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top) + 12px) 16px 12px" }}>
+        <p style={{ margin: 0, color: "white", fontWeight: 800, fontSize: 15 }}>الصورة الأصلية</p>
+        <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", color: "white", fontSize: 20, width: 36, height: 36, borderRadius: "50%" }}>×</button>
+      </div>
+      <div className="app-scroll" onClick={(e) => e.stopPropagation()} style={{ flex: 1, padding: "0 12px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 10 }}>
+        {!urls && !error && <p style={{ color: "white", textAlign: "center", fontSize: 13, opacity: 0.8, paddingTop: 30 }}>...جاري الفتح</p>}
+        {error && <p style={{ color: "white", textAlign: "center", fontSize: 13.5, lineHeight: 1.9, background: "rgba(255,255,255,.12)", borderRadius: 12, padding: 14, marginTop: 20 }}>{error}</p>}
+        {urls?.map((u, i) => (
+          <img key={i} src={u} alt={`الصورة ${i + 1}`} style={{ width: "100%", borderRadius: 12, background: "#222" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // «عنصر / عنصران / ٥ عناصر» — عربية سليمة بدل «5 عنصر».
 function countLabel(n, one, two, plural) {
   if (n === 1) return one;
@@ -2707,6 +2753,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
   const [openRow, setOpenRow] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showSource, setShowSource] = useState(false);
   const TYPES = ["واجب", "اختبار", "مشروع", "حفظ", "درس"];
 
   const tasks = items.tasks || [];
@@ -2777,7 +2824,12 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
     <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#FAF7F2", display: "flex", flexDirection: "column" }}>
       <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 14px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={onClose} style={{ background: "none", fontSize: 20, width: 36, height: 36 }}>←</button>
-        <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>راجعي المعلومات قبل إضافتها</p>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 16, flex: 1, minWidth: 0 }}>راجعي المعلومات قبل إضافتها</p>
+        {draft.sourceId && (
+          <button onClick={() => setShowSource(true)} style={{ background: "#F1EFFA", color: "#5C4B8C", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>
+            عرض الصورة
+          </button>
+        )}
       </div>
 
       <div className="app-scroll" style={{ flex: 1, padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -2927,6 +2979,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
           إلغاء بلا حفظ
         </button>
       </div>
+      {showSource && <SourceImageModal sourceId={draft.sourceId} onClose={() => setShowSource(false)} />}
     </div>
   );
 }

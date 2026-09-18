@@ -6,7 +6,7 @@ import { markTrialUploadUsed } from "@/lib/appEntitlements";
 async function loadDraft(sb, id, motherId) {
   const { data } = await sb
     .from("upload_drafts")
-    .select("id, mother_id, child_id, kind, items, status, images_count")
+    .select("id, mother_id, child_id, kind, items, status, images_count, source_id")
     .eq("id", id)
     .maybeSingle();
   return data && data.mother_id === motherId ? data : null;
@@ -41,7 +41,7 @@ export async function POST(req, { params }) {
   // ترسله الواجهة — وبلا إرسال نرجع لمحتوى المسودة كما استُخرج.
   const items = body.items && typeof body.items === "object" ? body.items : draft.items;
 
-  const counts = await applyPlanItems(sb, child.id, items);
+  const counts = await applyPlanItems(sb, child.id, items, draft.source_id || null);
 
   // التجربة المجانية تُستهلك هنا فقط — بعد ما تنحفظ البيانات فعلاً، لا عند
   // التحليل. فمحاولة فاشلة أو نتيجة رفضتها الأم ما تخسّرها التجربة.

@@ -4,6 +4,7 @@ import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
 import { kuwaitNow, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
 import { jobIdFrom, openJob, closeJob } from "@/lib/uploadJobs";
 import { summarize } from "@/lib/planApply";
+import { storeSourceImages } from "@/lib/uploadSources";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -189,9 +190,12 @@ async function handleUpload({ childId, images }, motherId) {
   // تراجع الأحدث. نلغيها بدل ما تتراكم مسودات تتنافس على نفس البيانات.
   await sb.from("upload_drafts").update({ status: "discarded" }).eq("child_id", child.id).eq("status", "pending");
 
+  // الصورة الأصلية تُحفظ أسبوعاً عشان تقدر الأم ترجع لها من «عرض المصدر».
+  const sourceId = await storeSourceImages(sb, { motherId, childId: child.id, images });
+
   const { data: draft, error: dErr } = await sb
     .from("upload_drafts")
-    .insert({ mother_id: motherId, child_id: child.id, kind: "plan", items, images_count: images.length })
+    .insert({ mother_id: motherId, child_id: child.id, kind: "plan", items, images_count: images.length, source_id: sourceId })
     .select("id")
     .single();
   if (dErr || !draft) {
@@ -203,6 +207,7 @@ async function handleUpload({ childId, images }, motherId) {
     ok: true,
     draftId: draft.id,
     childId: child.id,
+    sourceId,
     items,
     summary: summarize(items),
     imagesProcessed: images.length,

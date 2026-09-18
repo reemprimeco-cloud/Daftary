@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { kuwaitTodayStr, kuwaitNow } from "@/lib/kuwaitDate";
 import { mapPool, CONCURRENCY, configureWebPush, deliverToMother } from "@/lib/pushDelivery";
+import { purgeExpiredSources } from "@/lib/uploadSources";
 
 // APNs يحتاج HTTP/2 عبر node:http2، وهو غير متوفر على Edge runtime.
 export const runtime = "nodejs";
@@ -242,5 +243,14 @@ export async function GET(req) {
   sent += await sendRequirementReminders(sb, today, tomorrow);
   sent += await sendMemorizationReminders(sb, today);
 
-  return NextResponse.json({ ok: true, sent });
+  // تنظيف صور المصدر المنتهية (أسبوع من الرفع) — معلّق على كرون يومي موجود
+  // بدل كرون جديد. فشله ما يخص التذكيرات، فلا يوقفها.
+  let purgedSources = 0;
+  try {
+    purgedSources = await purgeExpiredSources(sb);
+  } catch (e) {
+    console.warn("purgeExpiredSources failed:", e.message);
+  }
+
+  return NextResponse.json({ ok: true, sent, purgedSources });
 }
