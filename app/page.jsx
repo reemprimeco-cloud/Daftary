@@ -48,6 +48,9 @@ const WHATSAPP_URL = "https://wa.me/96565068000";
 // بالتطبيق لو منصّب، وإلا يحوّل للمتصفح.
 const INSTAGRAM_URL = "https://ig.me/m/reemora.app";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
+// ترويسة أعمدة الحصص بنفس صيغة الجدول الورقي («الأولى» لا «الحصة ١») —
+// أقصر فتدخل بعمود ضيق. أي رقم فوق الثامنة يبان رقماً كما هو.
+const PERIOD_LABELS = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة"];
 const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
   "واجب": { done: "تم" },
@@ -439,15 +442,112 @@ function Avatar({ child, size = 52 }) {
   );
 }
 
+// أيقونات المواد: فيكتور فلات بلون واحد مصمت بلا تدرّج ولا لمعة (قرار
+// صاحبة التطبيق ١٨ سبتمبر). كانت صوراً PNG بنمط ثلاثي الأبعاد لامع —
+// يضيع تفصيلها بخانة جدول الحصص الصغيرة (١٧ بكسل) وتطلع ضبابية بشاشة
+// الريتينا. الفيكتور يبقى حاداً بأي مقاس وأوضح للعين.
+const SUBJECT_ICONS = {
+  islamic: { color: "#D2A046", glyph: (c) => (
+    <>
+      <path d="M13.9 4.6a7.4 7.4 0 1 0 0 14.8 8.9 8.9 0 0 1 0-14.8Z" fill="#fff" />
+      <path d="m18.4 5.6.95 1.98 2.15.3-1.55 1.5.37 2.14-1.92-1.02-1.92 1.02.37-2.14-1.55-1.5 2.15-.3z" fill="#fff" />
+    </>
+  ) },
+  arabic: { color: "#DB6489", glyph: () => <BookGlyph /> },
+  english: { color: "#4B8FD4", glyph: () => <BookGlyph /> },
+  math: { color: "#3DA37A", glyph: (c) => (
+    <>
+      <rect x="5" y="2.8" width="14" height="18.4" rx="2.6" fill="#fff" />
+      <rect x="7.1" y="5" width="9.8" height="3.7" rx="1.1" fill={c} />
+      {[0, 1, 2].map((r) => [0, 1, 2].map((k) => (
+        <circle key={`${r}-${k}`} cx={8.7 + k * 3.3} cy={11.9 + r * 3.1} r="1.15" fill={c} />
+      )))}
+    </>
+  ) },
+  science: { color: "#8A6DD4", glyph: (c) => (
+    <>
+      <path d="M9.6 2.9h4.8a.95.95 0 0 1 0 1.9h-.35v4.02l4.62 8.34A2.6 2.6 0 0 1 16.4 21.1H7.6a2.6 2.6 0 0 1-2.27-3.94l4.62-8.34V4.8H9.6a.95.95 0 0 1 0-1.9Z" fill="#fff" />
+      <circle cx="10.4" cy="16.6" r="1.25" fill={c} />
+      <circle cx="13.7" cy="18.1" r=".95" fill={c} />
+    </>
+  ) },
+  social: { color: "#DD8C3C", glyph: (c) => (
+    <>
+      <circle cx="12" cy="12" r="8.7" fill="#fff" />
+      <g fill="none" stroke={c} strokeWidth="1.35">
+        <path d="M3.5 12h17" />
+        <path d="M12 3.4c2.1 2.3 3.2 5.3 3.2 8.6s-1.1 6.3-3.2 8.6c-2.1-2.3-3.2-5.3-3.2-8.6S9.9 5.7 12 3.4Z" />
+      </g>
+    </>
+  ) },
+  pe: { color: "#56B05B", glyph: () => (
+    <g fill="#fff">
+      <rect x="2.2" y="9.6" width="2.8" height="4.8" rx="1.1" />
+      <rect x="19" y="9.6" width="2.8" height="4.8" rx="1.1" />
+      <rect x="5.4" y="7.6" width="3.2" height="8.8" rx="1.3" />
+      <rect x="15.4" y="7.6" width="3.2" height="8.8" rx="1.3" />
+      <rect x="8.4" y="10.7" width="7.2" height="2.6" />
+    </g>
+  ) },
+  art: { color: "#A56ED4", glyph: (c) => (
+    <>
+      <path d="M12 3.1c-5.1 0-8.9 3.7-8.9 8.4 0 4.8 3.9 8.5 8.9 8.5 1.6 0 2.5-.9 2.5-2.1 0-.6-.2-1.05-.6-1.45-.3-.4-.5-.8-.5-1.3 0-1.15.9-1.95 2.05-1.95h1.65c2.25 0 3.9-1.75 3.9-4.05 0-3.35-3.7-6.1-9-6.1Z" fill="#fff" />
+      <g fill={c}>
+        <circle cx="7.6" cy="11.9" r="1.35" />
+        <circle cx="9.9" cy="7.9" r="1.35" />
+        <circle cx="14.5" cy="7.5" r="1.35" />
+        <circle cx="17.6" cy="10.4" r="1.35" />
+      </g>
+    </>
+  ) },
+  music: { color: "#DB65A4", glyph: () => (
+    <path d="M18.6 2.6 8.9 4.65v10.1a3.35 3.35 0 1 0 1.9 3.02V8.1l5.9-1.25v5.55a3.35 3.35 0 1 0 1.9 3.02z" fill="#fff" />
+  ) },
+  computer: { color: "#3CA69E", glyph: (c) => (
+    <>
+      <rect x="2.6" y="4.2" width="18.8" height="12.6" rx="2.1" fill="#fff" />
+      <rect x="4.7" y="6.3" width="14.6" height="8.4" rx="1" fill={c} />
+      <rect x="10.3" y="17.3" width="3.4" height="2.2" fill="#fff" />
+      <rect x="6.8" y="19.4" width="10.4" height="2" rx="1" fill="#fff" />
+    </>
+  ) },
+};
+
+// صفحتان مفتوحتان — نفس الرسم للغة العربية والإنجليزية، يفرّقهما اللون
+// (كما كان بالصور السابقة).
+function BookGlyph() {
+  return (
+    <g fill="#fff">
+      <path d="M11.35 7.2C9.75 6 7.7 5.3 5.3 5.3c-.62 0-1.1.45-1.1 1.03v10.44c0 .58.48 1.03 1.1 1.03 2.4 0 4.45.6 6.05 1.8z" />
+      <path d="M12.65 7.2C14.25 6 16.3 5.3 18.7 5.3c.62 0 1.1.45 1.1 1.03v10.44c0 .58-.48 1.03-1.1 1.03-2.4 0-4.45.6-6.05 1.8z" />
+    </g>
+  );
+}
+
+// أول حرف دالّ على المادة: «الكهرباء» تعطي «ك» لا «ا» — أداة التعريف
+// ما تفرّق بين مادة وثانية، وكل المواد تقريباً تبدأ بها.
+function subjectInitial(subject) {
+  const s = (subject || "").trim();
+  if (!s) return "؟";
+  const bare = s.replace(/^ال(?=.)/, "");
+  return (bare || s)[0];
+}
+
 function SubjectIcon({ subject, size = 28 }) {
   const file = getSubjectIconFile(subject);
-  if (file) {
-    return <img src={`/icons/${file}.png`} alt={subject} style={{ width: size, height: size, objectFit: "contain", flexShrink: 0 }} />;
-  }
+  const icon = file && SUBJECT_ICONS[file];
+  // مادة ما نعرف لها أيقونة (مثل «الكهرباء») تاخذ نفس شكل البلاطة بلون
+  // محايد وأول حرف من اسمها — بدل دائرة رمادية بشكل مختلف عن جيرانها.
+  const color = icon ? icon.color : "#9AA3AF";
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: "#E5E7EB", color: "#6B7280", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.42, fontWeight: 800, flexShrink: 0 }}>
-      {subject?.trim()?.[0] || "؟"}
-    </div>
+    <svg viewBox="0 0 24 24" role="img" aria-label={subject || ""} style={{ width: size, height: size, display: "block", flexShrink: 0 }}>
+      <rect width="24" height="24" rx="6.2" fill={color} />
+      {icon ? icon.glyph(color) : (
+        <text x="12" y="12" textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="12.5" fontWeight="800">
+          {subjectInitial(subject)}
+        </text>
+      )}
+    </svg>
   );
 }
 
@@ -1988,55 +2088,59 @@ function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
               )}
             </button>
           </div>
-          <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 4, fontSize: 11 }}>
+          {/* نفس ترتيب الجدول الورقي اللي تعرفه الأم: الأيام صفوف والحصص
+              أعمدة. والمقاسات مضغوطة عشان الجدول كله يبان بشاشة الآيفون
+              بلا سحب أفقي — الخانة ٧ حصص × ٥ أيام تدخل بعرض ٣٩٠ بكسل. */}
+          <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 2, fontSize: 10 }}>
             <colgroup>
-              <col style={{ width: "16%" }} />
-              {DAYS.map((d) => <col key={d} style={{ width: `${84 / DAYS.length}%` }} />)}
+              <col style={{ width: 40 }} />
+              {periods.map((p) => <col key={p} />)}
             </colgroup>
             <thead>
               <tr>
-                <th style={{ padding: 4 }}></th>
-                {DAYS.map((d, di) => {
-                  const dayPal = PALETTE[di % PALETTE.length];
-                  return (
-                    <th key={d} style={{ padding: "8px 3px", background: dayPal.soft, color: dayPal.text, borderRadius: 8, fontWeight: 800 }}>{d}</th>
-                  );
-                })}
+                <th style={{ padding: "5px 2px", background: "#F3F4F6", color: "#6B7280", borderRadius: 6, fontWeight: 800, fontSize: 9 }}>اليوم</th>
+                {periods.map((p) => (
+                  <th key={p} style={{ padding: "5px 1px", background: "#F3F4F6", color: "#6B7280", borderRadius: 6, fontWeight: 800, fontSize: 8.5, lineHeight: 1.2 }}>
+                    {PERIOD_LABELS[p - 1] || p}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {periods.map((p) => (
-                <tr key={p}>
-                  <td style={{ padding: 4, textAlign: "center", color: "#9CA3AF", fontWeight: 800, fontSize: 10 }}>الحصة {p}</td>
-                  {DAYS.map((d, di) => {
-                    const dayPal = PALETTE[di % PALETTE.length];
-                    const entry = grid[`${d}-${p}`];
-                    return (
-                      <td key={d} onClick={() => onCellClick(d, p, entry || null)} style={{ padding: "6px 3px", textAlign: "center", background: dayPal.bg, borderRadius: 8, verticalAlign: entry ? "top" : "middle", cursor: "pointer" }}>
-                        {entry ? (
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                            <div style={{ position: "relative" }}>
-                              <SubjectIcon subject={entry.subject} size={22} />
-                              {getSubjectIconFile(entry.subject) === "pe" && child.pe_uniform_color && (
-                                <span style={{ position: "absolute", bottom: -2, left: -2, width: 9, height: 9, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
+              {DAYS.map((d, di) => {
+                const dayPal = PALETTE[di % PALETTE.length];
+                return (
+                  <tr key={d}>
+                    <td style={{ padding: "4px 2px", textAlign: "center", background: dayPal.soft, color: dayPal.text, borderRadius: 6, fontWeight: 800, fontSize: 9, lineHeight: 1.2 }}>{d}</td>
+                    {periods.map((p) => {
+                      const entry = grid[`${d}-${p}`];
+                      return (
+                        <td key={p} onClick={() => onCellClick(d, p, entry || null)} style={{ padding: "4px 1px", textAlign: "center", background: dayPal.bg, borderRadius: 6, verticalAlign: "middle", cursor: "pointer" }}>
+                          {entry ? (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                              <div style={{ position: "relative", lineHeight: 0 }}>
+                                <SubjectIcon subject={entry.subject} size={17} />
+                                {getSubjectIconFile(entry.subject) === "pe" && child.pe_uniform_color && (
+                                  <span style={{ position: "absolute", bottom: -2, left: -2, width: 7, height: 7, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
+                                )}
+                              </div>
+                              <span style={{ fontSize: 7.5, fontWeight: 800, color: dayPal.text, lineHeight: 1.2, wordBreak: "break-word" }}>{entry.subject}</span>
+                              {entry.teacher && <span style={{ fontSize: 6.5, color: dayPal.text, opacity: 0.75, lineHeight: 1.15, wordBreak: "break-word" }}>{entry.teacher}</span>}
+                              {/* dir="ltr" إجباري — بدونه يعكس RTL ترتيب الوقتين فتبان
+                                  الحصة كأنها تنتهي قبل ما تبدأ (08:15 - 07:30). */}
+                              {(entry.start_time || entry.end_time) && (
+                                <span dir="ltr" style={{ fontSize: 6, color: dayPal.text, opacity: 0.55, direction: "ltr" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
                               )}
                             </div>
-                            <span style={{ fontSize: 9, fontWeight: 800, color: dayPal.text, lineHeight: 1.25 }}>{entry.subject}</span>
-                            {entry.teacher && <span style={{ fontSize: 8, color: dayPal.text, opacity: 0.75, lineHeight: 1.2 }}>{entry.teacher}</span>}
-                            {/* dir="ltr" إجباري — بدونه يعكس RTL ترتيب الوقتين فتبان
-                                الحصة كأنها تنتهي قبل ما تبدأ (08:15 - 07:30). */}
-                            {(entry.start_time || entry.end_time) && (
-                              <span dir="ltr" style={{ fontSize: 7, color: dayPal.text, opacity: 0.55, direction: "ltr" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <span style={{ color: dayPal.text, opacity: 0.35, fontWeight: 800 }}>+</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                          ) : (
+                            <span style={{ color: dayPal.text, opacity: 0.35, fontWeight: 800 }}>+</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           </>
