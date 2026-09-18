@@ -15,7 +15,7 @@ export async function POST(req) {
   const childIds = (children || []).map((c) => c.id);
   if (!childIds.length) return NextResponse.json({ ok: true, cleared: 0 });
 
-  const tables = ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages"];
+  const tables = ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages", "teacher_notes"];
   for (const table of tables) {
     const { error } = await sb.from(table).delete().in("child_id", childIds);
     if (error) return NextResponse.json({ error: `فشل مسح ${table}: ${error.message}` }, { status: 400 });

@@ -64,7 +64,7 @@ export async function POST(req) {
   }
 
   if (childIds.length) {
-    for (const table of ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages"]) {
+    for (const table of ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages", "teacher_notes"]) {
       const { error } = await sb.from(table).delete().in("child_id", childIds);
       if (error) return NextResponse.json({ error: `فشل حذف ${table}: ${error.message}` }, { status: 400 });
     }

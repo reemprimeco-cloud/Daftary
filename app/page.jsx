@@ -1066,7 +1066,7 @@ export default function Home() {
             {children.length === 0 ? (
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
-              <ProgressView children={children} motherId={mother.id} />
+              <ProgressView children={children} motherId={mother.id} classSchedule={classSchedule} />
             )}
           </div>
         ) : (
@@ -4185,13 +4185,19 @@ function TeacherView({ children, motherId }) {
   );
 }
 
-function ProgressView({ children, motherId }) {
-  const [section, setSection] = useState("memorization");
+function ProgressView({ children, motherId, classSchedule = [] }) {
+  const [section, setSection] = useState("notes");
   const [childId, setChildId] = useState(children[0]?.id || "");
   const [native, setNative] = useState(false);
   const child = children.find((c) => c.id === childId) || children[0];
 
   useEffect(() => setNative(isNativeApp()), []);
+
+  // مواد الطالب/ة من جدول حصصه هي الأصدق لقائمة اختيار المادة — بلا قائمة
+  // ثابتة من عندنا تجبر الأم تلقى مادتها بين مواد مدرسة ثانية.
+  const subjects = [...new Set(
+    classSchedule.filter((s) => s.child_id === child?.id).map((s) => s.subject?.trim()).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, "ar"));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -4208,15 +4214,15 @@ function ProgressView({ children, motherId }) {
 
       {native ? (
         <div className="ios-segmented">
-          <button onClick={() => setSection("memorization")} data-active={section === "memorization"}>الحفظ</button>
+          <button onClick={() => setSection("notes")} data-active={section === "notes"}>ملاحظات المعلم</button>
           <button onClick={() => setSection("grades")} data-active={section === "grades"}>الدرجات</button>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setSection("memorization")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "memorization" ? "#B7A6E8" : "#F3F4F6", color: section === "memorization" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
+          <button onClick={() => setSection("notes")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "notes" ? "#B7A6E8" : "#F3F4F6", color: section === "notes" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
             <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              <TileIcon name="memorize" size={17} />
-              الحفظ
+              <TileIcon name="teacher" size={17} />
+              ملاحظات المعلم
             </span>
           </button>
           <button onClick={() => setSection("grades")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "grades" ? "#B7A6E8" : "#F3F4F6", color: section === "grades" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
@@ -4228,8 +4234,8 @@ function ProgressView({ children, motherId }) {
         </div>
       )}
 
-      {child && (section === "memorization" ? (
-        <MemorizationSection child={child} motherId={motherId} />
+      {child && (section === "notes" ? (
+        <TeacherNotesSection child={child} motherId={motherId} subjects={subjects} />
       ) : (
         <GradesSection child={child} motherId={motherId} />
       ))}
@@ -4237,62 +4243,225 @@ function ProgressView({ children, motherId }) {
   );
 }
 
-function MemorizationSection({ child, motherId }) {
+// قسم الحفظ المستقل انشال من تبويب «الحفظ والدرجات» (قرار صاحبة التطبيق
+// ١٨ سبتمبر) وحلّت محله «ملاحظات المعلم». الحفظ نفسه ما تأثر: يبقى ظاهراً
+// بالخطة الأسبوعية بالرئيسية مع علامة الإنجاز وزر التعديل، ويُستخرج من
+// الصور كما هو، وتذكيراته شغالة — التبويب كان يكرّر ما هو موجود أصلاً.
+
+// الفترات الدراسية الجاهزة — والأم تقدر تكتب تسمية مدرستها بدلها.
+const TERMS = ["الفترة الأولى", "الفترة الثانية", "الفترة الثالثة", "الفترة الرابعة"];
+
+// ملاحظات المعلم من اجتماع أولياء الأمور: الأم تسمع الملاحظة بالاجتماع
+// وتكتبها هنا بمادتها وفترتها، فتتجمّع بالفترات وتبيّن تطوّر الطالب على
+// مدار السنة بدل ما تضيع بالذاكرة. كلها كتابة يدوية — ما فيه استخراج
+// من صورة، فقاعدة «المرفوع يبقى كما هو» ما تخصّها.
+function TeacherNotesSection({ child, motherId, subjects }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingMemo, setEditingMemo] = useState(null);
+  const [note, setNote] = useState("");
+  const [subject, setSubject] = useState("");
+  const [customSubject, setCustomSubject] = useState("");
+  const [term, setTerm] = useState(TERMS[0]);
+  const [customTerm, setCustomTerm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [editing, setEditing] = useState(null);
 
   function load() {
     setLoading(true);
-    fetch(`/api/memorization?childId=${child.id}&motherId=${motherId}`)
+    fetch(`/api/teacher-notes?childId=${child.id}&motherId=${motherId}`)
       .then((r) => r.json())
       .then((data) => setItems(data.items || []))
       .finally(() => setLoading(false));
   }
-
   useEffect(load, [child.id, motherId]);
 
-  async function handleToggle(id) {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)));
-    const res = await fetch(`/api/memorization/${id}/toggle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
-    if (!res.ok) load();
+  const finalSubject = subject === "__other" ? customSubject.trim() : subject;
+  const finalTerm = term === "__other" ? customTerm.trim() : term;
+  const canSave = !!note.trim() && !!finalSubject && !busy;
+
+  async function save() {
+    setBusy(true); setError("");
+    const res = await fetch("/api/teacher-notes", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ childId: child.id, motherId, subject: finalSubject, note: note.trim(), term: finalTerm }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) setError(data.error || "تعذّر الحفظ");
+    else {
+      setItems((prev) => [data.item, ...prev]);
+      setNote(""); setCustomSubject("");
+    }
+    setBusy(false);
   }
 
-  async function saveMemo(id, updates) {
-    const res = await fetch(`/api/memorization/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
+  async function remove(id) {
+    if (!confirm("حذف هذه الملاحظة نهائياً؟")) return;
+    const res = await fetch(`/api/teacher-notes/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    setItems((prev) => prev.filter((it) => it.id !== id));
+    setEditing(null);
+  }
+
+  async function saveEdit(id, updates) {
+    const res = await fetch(`/api/teacher-notes/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates),
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || "تعذّر حفظ التعديلات");
     }
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...updates } : it)));
-    setEditingMemo(null);
+    setEditing(null);
   }
 
-  async function deleteMemo(id) {
-    if (!confirm("حذف هذا العنصر من الحفظ نهائياً؟")) return;
-    const res = await fetch(`/api/memorization/${id}`, { method: "DELETE" });
-    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
-    setItems((prev) => prev.filter((it) => it.id !== id));
-    setEditingMemo(null);
+  // التجميع بالفترة عشان تقارن الأم فترة بفترة — وهو الهدف من الميزة.
+  // الترتيب بتسلسل الفترات (الأولى ← الرابعة) لا بالأحدث، لأن القراءة
+  // من فوق لتحت هي نفسها متابعة التطوّر على مدار السنة. الفترات اللي
+  // كتبتها الأم بنفسها تجي بعدها بترتيب ظهورها، و«بلا فترة» بالآخر.
+  const groups = [];
+  for (const it of items) {
+    const key = it.term || "بلا فترة";
+    let g = groups.find((x) => x.key === key);
+    if (!g) { g = { key, notes: [] }; groups.push(g); }
+    g.notes.push(it);
   }
+  const rank = (key) => {
+    const i = TERMS.indexOf(key);
+    if (i !== -1) return i;                 // الفترات الجاهزة بتسلسلها
+    if (key === "بلا فترة") return 999;
+    return 100;                             // فترة كتبتها الأم
+  };
+  groups.sort((a, b) => rank(a.key) - rank(b.key));
 
-  if (loading) return <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>...جاري التحميل</p>;
-  if (items.length === 0) return <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>ما فيه مطلوبات حفظ حالياً لـ{child.name} — تُستخرج تلقائياً من صور الخطة الأسبوعية.</p>;
+  const field = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, background: "white" };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {items.map((it) => (
-        <div key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: it.done ? "#F7F7F5" : "white", border: "1px solid #EEEDE8" }}>
-          <input type="checkbox" checked={it.done} onChange={() => handleToggle(it.id)} style={{ marginTop: 3, width: 18, height: 18, accentColor: "#B7A6E8", flexShrink: 0 }} />
-          <button onClick={() => setEditingMemo(it)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
-            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: it.done ? "#9CA3AF" : "#374151", textDecoration: it.done ? "line-through" : "none", display: "flex", alignItems: "center", gap: 5 }}>
-              {typeof window !== "undefined" && isNativeApp() ? <Icon name="memorize" size={14} style={{ color: "#7B68C4" }} /> : <TileIcon name="memorize" size={17} />} {it.reference}
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
+        ملاحظات المعلم للطالب من اجتماع أولياء الأمور — اكتبي كل ملاحظة بمادتها
+        وفترتها، وبنهاية السنة تشوفين تطوّر {child.name} فترة بفترة بمكان واحد.
+      </div>
+
+      <div style={{ background: "white", borderRadius: 14, border: "1px solid #EEEDE8", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          placeholder="الملاحظة… مثال: الطالب كثير الكلام"
+          style={{ ...field, resize: "vertical", lineHeight: 1.7 }}
+        />
+        <select value={subject} onChange={(e) => setSubject(e.target.value)} style={field}>
+          <option value="">اختاري المادة…</option>
+          {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="__other">مادة ثانية (اكتبيها)</option>
+        </select>
+        {subject === "__other" && (
+          <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={field} />
+        )}
+        <select value={term} onChange={(e) => setTerm(e.target.value)} style={field}>
+          {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+          <option value="__other">فترة ثانية (اكتبيها)</option>
+        </select>
+        {term === "__other" && (
+          <input value={customTerm} onChange={(e) => setCustomTerm(e.target.value)} placeholder="اسم الفترة" style={field} />
+        )}
+        {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0, lineHeight: 1.7 }}>{error}</p>}
+        <button onClick={save} disabled={!canSave} style={{ width: "100%", padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: canSave ? 1 : 0.45 }}>
+          {busy ? "..." : "حفظ الملاحظة"}
+        </button>
+      </div>
+
+      {loading ? (
+        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>...جاري التحميل</p>
+      ) : items.length === 0 ? (
+        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0", lineHeight: 1.8 }}>
+          ما فيه ملاحظات مسجّلة لـ{child.name} بعد — أول ملاحظة من اجتماع أولياء الأمور تنكتب من فوق.
+        </p>
+      ) : (
+        groups.map((g) => (
+          <div key={g.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <p style={{ margin: "4px 0 0", fontSize: 12.5, fontWeight: 800, color: "#5C4B8C" }}>
+              {g.key} <span style={{ color: "#9CA3AF", fontWeight: 400 }}>({countLabel(g.notes.length, "ملاحظة", "ملاحظتان", "ملاحظات")})</span>
             </p>
-            {it.details && <p style={{ margin: "3px 0 0", fontSize: 12, color: "#9CA3AF" }}>{it.details}</p>}
-          </button>
+            {g.notes.map((it) => (
+              <button key={it.id} onClick={() => setEditing(it)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: "white", border: "1px solid #EEEDE8", textAlign: "right", width: "100%" }}>
+                <SubjectIcon subject={it.subject} size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: "#374151", lineHeight: 1.7 }}>{it.note}</p>
+                  <p style={{ margin: "3px 0 0", fontSize: 11.5, color: "#9CA3AF" }}>
+                    {it.subject} · {new Date(it.created_at).toLocaleDateString("ar-KW", { day: "numeric", month: "long" })}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        ))
+      )}
+
+      {editing && (
+        <EditTeacherNoteModal
+          item={editing}
+          subjects={subjects}
+          onClose={() => setEditing(null)}
+          onSave={saveEdit}
+          onDelete={remove}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditTeacherNoteModal({ item, subjects, onClose, onSave, onDelete }) {
+  const known = subjects.includes(item.subject);
+  const [note, setNote] = useState(item.note);
+  const [subject, setSubject] = useState(known ? item.subject : "__other");
+  const [customSubject, setCustomSubject] = useState(known ? "" : item.subject);
+  const knownTerm = !item.term || TERMS.includes(item.term);
+  const [term, setTerm] = useState(knownTerm ? item.term || TERMS[0] : "__other");
+  const [customTerm, setCustomTerm] = useState(knownTerm ? "" : item.term);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const finalSubject = subject === "__other" ? customSubject.trim() : subject;
+  const finalTerm = term === "__other" ? customTerm.trim() : term;
+  const field = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, background: "white" };
+
+  async function submit() {
+    setBusy(true); setError("");
+    try {
+      await onSave(item.id, { note: note.trim(), subject: finalSubject, term: finalTerm });
+    } catch (e) {
+      setError(e.message); setBusy(false);
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 60, display: "flex", alignItems: "flex-end" }}>
+      <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "100%", background: "#FAF7F2", borderRadius: "20px 20px 0 0", padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 9, maxHeight: "88%", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>تعديل الملاحظة</p>
+          <button onClick={onClose} style={{ background: "none", fontSize: 20, color: "#9CA3AF", padding: "0 4px" }}>×</button>
         </div>
-      ))}
-      {editingMemo && <EditMemoModal item={editingMemo} onClose={() => setEditingMemo(null)} onSave={saveMemo} onDelete={deleteMemo} />}
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} style={{ ...field, resize: "vertical", lineHeight: 1.7 }} />
+        <select value={subject} onChange={(e) => setSubject(e.target.value)} style={field}>
+          {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="__other">مادة ثانية (اكتبيها)</option>
+        </select>
+        {subject === "__other" && <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={field} />}
+        <select value={term} onChange={(e) => setTerm(e.target.value)} style={field}>
+          {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+          <option value="__other">فترة ثانية (اكتبيها)</option>
+        </select>
+        {term === "__other" && <input value={customTerm} onChange={(e) => setCustomTerm(e.target.value)} placeholder="اسم الفترة" style={field} />}
+        {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0, lineHeight: 1.7 }}>{error}</p>}
+        <button onClick={submit} disabled={busy || !note.trim() || !finalSubject} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14.5, minHeight: 46, opacity: busy || !note.trim() || !finalSubject ? 0.5 : 1 }}>
+          {busy ? "..." : "حفظ التعديلات"}
+        </button>
+        <button onClick={() => onDelete(item.id)} style={{ width: "100%", padding: 10, borderRadius: 12, background: "none", color: "#B91C1C", fontWeight: 700, fontSize: 13 }}>
+          حذف الملاحظة
+        </button>
+      </div>
     </div>
   );
 }
@@ -4399,7 +4568,7 @@ function ResetYearButton({ motherId, onDone, ios }) {
   const [busy, setBusy] = useState(false);
 
   async function handleReset() {
-    if (!confirm("مسح كل بيانات هذا العام الدراسي (الواجبات، المتطلبات، جدول الحصص، الحفظ، الدرجات، ومحادثات المعلم الذكي) لكل الأطفال؟ هذا الإجراء نهائي ولا يمكن التراجع عنه. ملفات الأطفال نفسها تبقى، بس لازم تحدّثين الصف يدوياً بعدها.")) return;
+    if (!confirm("مسح كل بيانات هذا العام الدراسي (الواجبات، المتطلبات، جدول الحصص، الحفظ، الدرجات، ملاحظات المعلم، ومحادثات المعلم الذكي) لكل الأطفال؟ هذا الإجراء نهائي ولا يمكن التراجع عنه. ملفات الأطفال نفسها تبقى، بس لازم تحدّثين الصف يدوياً بعدها.")) return;
     if (!confirm("تأكيد أخير: راح تنمسح البيانات نهائياً. متأكدة؟")) return;
     setBusy(true);
     const res = await fetch("/api/reset-year", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
@@ -5033,7 +5202,7 @@ function DeleteAccountButton({ mother, onDeleted, ios }) {
     <div style={{ marginTop: 4, padding: 14, borderRadius: 12, border: "1px solid #FECACA", background: "#FEF2F2" }}>
       <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "#B91C1C" }}>حذف الحساب نهائياً</p>
       <p style={{ margin: "6px 0 10px", fontSize: 12.5, lineHeight: 1.75, color: "#7F1D1D" }}>
-        سيُحذف حسابك وكل بيانات أبنائك (الواجبات، المتطلبات، الجدول، الحفظ، الدرجات، ومحادثات المعلم الذكي) نهائياً
+        سيُحذف حسابك وكل بيانات أبنائك (الواجبات، المتطلبات، الجدول، الحفظ، الدرجات، ملاحظات المعلم، ومحادثات المعلم الذكي) نهائياً
         وبدون إمكانية استرجاع. لتأكيد الحذف، اكتبي رقم موبايلك ({lastEight}):
       </p>
       <input
