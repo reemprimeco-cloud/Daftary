@@ -463,6 +463,7 @@ export default function Home() {
   const [editingChild, setEditingChild] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showUploadSchedule, setShowUploadSchedule] = useState(false);
+  const [showAddTask, setShowAddTask] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showSubscriptionManage, setShowSubscriptionManage] = useState(false);
   const [openTask, setOpenTask] = useState(null);
@@ -693,6 +694,16 @@ export default function Home() {
     setRequirements((prev) => prev.filter((r) => !(r.child_id === childId && r.bought)));
   }
 
+  // إضافة واجب/اختبار يدوياً — تأخذ نفس مسار الترتيب والتذكيرات اللي
+  // تمشي عليه المهام المستخرجة من الصور (نفس الجدول، نفس كرون التذكيرات).
+  async function handleAddTask(taskData) {
+    const res = await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(taskData) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { alert(data.error || "تعذّرت إضافة الواجب، حاولي مرة ثانية."); return; }
+    setShowAddTask(false);
+    await loadAll(mother.id);
+  }
+
   if (loading || (mother && (!schools || !dataLoaded))) {
     return (
       <>
@@ -814,6 +825,7 @@ export default function Home() {
                   onToggle={handleMarkDone}
                   onOpenTask={setOpenTask}
                   onEdit={() => setEditingChild(planChild)}
+                  onAddTask={() => setShowAddTask(true)}
                 />
               </>
             )}
@@ -885,6 +897,7 @@ export default function Home() {
       )}
 
       {showAddChild && <AddChildModal schools={schools} nextColorIdx={children.length} onClose={() => setShowAddChild(false)} onSave={handleAddChild} />}
+      {showAddTask && planChild && <AddTaskModal child={planChild} onClose={() => setShowAddTask(false)} onSave={handleAddTask} />}
       {editingChild && (
         <AddChildModal
           schools={schools}
@@ -1455,7 +1468,7 @@ function ChildSwitcher({ children, selectedId, onSelect }) {
 // الخطة الأسبوعية للطالب/ة كقائمة إنجاز — وهي الواجهة الرئيسية للتطبيق
 // (قرار صاحبة التطبيق ١٥ سبتمبر): كل واجب بسطر مع تفاصيله كما كُتبت بالخطة
 // وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر.
-function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit }) {
+function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit, onAddTask }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const [filter, setFilter] = useState("all");
   const [memo, setMemo] = useState([]);
@@ -1524,6 +1537,9 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
                 </span>
               )}
             </div>
+            <button onClick={onAddTask} style={{ background: "white", color: color.text, fontSize: 12, fontWeight: 800, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>
+              + واجب
+            </button>
             <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
                 <TileIcon name="pencil" size={15} />
@@ -2057,6 +2073,61 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
               حذف {studentWord(gender)} نهائياً
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// إضافة واجب أو اختبار يدوياً بلا رفع صورة — مادة + تفاصيل + تاريخ، يدخل
+// بنفس جدول tasks فيرتّب بالخطة الأسبوعية وياخذ تذكيره العادي (قبل
+// الموعد بيوم ويوم الموعد) بلا أي فرق عن الواجب المستخرج من صورة.
+function AddTaskModal({ child, onClose, onSave }) {
+  const [subject, setSubject] = useState("");
+  const [type, setType] = useState("واجب");
+  const [details, setDetails] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [saving, setSaving] = useState(false);
+  const TYPES = ["واجب", "اختبار", "مشروع", "حفظ"];
+  const canSave = subject.trim().length > 0 && dueDate && !saving;
+
+  async function save() {
+    setSaving(true);
+    await onSave({ childId: child.id, subject: subject.trim(), type, dueDate, details: details.trim() || null });
+    setSaving(false);
+  }
+
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
+        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 17 }}>إضافة واجب/اختبار لـ {child.name}</h2>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+        </div>
+        <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>النوع</label>
+            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+              {TYPES.map((v) => (
+                <button key={v} onClick={() => setType(v)} style={{ flex: 1, minWidth: 70, padding: 9, borderRadius: 12, border: `1px solid ${type === v ? "#B7A6E8" : "#E5E7EB"}`, background: type === v ? "#F1EFFA" : "white", color: type === v ? "#5C4B8C" : "#6B7280", fontWeight: 700, fontSize: 13 }}>{v}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>المادة</label>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="مثال: رياضيات" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>التفاصيل (اختياري)</label>
+            <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={3} placeholder="محتوى الواجب أو الاختبار" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>التاريخ</label>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+            {saving ? "جارِ الإضافة..." : "إضافة"}
+          </button>
         </div>
       </div>
     </div>
