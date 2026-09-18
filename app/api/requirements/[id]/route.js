@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { rowInFamily } from "@/lib/family";
 
 async function verifyOwnership(sb, id, motherId) {
-  const { data } = await sb.from("requirements").select("id, children(mother_id)").eq("id", id).single();
-  return !!data && data.children?.mother_id === motherId;
+  return rowInFamily(sb, "requirements", id, motherId);
 }
 
 export async function PATCH(req, { params }) {
@@ -34,8 +34,7 @@ export async function DELETE(req, { params }) {
   const body = await req.json().catch(() => ({}));
   const sb = supabaseAdmin();
 
-  const { data: existing } = await sb.from("requirements").select("id, children(mother_id)").eq("id", params.id).single();
-  if (!existing || existing.children?.mother_id !== req.headers.get("x-mother-id")) {
+  if (!(await rowInFamily(sb, "requirements", params.id, req.headers.get("x-mother-id")))) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 

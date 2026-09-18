@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { childInFamily } from "@/lib/family";
 import { applyPlanItems, cleanupCompletedBeforeThisWeek, summarize } from "@/lib/planApply";
 import { markTrialUploadUsed } from "@/lib/appEntitlements";
 
+// المسودة تخص العائلة لا الجهاز اللي رفعها: الأب يقدر يراجع ويعتمد رفعة
+// الأم والعكس (صلاحيات كاملة للاثنين — قرار صاحبة التطبيق).
 async function loadDraft(sb, id, motherId) {
   const { data } = await sb
     .from("upload_drafts")
     .select("id, mother_id, child_id, kind, items, status, images_count, source_id")
     .eq("id", id)
     .maybeSingle();
-  return data && data.mother_id === motherId ? data : null;
+  if (!data) return null;
+  return (await childInFamily(sb, data.child_id, motherId, "id")) ? data : null;
 }
 
 export async function GET(req, { params }) {
@@ -33,8 +37,7 @@ export async function POST(req, { params }) {
   if (draft.status === "applied") return NextResponse.json({ ok: true, alreadyApplied: true });
   if (draft.status !== "pending") return NextResponse.json({ error: "هذي المراجعة انتهت، ارفعي الخطة مرة ثانية." }, { status: 409 });
 
-  const { data: child } = await sb
-    .from("children").select("id").eq("id", draft.child_id).eq("mother_id", motherId).maybeSingle();
+  const child = await childInFamily(sb, draft.child_id, motherId, "id");
   if (!child) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   // الأم تقدر تحذف عنصراً أو تعدّله بشاشة المراجعة، فاللي ينحفظ هو اللي

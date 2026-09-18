@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { childInFamily } from "@/lib/family";
 
 // نفس قيد class_schedule.day بالقاعدة
 const DAYS = new Set(["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"]);
@@ -16,7 +17,7 @@ export async function POST(req) {
   }
 
   const sb = supabaseAdmin();
-  const { data: child } = await sb.from("children").select("id").eq("id", childId).eq("mother_id", motherId).maybeSingle();
+  const child = await childInFamily(sb, childId, motherId, "id");
   if (!child) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const { data, error } = await sb

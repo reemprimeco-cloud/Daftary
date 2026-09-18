@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { familyIdOf } from "@/lib/family";
 import { logAiUsage } from "@/lib/aiUsage";
 import { consumeQuestion, refundQuestion } from "@/lib/entitlements";
 import { detectRotation } from "@/lib/visionExtract";
@@ -49,7 +50,7 @@ async function handleAsk(req) {
     .from("children")
     .select("*")
     .eq("id", childId)
-    .eq("mother_id", motherId)
+    .eq("family_id", await familyIdOf(sb, motherId))
     .single();
   if (cErr || !child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
 

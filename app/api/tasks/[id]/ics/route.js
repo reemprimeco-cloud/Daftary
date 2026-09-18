@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { familyIdOf } from "@/lib/family";
 
 function escapeICS(str) {
   return (str || "")
@@ -21,11 +22,11 @@ function nextDayCompact(dueDateStr) {
 export async function GET(req, { params }) {
   const motherId = req.nextUrl.searchParams.get("motherId");
   const sb = supabaseAdmin();
-  const { data: task, error } = await sb.from("tasks").select("*, children(mother_id)").eq("id", params.id).single();
+  const { data: task, error } = await sb.from("tasks").select("*, children(family_id)").eq("id", params.id).single();
   if (error || !task) {
     return new Response("الواجب غير موجود", { status: 404 });
   }
-  if (!motherId || task.children?.mother_id !== motherId) {
+  if (!motherId || task.children?.family_id !== (await familyIdOf(sb, motherId))) {
     return new Response("غير مصرح", { status: 403 });
   }
   if (!task.due_date) {

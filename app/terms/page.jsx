@@ -196,11 +196,15 @@ export default function TermsPage() {
         </Section>
 
         <Section title="تواصل معنا">
-          <p style={p}>لأي استفسار يخص الاشتراك أو هذه الشروط:</p>
+          <p style={p}>لأي استفسار يخص الاشتراك أو هذه الشروط راسلينا بالمسجات الدايركت:</p>
           <p style={{ ...p, textAlign: "center", marginTop: 16 }}>
-            <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "11px 26px", borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, textDecoration: "none", fontSize: 14 }}>
-              reemprimeco@gmail.com
+            <a href="https://ig.me/m/reemora.app" target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "11px 26px", borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, textDecoration: "none", fontSize: 14 }}>
+              @reemora.app
             </a>
+          </p>
+          {/* الايميل يبقى مكتوباً كقناة رسمية للطلبات القانونية */}
+          <p style={{ ...p, textAlign: "center", marginTop: 10, fontSize: 13, color: "#8B8397" }}>
+            أو بالبريد: <a href="mailto:reemprimeco@gmail.com" style={{ color: "#8B8397" }}>reemprimeco@gmail.com</a>
           </p>
         </Section>
 

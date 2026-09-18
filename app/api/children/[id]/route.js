@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { familyIdOf } from "@/lib/family";
 
 async function verifyOwnership(sb, childId, motherId) {
-  const { data } = await sb.from("children").select("mother_id").eq("id", childId).single();
-  return !!data && data.mother_id === motherId;
+  const [{ data }, familyId] = await Promise.all([
+    sb.from("children").select("family_id").eq("id", childId).maybeSingle(),
+    familyIdOf(sb, motherId),
+  ]);
+  return !!data && !!familyId && data.family_id === familyId;
 }
 
 export async function PATCH(req, { params }) {

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { rowInFamily } from "@/lib/family";
 
 // نفس الأنواع اللي يقبلها القيد بالقاعدة (tasks_type_check) — بخلاف مسار
 // الإضافة اليدوية، «درس» مسموح هنا لأن التعديل يصحّح مهام موجودة أصلاً
 // (بما فيها المستخرجة من صورة بنوع «درس») لا يمنع إنشاءها.
 const TASK_TYPES = new Set(["واجب", "حفظ", "اختبار", "مشروع", "درس"]);
 
-async function verifyOwnership(sb, taskId, motherId) {
-  const { data } = await sb.from("tasks").select("id, children(mother_id)").eq("id", taskId).single();
-  return !!data && data.children?.mother_id === motherId;
+async function verifyOwnership(sb, id, motherId) {
+  return rowInFamily(sb, "tasks", id, motherId);
 }
 
 export async function PATCH(req, { params }) {

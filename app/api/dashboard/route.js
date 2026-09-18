@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { kuwaitWeekMap } from "@/lib/kuwaitDate";
+import { familyIdOf } from "@/lib/family";
 
 export async function GET(req) {
   const motherId = req.nextUrl.searchParams.get("motherId");
@@ -20,10 +21,17 @@ export async function GET(req) {
   // مو المتصفح — لو تركناها للعميل رجع الطلب بمسح بيانات المتصفح.
   const FEEDBACK_AFTER_DAYS = 7;
   // قائمة الأبناء ما تعتمد على التقييم ولا العكس، فتنجيب معهم بنفس الرحلة.
+  const familyChildren = async (sb, id) => {
+    const familyId = await familyIdOf(sb, id);
+    if (!familyId) return { data: [], error: null };
+    return sb.from("children").select("*").eq("family_id", familyId).order("created_at");
+  };
   const [{ data: profile }, { data: rated }, { data: children, error: cErr }] = await Promise.all([
     sb.from("mothers").select("created_at").eq("id", motherId).maybeSingle(),
     sb.from("app_feedback").select("mother_id").eq("mother_id", motherId).maybeSingle(),
-    sb.from("children").select("*").eq("mother_id", motherId).order("created_at"),
+    // أبناء العائلة لا أبناء هذا الحساب وحده — فالأب يشوف نفس الأبناء.
+    // (كل حساب بلا شريك = عائلة من شخص واحد، فالنتيجة ما تتغير له.)
+    familyChildren(sb, motherId),
   ]);
   const feedbackDue =
     !rated &&

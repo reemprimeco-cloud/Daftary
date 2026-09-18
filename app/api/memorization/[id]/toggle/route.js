@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { familyIdOf } from "@/lib/family";
 
 export async function POST(req, { params }) {
   const body = await req.json().catch(() => ({}));
   const sb = supabaseAdmin();
   const { data: existing, error: e1 } = await sb
     .from("memorization")
-    .select("done, children(mother_id)")
+    .select("done, children(family_id)")
     .eq("id", params.id)
     .single();
   if (e1) return NextResponse.json({ error: e1.message }, { status: 400 });
-  if (existing.children?.mother_id !== req.headers.get("x-mother-id")) {
+  if (existing.children?.family_id !== (await familyIdOf(sb, req.headers.get("x-mother-id")))) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { familyIdOf } from "@/lib/family";
 
 // يمسح بيانات العام الدراسي (واجبات، طلبات، جدول حصص، حفظ، درجات، محادثات المعلم الذكي)
 // لكل أطفال ولي الأمر — يبقي ملفات الأطفال أنفسهم (الاسم، المدرسة...) لتحديثها يدوياً بالصف الجديد.
@@ -9,7 +10,7 @@ export async function POST(req) {
   if (!motherId) return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
 
   const sb = supabaseAdmin();
-  const { data: children, error: cErr } = await sb.from("children").select("id").eq("mother_id", motherId);
+  const { data: children, error: cErr } = await sb.from("children").select("id").eq("family_id", await familyIdOf(sb, motherId));
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 400 });
   const childIds = (children || []).map((c) => c.id);
   if (!childIds.length) return NextResponse.json({ ok: true, cleared: 0 });

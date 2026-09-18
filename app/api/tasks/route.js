@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { logFamilyAction } from "@/lib/family";
+import { childInFamily } from "@/lib/family";
 
 // نفس الأنواع اللي يقبلها القيد بالقاعدة (tasks_type_check)، بلا «درس» —
 // محتوى المنهج يُستخرج من الصور فقط ولا يُضاف يدوياً.
@@ -18,7 +20,7 @@ export async function POST(req) {
   }
 
   const sb = supabaseAdmin();
-  const { data: child } = await sb.from("children").select("id").eq("id", childId).eq("mother_id", motherId).maybeSingle();
+  const child = await childInFamily(sb, childId, motherId, "id");
   if (!child) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const { data, error } = await sb
@@ -35,5 +37,6 @@ export async function POST(req) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  await logFamilyAction(sb, motherId, "أضاف واجباً يدوياً", `${subject.trim()} (${type})`);
   return NextResponse.json({ task: data });
 }

@@ -44,6 +44,9 @@ const APP_STORE_URL = "https://apps.apple.com/app/id6801521796";
 // wa.me يفتح تطبيق واتساب إذا كان منزّلاً، ونسخة الويب إذا لا — فيشتغل
 // داخل تطبيق آبل وبالمتصفح بنفس الرابط.
 const WHATSAPP_URL = "https://wa.me/96565068000";
+// المسجات الدايركت بالانستقرام بدل الايميل — ig.me يفتح المحادثة مباشرة
+// بالتطبيق لو منصّب، وإلا يحوّل للمتصفح.
+const INSTAGRAM_URL = "https://ig.me/m/reemora.app";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
@@ -147,6 +150,13 @@ const TILE_GLYPHS = {
       <path d="M9.15 7.4c.2-.02.42-.02.6.02.22.05.35.42.45.66l.5 1.2c.08.2.04.42-.1.58l-.45.5a.4.4 0 0 0-.07.45 6 6 0 0 0 2.85 2.5c.17.07.36.02.47-.12l.5-.62c.14-.17.37-.23.57-.15l1.5.6c.2.08.33.28.32.5-.04.62-.32 1.2-.85 1.5-.6.34-1.35.4-2.02.2a8.4 8.4 0 0 1-5.1-4.6c-.3-.7-.35-1.48-.05-2.15.25-.55.72-.99 1.3-1.07" fill={sh} />
     </>
   ),
+  instagram: (sh) => (
+    <>
+      <path d="M7.9 2.4h8.2a5.5 5.5 0 0 1 5.5 5.5v8.2a5.5 5.5 0 0 1-5.5 5.5H7.9a5.5 5.5 0 0 1-5.5-5.5V7.9a5.5 5.5 0 0 1 5.5-5.5" />
+      <path d="M12 7.35A4.65 4.65 0 1 0 12 16.65 4.65 4.65 0 0 0 12 7.35m0 1.7a2.95 2.95 0 1 1 0 5.9 2.95 2.95 0 0 1 0-5.9" fill={sh} />
+      <circle cx="17.1" cy="6.9" r="1.2" fill={sh} />
+    </>
+  ),
   star: () => <path d="M12 2.2l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 18l-6.2 3.3 1.2-6.9-5-4.9 6.9-1z" />,
   gear: (sh) => (
     <>
@@ -210,6 +220,7 @@ const TILE_TINTS = {
   gear: "#A8A2C4",
   star: "#E8C05C",
   whatsapp: "#3FC45E",
+  instagram: "#D9518C",
   pencil: "#E0A873",
   refresh: "#7FA8E0",
   chart: "#7FC2A0",
@@ -840,6 +851,7 @@ export default function Home() {
           </div>
         )}
         <PermissionsBanner />
+        <FamilyInviteBanner onJoined={() => loadAll(mother.id)} />
         {feedbackDue && <FeedbackBanner onOpen={() => setShowFeedback(true)} />}
         {view === "dashboard" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1318,7 +1330,7 @@ function Onboarding({ onDone }) {
         </div>
       </div>
       <div style={{ textAlign: "center", flexShrink: 0, width: "100%", maxWidth: 380, margin: "0 auto" }}>
-        <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           تواصل معنا
         </a>
         <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
@@ -4481,6 +4493,157 @@ function PasswordSetting({ ios }) {
   );
 }
 
+// إدارة العائلة: اشتراك واحد يغطي ولي أمر أساسي + ولي أمر ثانٍ. الأساسي
+// يدعو برقم جوال، والثاني يقبل من حسابه هو — بلا اشتراك جديد ولا دخول
+// بحساب غيره. الحد وليّان فقط، مفروض بقاعدة البيانات كذلك.
+function FamilySetting({ ios }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState(null);
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = () => fetch("/api/family").then((r) => r.json()).then(setData).catch(() => setData({ parents: [] }));
+  useEffect(() => { if (open && !data) load(); }, [open]);
+
+  async function invite() {
+    setBusy(true); setError("");
+    const res = await fetch("/api/family", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) setError(d.error || "تعذّر إرسال الدعوة");
+    else { setPhone(""); await load(); }
+    setBusy(false);
+  }
+
+  async function remove(parentId) {
+    const msg = parentId ? "إخراج ولي الأمر الثاني؟ راح ينقطع وصوله لبيانات العائلة فوراً." : "إلغاء الدعوة؟";
+    if (!confirm(msg)) return;
+    setBusy(true); setError("");
+    const res = await fetch("/api/family", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ parentId }) });
+    if (!res.ok) setError((await res.json().catch(() => ({}))).error || "تعذّرت العملية");
+    else await load();
+    setBusy(false);
+  }
+
+  const rowStyle = ios
+    ? { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "12px 16px", background: "none", color: "#000" }
+    : { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", width: "100%", background: "none", color: "#374151" };
+
+  return (
+    <div style={ios ? undefined : { borderBottom: "1px solid #F5F3EF" }}>
+      <button onClick={() => setOpen((v) => !v)} className={ios ? "ios-row" : undefined} style={rowStyle}>
+        <span style={{ fontSize: ios ? 17 : 14.5, fontWeight: ios ? 400 : 700, display: "flex", alignItems: "center", gap: 9 }}>
+          {!ios && <TileIcon name="gift" size={25} />}
+          العائلة (مشاركة الاشتراك)
+        </span>
+        <span style={{ color: "#C7C2D4", fontSize: 16 }}>{open ? "︿" : "‹"}</span>
+      </button>
+      {open && (
+        <div style={{ padding: ios ? "0 16px 14px" : "0 18px 16px" }}>
+          {!data && <p style={{ fontSize: 12.5, color: "#9CA3AF" }}>...جاري التحميل</p>}
+          {data && (
+            <>
+              <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9CA3AF", lineHeight: 1.8 }}>
+                اشتراكك يغطي ولي أمر ثاني (الأب) — يدخل بحسابه ورقمه هو، ويشوف نفس الأبناء والواجبات ويوصله نفس التذكيرات.
+              </p>
+
+              {(data.parents || []).map((p) => (
+                <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0", borderTop: "1px solid #F3F2EE" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700 }}>{p.name} {p.isMe && <span style={{ color: "#9CA3AF", fontWeight: 400 }}>(أنت)</span>}</p>
+                    <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF" }}>{p.role === "primary" ? "صاحب الاشتراك" : "ولي أمر ثاني"}</p>
+                  </div>
+                  {data.role === "primary" && p.role === "secondary" && (
+                    <button onClick={() => remove(p.id)} disabled={busy} style={{ background: "#FEF2F2", color: "#B91C1C", fontSize: 11.5, fontWeight: 700, padding: "6px 10px", borderRadius: 9 }}>إخراج</button>
+                  )}
+                </div>
+              ))}
+
+              {data.invite && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0", borderTop: "1px solid #F3F2EE" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#8C6027" }}>دعوة معلّقة — {data.invite.phone}</p>
+                    <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF" }}>تظهر له بحسابه أول ما يدخل برقمه</p>
+                  </div>
+                  <button onClick={() => remove(null)} disabled={busy} style={{ background: "#F3F4F6", color: "#6B7280", fontSize: 11.5, fontWeight: 700, padding: "6px 10px", borderRadius: 9 }}>إلغاء</button>
+                </div>
+              )}
+
+              {data.canInvite && (
+                <div style={{ marginTop: 10 }}>
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم جوال ولي الأمر الثاني" inputMode="numeric"
+                    style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, marginBottom: 8, direction: "ltr", textAlign: "center" }} />
+                  <button onClick={invite} disabled={busy || phone.trim().length < 8} style={{ width: "100%", padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13.5, minHeight: 42, opacity: busy || phone.trim().length < 8 ? 0.5 : 1 }}>
+                    {busy ? "..." : "إرسال الدعوة"}
+                  </button>
+                </div>
+              )}
+
+              {data.role === "secondary" && (
+                <p style={{ margin: "10px 0 0", fontSize: 12, color: "#6B7280", lineHeight: 1.8 }}>أنت ولي أمر ثاني بهذي العائلة — الاشتراك وإدارة العائلة عند صاحب الاشتراك.</p>
+              )}
+
+              {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: "8px 0 0", lineHeight: 1.7 }}>{error}</p>}
+
+              {(data.activity || []).length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 800, color: "#6B7280" }}>آخر النشاط</p>
+                  {data.activity.slice(0, 8).map((a, i) => (
+                    <p key={i} style={{ margin: "0 0 4px", fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.8 }}>
+                      {a.actor_name || "ولي أمر"} {a.action}{a.entity ? `: ${a.entity}` : ""}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// دعوة وصلت لرقمك: تظهر أول ما تدخل، وما تنضم إلا بقبولك أنت.
+function FamilyInviteBanner({ onJoined }) {
+  const [invite, setInvite] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/family/invite").then((r) => r.json()).then((d) => setInvite(d.invite || null)).catch(() => {});
+  }, []);
+
+  async function answer(accept) {
+    setBusy(true); setError("");
+    const res = await fetch("/api/family/invite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accept }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setError(d.error || "تعذّرت العملية"); setBusy(false); return; }
+    setInvite(null);
+    if (d.joined) onJoined();
+  }
+
+  if (!invite) return null;
+  return (
+    <div style={{ margin: "12px 16px 0", background: "#F1EFFA", border: "1px solid #D9D2F2", borderRadius: 16, padding: 14 }}>
+      <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#5C4B8C", lineHeight: 1.8 }}>
+        {invite.fromName} يدعوك تنضم لعائلته بدفتري
+      </p>
+      <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "#6B7280", lineHeight: 1.8 }}>
+        راح تشوف نفس الأبناء والواجبات والاختبارات، ويوصلك نفس التذكيرات — بحسابك هذا وبلا اشتراك جديد.
+      </p>
+      {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: "0 0 8px", lineHeight: 1.7 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => answer(true)} disabled={busy} style={{ flex: 2, padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: busy ? 0.6 : 1 }}>
+          {busy ? "..." : "انضمام"}
+        </button>
+        <button onClick={() => answer(false)} disabled={busy} style={{ flex: 1, padding: 11, borderRadius: 12, background: "white", color: "#6B7280", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+          رفض
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared, onManageSubscription }) {
   const phone = (mother.phone || "").replace(/^\+965/, "");
   const [native, setNative] = useState(false);
@@ -4551,8 +4714,8 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span>سياسة الخصوصية</span>
               <span className="ios-chevron">›</span>
             </a>
-            <a href="mailto:reemprimeco@gmail.com" className="ios-row">
-              <span>تواصل معانا (ايميل)</span>
+            <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" className="ios-row">
+              <span>تواصل معانا (انستقرام)</span>
               <span className="ios-chevron">›</span>
             </a>
             <a href={WHATSAPP_URL} target="_blank" rel="noreferrer" className="ios-row">
@@ -4568,6 +4731,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
 
           <div className="ios-group">
             <PasswordSetting ios />
+            <FamilySetting ios />
           </div>
 
           <div className="ios-group">
@@ -4633,10 +4797,10 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
-          <a href="mailto:reemprimeco@gmail.com" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
+          <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
-              <TileIcon name="mail" size={25} />
-              تواصل معانا (ايميل)
+              <TileIcon name="instagram" size={25} />
+              تواصل معانا (انستقرام)
             </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
@@ -4655,6 +4819,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
 
         <div style={{ background: "white", borderRadius: 18, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
           <PasswordSetting />
+          <FamilySetting />
         </div>
 
         <button onClick={onLogout} style={{ background: "white", borderRadius: 18, padding: "15px 18px", textAlign: "right", fontSize: 14.5, fontWeight: 700, color: "#374151", boxShadow: "0 1px 3px rgba(0,0,0,.05)", width: "100%" }}>

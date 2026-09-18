@@ -37,24 +37,33 @@ export async function GET(req) {
   const tomorrow = tomorrowDate.toISOString().slice(0, 10);
 
   // كل ولي أمر عنده طالب/ة — الرسالة تذكير عام ما تعتمد على وجود واجبات.
-  const { data: children } = await sb.from("children").select("id, name, mother_id");
-  const byMother = new Map();
-  for (const c of children || []) {
-    if (!c.mother_id) continue;
-    const m = byMother.get(c.mother_id) || { names: [], childIds: [] };
-    m.names.push(c.name);
-    m.childIds.push(c.id);
-    byMother.set(c.mother_id, m);
+  // التجميع بالعائلة، والإرسال لكل أولياء أمورها (الأم والأب).
+  const { data: children } = await sb.from("children").select("id, name, family_id");
+  const { data: allParents } = await sb.from("mothers").select("id, family_id");
+  const parentsByFamily = new Map();
+  for (const p of allParents || []) {
+    if (!p.family_id) continue;
+    if (!parentsByFamily.has(p.family_id)) parentsByFamily.set(p.family_id, []);
+    parentsByFamily.get(p.family_id).push(p.id);
   }
 
-  // عدد المواعيد بكرا لكل ولي أمر — استعلام واحد للجميع بدل واحد لكل أم.
+  const byFamily = new Map();
+  for (const c of children || []) {
+    if (!c.family_id) continue;
+    const m = byFamily.get(c.family_id) || { names: [], childIds: [] };
+    m.names.push(c.name);
+    m.childIds.push(c.id);
+    byFamily.set(c.family_id, m);
+  }
+
+  // عدد المواعيد بكرا لكل عائلة — استعلام واحد للجميع بدل واحد لكل أم.
   const { data: dueRows } = await sb
     .from("tasks").select("child_id").eq("status", "active").neq("type", "درس").eq("due_date", tomorrow);
-  const childMother = new Map((children || []).map((c) => [c.id, c.mother_id]));
-  const dueByMother = new Map();
+  const childFamily = new Map((children || []).map((c) => [c.id, c.family_id]));
+  const dueByFamily = new Map();
   for (const t of dueRows || []) {
-    const m = childMother.get(t.child_id);
-    if (m) dueByMother.set(m, (dueByMother.get(m) || 0) + 1);
+    const f = childFamily.get(t.child_id);
+    if (f) dueByFamily.set(f, (dueByFamily.get(f) || 0) + 1);
   }
 
   // من وصله إشعار اليوم ما يُعاد — استعلام واحد بدل واحد لكل أم.
@@ -62,15 +71,18 @@ export async function GET(req) {
     .from("reminder_log").select("mother_id").eq("kind", KIND).gte("sent_at", `${today}T00:00:00+03:00`);
   const already = new Set((sentToday || []).map((r) => r.mother_id));
 
-  const results = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, { names }]) => {
-    if (already.has(motherId)) return 0;
-    const body = message(names, dueByMother.get(motherId) || 0);
-    const delivered = await deliverToMother(sb, motherId, "دفتري", body);
-    if (!delivered) return 0;
-    await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind: KIND });
-    return 1;
+  const results = await mapPool([...byFamily.entries()], CONCURRENCY, async ([familyId, { names }]) => {
+    const body = message(names, dueByFamily.get(familyId) || 0);
+    let count = 0;
+    for (const motherId of parentsByFamily.get(familyId) || []) {
+      if (already.has(motherId)) continue;
+      if (!(await deliverToMother(sb, motherId, "دفتري", body))) continue;
+      await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind: KIND });
+      count++;
+    }
+    return count;
   });
 
   const sent = results.reduce((a, b) => a + b, 0);
-  return NextResponse.json({ ok: true, mothers: byMother.size, sent });
+  return NextResponse.json({ ok: true, families: byFamily.size, sent });
 }

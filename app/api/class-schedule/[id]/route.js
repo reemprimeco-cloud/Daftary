@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { rowInFamily } from "@/lib/family";
 
 async function verifyOwnership(sb, id, motherId) {
-  const { data } = await sb.from("class_schedule").select("id, children(mother_id)").eq("id", id).single();
-  return !!data && data.children?.mother_id === motherId;
+  return rowInFamily(sb, "class_schedule", id, motherId);
 }
 
 // اليوم ورقم الحصة يحددان موقع الخانة بالجدول (قيد UNIQUE)، فما يُعدَّلان

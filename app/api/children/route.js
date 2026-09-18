@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { redistributePool } from "@/lib/entitlements";
 import { hasAppAccess, childAddAllowedByTrial } from "@/lib/appEntitlements";
+import { familyIdOf } from "@/lib/family";
 
 export async function GET(req) {
   const motherId = req.nextUrl.searchParams.get("motherId");
   if (!motherId) return NextResponse.json({ error: "motherId مطلوب" }, { status: 400 });
   const sb = supabaseAdmin();
-  const { data, error } = await sb.from("children").select("*").eq("mother_id", motherId).order("created_at");
+  // أبناء العائلة — الأب والأم يشوفون نفس القائمة.
+  const familyId = await familyIdOf(sb, motherId);
+  if (!familyId) return NextResponse.json({ children: [] });
+  const { data, error } = await sb.from("children").select("*").eq("family_id", familyId).order("created_at");
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ children: data });
 }
@@ -35,13 +39,15 @@ export async function POST(req) {
   }
 
   const sb = supabaseAdmin();
+  const familyId = await familyIdOf(sb, motherId);
+  if (!familyId) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   let colorIdx = body.colorIdx;
   if (colorIdx === undefined || colorIdx === null) {
     const { count } = await sb
       .from("children")
       .select("*", { count: "exact", head: true })
-      .eq("mother_id", motherId);
+      .eq("family_id", familyId);
     colorIdx = count ?? 0;
   }
 
@@ -49,6 +55,7 @@ export async function POST(req) {
     .from("children")
     .insert({
       mother_id: motherId,
+      family_id: familyId,
       name: body.name,
       photo_url: body.photo || null,
       governorate: body.governorate,

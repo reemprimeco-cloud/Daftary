@@ -15,6 +15,43 @@ export const maxDuration = 300;
 
 // دوال الإرسال المشتركة (mapPool، Web Push، APNs) في lib/pushDelivery.js
 
+// التذكير يوصل لكل أولياء أمور العائلة (الأم والأب) لا لمن أنشأ الصف وحده.
+// خريطة وحدة لكل تشغيلة بدل استعلام لكل عائلة — الجدول صغير والكرون يومي.
+async function loadFamilyParents(sb) {
+  const { data } = await sb.from("mothers").select("id, family_id");
+  const map = new Map();
+  for (const m of data || []) {
+    if (!m.family_id) continue;
+    if (!map.has(m.family_id)) map.set(m.family_id, []);
+    map.get(m.family_id).push(m.id);
+  }
+  return map;
+}
+
+// إرسال رسالة مجمّعة لكل ولي أمر بالعائلة، مع سجل مستقل لكل واحد — القيد
+// بالقاعدة صار (task_id, kind, mother_id)، فسجل الأم ما يمنع وصول الأب.
+// dedupeToday: للرسائل اللي ما لها مهمة (تسميع، مستلزمات) نمنع التكرار
+// بفحص سجل اليوم لنفس ولي الأمر.
+async function deliverToFamily(sb, parentIds, { title, text, kind, today, taskIds = [null] }) {
+  let sent = 0;
+  for (const motherId of parentIds || []) {
+    if (today) {
+      const { data: already } = await sb
+        .from("reminder_log")
+        .select("id")
+        .eq("mother_id", motherId)
+        .eq("kind", kind)
+        .gte("sent_at", `${today}T00:00:00+03:00`)
+        .limit(1);
+      if (already?.length) continue;
+    }
+    if (!(await deliverToMother(sb, motherId, title, text))) continue;
+    await sb.from("reminder_log").insert(taskIds.map((taskId) => ({ mother_id: motherId, task_id: taskId, kind })));
+    sent += taskIds.length;
+  }
+  return sent;
+}
+
 const KIND_TITLES = {
   exam_day_before: "تذكير اختبار غداً",
   exam_today: "اختبار اليوم",
@@ -63,46 +100,36 @@ function groupedText(tasks, kind, groupFn) {
 //
 // رسالة واحدة مجمّعة لكل ولي أمر مو رسالة لكل محفوظ — عائلة عندها عشر
 // محفوظات ما تستاهل عشرة إشعارات بنفس الدقيقة.
-async function sendMemorizationReminders(sb, today) {
+async function sendMemorizationReminders(sb, today, parents) {
   const weekday = kuwaitNow().getUTCDay(); // ٠ الأحد .. ٦ السبت
   if (weekday !== 6 && weekday !== 2) return 0;
 
   const { data: pending } = await sb
     .from("memorization")
-    .select("id, children(mother_id, name)")
+    .select("id, children(family_id, name)")
     .eq("done", false)
     // اللي له موعد تسميع مكتوب ياخذ تذكير موعده (قبله بيوم ويومه) —
     // لو دخل هنا كمان صار عنه تذكيران بنفس الأسبوع.
     .is("recite_on", null);
 
-  const byMother = new Map();
+  const byFamily = new Map();
   for (const m of pending || []) {
-    const motherId = m.children?.mother_id;
-    if (!motherId) continue;
-    const entry = byMother.get(motherId) || { count: 0, names: new Set() };
+    const familyId = m.children?.family_id;
+    if (!familyId) continue;
+    const entry = byFamily.get(familyId) || { count: 0, names: new Set() };
     entry.count++;
     entry.names.add(m.children.name);
-    byMother.set(motherId, entry);
+    byFamily.set(familyId, entry);
   }
 
-  const memoResults = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, { count, names }]) => {
-    // القيد الفريد بـreminder_log على (task_id, kind) وهنا ما فيه مهمة،
-    // فنمنع التكرار بفحص إن ما أُرسل شي لنفس ولي الأمر اليوم.
-    const { data: already } = await sb
-      .from("reminder_log")
-      .select("id")
-      .eq("mother_id", motherId)
-      .eq("kind", "memorization")
-      .gte("sent_at", `${today}T00:00:00+03:00`)
-      .limit(1);
-    if (already?.length) return 0;
-
+  const memoResults = await mapPool([...byFamily.entries()], CONCURRENCY, async ([familyId, { count, names }]) => {
     const who = names.size === 1 ? [...names][0] : "أبنائك";
-    const text = `🕌 عند ${who} ${count} للتسميع — وقت المراجعة`;
-
-    if (!(await deliverToMother(sb, motherId, "تذكير التسميع", text))) return 0;
-    await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind: "memorization" });
-    return 1;
+    return deliverToFamily(sb, parents.get(familyId), {
+      title: "تذكير التسميع",
+      text: `🕌 عند ${who} ${count} للتسميع — وقت المراجعة`,
+      kind: "memorization",
+      today,
+    });
   });
   return memoResults.reduce((a, b) => a + b, 0);
 }
@@ -110,7 +137,7 @@ async function sendMemorizationReminders(sb, today) {
 // التسميع اللي مكتوب له موعد بالخطة ياخذ نفس قاعدة بقية المواعيد: تذكير
 // قبله بيوم وتذكير يومه. اللي بلا موعد يبقى على تذكير السبت والثلاثاء فوق.
 // مجمّع لكل أم (reminder_log.task_id يخص المهام، فنمنع التكرار باليوم).
-async function sendRecitationReminders(sb, today, tomorrow) {
+async function sendRecitationReminders(sb, today, tomorrow, parents) {
   let sent = 0;
   for (const [date, kind, title, phrase] of [
     [tomorrow, "recitation_day_before", "تسميع غداً", "غداً موعد تسميع"],
@@ -118,35 +145,28 @@ async function sendRecitationReminders(sb, today, tomorrow) {
   ]) {
     const { data: due } = await sb
       .from("memorization")
-      .select("reference, children(mother_id, name)")
+      .select("reference, children(family_id, name)")
       .eq("done", false)
       .eq("recite_on", date);
 
-    const byMother = new Map();
+    const byFamily = new Map();
     for (const m of due || []) {
-      const motherId = m.children?.mother_id;
-      if (!motherId) continue;
-      const entry = byMother.get(motherId) || { refs: [], names: new Set() };
+      const familyId = m.children?.family_id;
+      if (!familyId) continue;
+      const entry = byFamily.get(familyId) || { refs: [], names: new Set() };
       entry.refs.push(m.reference);
       entry.names.add(m.children.name);
-      byMother.set(motherId, entry);
+      byFamily.set(familyId, entry);
     }
 
-    const results = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, { refs, names }]) => {
-      const { data: already } = await sb
-        .from("reminder_log")
-        .select("id")
-        .eq("mother_id", motherId)
-        .eq("kind", kind)
-        .gte("sent_at", `${today}T00:00:00+03:00`)
-        .limit(1);
-      if (already?.length) return 0;
-
+    const results = await mapPool([...byFamily.entries()], CONCURRENCY, async ([familyId, { refs, names }]) => {
       const who = names.size === 1 ? [...names][0] : "أبنائك";
-      const text = `🕌 ${phrase} ${who}: ${refs.join("، ")}`;
-      if (!(await deliverToMother(sb, motherId, title, text))) return 0;
-      await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind });
-      return refs.length;
+      return deliverToFamily(sb, parents.get(familyId), {
+        title,
+        text: `🕌 ${phrase} ${who}: ${refs.join("، ")}`,
+        kind,
+        today,
+      });
     });
     sent += results.reduce((a, b) => a + b, 0);
   }
@@ -157,40 +177,31 @@ async function sendRecitationReminders(sb, today, tomorrow) {
 // تذكير — والأم تحتاج تعرف قبل بيوم عشان تشتريها، مو صبح يوم التسليم.
 // رسالة واحدة مجمّعة: خمسة أغراض لنفس اليوم رحلة شراء وحدة مو خمس رسائل.
 // وreminder_log.task_id مرتبط بجدول المهام، فنمنع التكرار باليوم وولي الأمر.
-async function sendRequirementReminders(sb, today, tomorrow) {
+async function sendRequirementReminders(sb, today, tomorrow, parents) {
   const { data: due } = await sb
     .from("requirements")
-    .select("item, children(mother_id, name)")
+    .select("item, children(family_id, name)")
     .eq("bought", false)
     .eq("due_date", tomorrow);
 
-  const byMother = new Map();
+  const byFamily = new Map();
   for (const r of due || []) {
-    const motherId = r.children?.mother_id;
-    if (!motherId) continue;
-    const entry = byMother.get(motherId) || { items: [], names: new Set() };
+    const familyId = r.children?.family_id;
+    if (!familyId) continue;
+    const entry = byFamily.get(familyId) || { items: [], names: new Set() };
     entry.items.push(r.item);
     entry.names.add(r.children.name);
-    byMother.set(motherId, entry);
+    byFamily.set(familyId, entry);
   }
 
-  const results = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, { items, names }]) => {
-    const { data: already } = await sb
-      .from("reminder_log")
-      .select("id")
-      .eq("mother_id", motherId)
-      .eq("kind", "requirement_day_before")
-      .gte("sent_at", `${today}T00:00:00+03:00`)
-      .limit(1);
-    if (already?.length) return 0;
-
+  const results = await mapPool([...byFamily.entries()], CONCURRENCY, async ([familyId, { items, names }]) => {
     const who = names.size === 1 ? [...names][0] : "العيال";
-    const text = `🎒 مستلزمات ${who} المطلوبة غداً: ${items.join("، ")}`;
-    const title = "مستلزمات غداً";
-
-    if (!(await deliverToMother(sb, motherId, title, text))) return 0;
-    await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind: "requirement_day_before" });
-    return 1;
+    return deliverToFamily(sb, parents.get(familyId), {
+      title: "مستلزمات غداً",
+      text: `🎒 مستلزمات ${who} المطلوبة غداً: ${items.join("، ")}`,
+      kind: "requirement_day_before",
+      today,
+    });
   });
   return results.reduce((a, b) => a + b, 0);
 }
@@ -204,6 +215,8 @@ export async function GET(req) {
   configureWebPush();
 
   const sb = supabaseAdmin();
+  // أولياء أمور كل عائلة — التذكير يوصل للأم والأب سواء.
+  const parents = await loadFamilyParents(sb);
   const today = kuwaitTodayStr();
   const tomorrowDate = kuwaitNow();
   tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
@@ -211,21 +224,21 @@ export async function GET(req) {
 
   const { data: examsToday } = await sb
     .from("tasks")
-    .select("*, children(mother_id, name)")
+    .select("*, children(family_id, name)")
     .eq("type", "اختبار")
     .eq("due_date", today)
     .eq("status", "active");
 
   const { data: examsTomorrow } = await sb
     .from("tasks")
-    .select("*, children(mother_id, name)")
+    .select("*, children(family_id, name)")
     .eq("type", "اختبار")
     .eq("due_date", tomorrow)
     .eq("status", "active");
 
   const { data: freshTasks } = await sb
     .from("tasks")
-    .select("*, children(mother_id, name)")
+    .select("*, children(family_id, name)")
     .eq("status", "active")
     // «درس» = محتوى المنهج بالخطة الأسبوعية، ما له موعد تسليم ولا يحتاج
     // تنبيهاً — التذكير للواجب والاختبار والمشروع والحفظ فقط.
@@ -238,7 +251,7 @@ export async function GET(req) {
   // يبقى وقت لعمله. نفس قاعدة الاختبار تنطبق عليه.
   const { data: tasksTomorrow } = await sb
     .from("tasks")
-    .select("*, children(mother_id, name)")
+    .select("*, children(family_id, name)")
     .neq("type", "اختبار")
     .neq("type", "درس")
     .eq("due_date", tomorrow)
@@ -249,7 +262,7 @@ export async function GET(req) {
   // أيام ما كان يوصلها شي أصلاً. الاختبارات مستثناة لأن لها تذكيرها الخاص.
   const { data: tasksToday } = await sb
     .from("tasks")
-    .select("*, children(mother_id, name)")
+    .select("*, children(family_id, name)")
     .neq("type", "اختبار")
     .neq("type", "درس")
     .eq("due_date", today)
@@ -269,29 +282,37 @@ export async function GET(req) {
   // التطبيق ١٦ سبتمبر). التكرار يبقى ممنوعاً بسجل reminder_log لكل واجب.
   for (const [rows, kind, textFn, groupFn] of batches) {
     if (!rows.length) continue;
-    const { data: logged } = await sb.from("reminder_log").select("task_id").eq("kind", kind).in("task_id", rows.map((t) => t.id));
-    const already = new Set((logged || []).map((r) => r.task_id));
-    const byMother = new Map();
+    // المنع من التكرار صار لكل ولي أمر على حدة: سجل الأم ما يمنع وصول
+    // التذكير للأب (القيد بالقاعدة صار (task_id, kind, mother_id)).
+    const { data: logged } = await sb.from("reminder_log").select("task_id, mother_id").eq("kind", kind).in("task_id", rows.map((t) => t.id));
+    const already = new Set((logged || []).map((r) => `${r.task_id}|${r.mother_id}`));
+    const byFamily = new Map();
     for (const t of rows) {
-      const motherId = t.children?.mother_id;
-      if (!motherId || already.has(t.id)) continue;
-      if (!byMother.has(motherId)) byMother.set(motherId, []);
-      byMother.get(motherId).push(t);
+      const familyId = t.children?.family_id;
+      if (!familyId) continue;
+      if (!byFamily.has(familyId)) byFamily.set(familyId, []);
+      byFamily.get(familyId).push(t);
     }
 
-    const results = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, tasks]) => {
-      const text = tasks.length === 1 ? textFn(tasks[0]) : groupedText(tasks, kind, groupFn);
-      const title = tasks.length === 1 ? KIND_TITLES[kind] || "دفتري" : GROUP_TITLES[kind] || KIND_TITLES[kind] || "دفتري";
-      if (!(await deliverToMother(sb, motherId, title, text))) return 0;
-      await sb.from("reminder_log").insert(tasks.map((t) => ({ mother_id: motherId, task_id: t.id, kind })));
-      return tasks.length;
+    const results = await mapPool([...byFamily.entries()], CONCURRENCY, async ([familyId, familyTasks]) => {
+      let count = 0;
+      for (const motherId of parents.get(familyId) || []) {
+        const tasks = familyTasks.filter((t) => !already.has(`${t.id}|${motherId}`));
+        if (!tasks.length) continue;
+        const text = tasks.length === 1 ? textFn(tasks[0]) : groupedText(tasks, kind, groupFn);
+        const title = tasks.length === 1 ? KIND_TITLES[kind] || "دفتري" : GROUP_TITLES[kind] || KIND_TITLES[kind] || "دفتري";
+        if (!(await deliverToMother(sb, motherId, title, text))) continue;
+        await sb.from("reminder_log").insert(tasks.map((t) => ({ mother_id: motherId, task_id: t.id, kind })));
+        count += tasks.length;
+      }
+      return count;
     });
     sent += results.reduce((a, b) => a + b, 0);
   }
 
-  sent += await sendRequirementReminders(sb, today, tomorrow);
-  sent += await sendRecitationReminders(sb, today, tomorrow);
-  sent += await sendMemorizationReminders(sb, today);
+  sent += await sendRequirementReminders(sb, today, tomorrow, parents);
+  sent += await sendRecitationReminders(sb, today, tomorrow, parents);
+  sent += await sendMemorizationReminders(sb, today, parents);
 
   // تنظيف صور المصدر المنتهية (أسبوع من الرفع) — معلّق على كرون يومي موجود
   // بدل كرون جديد. فشله ما يخص التذكيرات، فلا يوقفها.

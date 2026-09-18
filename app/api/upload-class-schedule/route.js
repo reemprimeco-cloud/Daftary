@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { childInFamily } from "@/lib/family";
 import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
 import { jobIdFrom, openJob, closeJob } from "@/lib/uploadJobs";
 import { markTrialUploadUsed } from "@/lib/appEntitlements";
@@ -37,12 +38,8 @@ async function handleUpload({ childId, images }, motherId) {
   }
 
   const sb = supabaseAdmin();
-  const { data: child, error: cErr } = await sb
-    .from("children")
-    .select("*")
-    .eq("id", childId)
-    .eq("mother_id", motherId)
-    .single();
+  const child = await childInFamily(sb, childId, motherId);
+  const cErr = null;
   if (cErr || !child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
 
   const prompt = `أنت مساعد يقرأ صور "الجدول الدراسي الأسبوعي" (جدول الحصص) لمدرسة كويتية — جدول يبيّن مادة ومعلم/ـة كل حصة في كل يوم دراسي، وليس جدول واجبات أو تواريخ. أمامك ${images.length} صورة، وكلها معروف مسبقاً إنها تخص طالب واحد محدد (الصف ${child.grade}/${child.section})، فلا تحتاجين تحديد صاحب الجدول من الصورة.
