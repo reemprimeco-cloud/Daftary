@@ -469,6 +469,8 @@ export default function Home() {
   const [showUploadSchedule, setShowUploadSchedule] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [editingCell, setEditingCell] = useState(null); // { child, day, period, entry } — entry فاضي لو خانة جديدة
+  // نتيجة تحليل خطة تنتظر مراجعة الأم — ما تنحفظ إلا باعتمادها
+  const [reviewDraft, setReviewDraft] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showSubscriptionManage, setShowSubscriptionManage] = useState(false);
   const [openTask, setOpenTask] = useState(null);
@@ -984,6 +986,15 @@ export default function Home() {
           hint="ارفعي الخطط الأسبوعية، جدول الاختبارات ومتطلبات العام الدراسي هنا"
           onClose={() => setShowUpload(false)}
           onDone={() => loadAll(mother.id)}
+          onReview={(draft) => { setShowUpload(false); setReviewDraft(draft); }}
+        />
+      )}
+      {reviewDraft && (
+        <ReviewDraftScreen
+          draft={reviewDraft}
+          child={children.find((c) => c.id === reviewDraft.childId)}
+          onClose={() => setReviewDraft(null)}
+          onApplied={() => { setReviewDraft(null); loadAll(mother.id); }}
         />
       )}
       {showUploadSchedule && (
@@ -2445,7 +2456,7 @@ function AddTaskModal({ child, onClose, onSave }) {
   );
 }
 
-function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, selectChild = true, hint, onClose, onDone }) {
+function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, selectChild = true, hint, onClose, onDone, onReview }) {
   const [school, setSchool] = useState("");
   const [childId, setChildId] = useState("");
   const [images, setImages] = useState([]);
@@ -2533,9 +2544,16 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         data = await post(current);
       }
       if (data.needsRotation) throw new Error("ما قدرنا نضبط اتجاه الصورة. صوّري الجدول وهو معتدل وجربي مرة ثانية.");
+      setImages([]);
+      // رفعة الخطة ما تحفظ شي بنفسها — ترجّع مسودة تراجعها الأم وتعتمدها.
+      // بقية المسارات (جدول الحصص) تحفظ مباشرة كما كانت.
+      if (data.draftId && onReview) {
+        setStatus("idle");
+        onReview(data);
+        return;
+      }
       setSummary(data);
       setStatus("done");
-      setImages([]);
       onDone();
     } catch (err) {
       console.error(err);
@@ -2625,7 +2643,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
           </div>
         )}
         <button disabled={!canRun || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, opacity: canRun ? 1 : 0.4 }}>
-          {status === "loading" ? "جاري التحليل..." : buttonLabel}
+          {status === "loading" ? (onReview ? "🤖 جاري فهم الخطة..." : "جاري التحليل...") : buttonLabel}
         </button>
         {blockedReason && status !== "loading" && (
           <p style={{ margin: "-4px 0 0", fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 10, padding: "9px 12px", textAlign: "center" }}>
@@ -2655,6 +2673,219 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// «عنصر / عنصران / ٥ عناصر» — عربية سليمة بدل «5 عنصر».
+function countLabel(n, one, two, plural) {
+  if (n === 1) return one;
+  if (n === 2) return two;
+  if (n <= 10) return `${n} ${plural}`;
+  return `${n} ${one}`;
+}
+
+// شاشة مراجعة نتيجة التحليل قبل الحفظ. قبلها كانت الرفعة تحفظ مباشرة
+// بجداول الطالب/ة، فأي قراءة غلط تدخل بلا ما تشوفها الأم. الحين تشوف كل
+// عنصر، تعدّله أو تحذفه، وما ينحفظ إلا باعتمادها (قرار ١٨ سبتمبر).
+function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
+  const [items, setItems] = useState(draft.items || { tasks: [], requirements: [], memorization: [] });
+  const [openRow, setOpenRow] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const TYPES = ["واجب", "اختبار", "مشروع", "حفظ", "درس"];
+
+  const tasks = items.tasks || [];
+  const reqs = items.requirements || [];
+  const memo = items.memorization || [];
+  const total = tasks.length + reqs.length + memo.length;
+  const byType = (t) => tasks.filter((e) => e.type === t).length;
+  const lines = [
+    [byType("واجب"), "واجب", "واجبان", "واجبات"],
+    [byType("اختبار"), "اختبار", "اختباران", "اختبارات"],
+    [byType("مشروع"), "مشروع", "مشروعان", "مشاريع"],
+    [byType("حفظ"), "مطلوب حفظ", "مطلوبا حفظ", "مطلوبات حفظ"],
+    [byType("درس"), "درس", "درسان", "دروس"],
+    [reqs.length, "مستلزم", "مستلزمان", "مستلزمات"],
+    [memo.length, "تسميع", "تسميعان", "تسميعات"],
+  ].filter(([n]) => n > 0);
+
+  const setRow = (group, i, patch) =>
+    setItems((prev) => ({ ...prev, [group]: prev[group].map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
+  const removeRow = (group, i) => {
+    setItems((prev) => ({ ...prev, [group]: prev[group].filter((_, idx) => idx !== i) }));
+    setOpenRow(null);
+  };
+
+  async function apply() {
+    setSaving(true);
+    setError("");
+    const res = await fetch(`/api/upload-drafts/${draft.draftId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({}));
+    if (!res?.ok) {
+      setError(data?.error || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setSaving(false);
+      return;
+    }
+    hapticSuccess();
+    onApplied();
+  }
+
+  async function discard() {
+    if (!confirm("إلغاء هذي القراءة بلا حفظ؟")) return;
+    await fetch(`/api/upload-drafts/${draft.draftId}`, { method: "DELETE" }).catch(() => {});
+    onClose();
+  }
+
+  const rowBox = { borderTop: "1px solid #F3F2EE", padding: "10px 0" };
+  const field = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 10, padding: "8px 10px", marginTop: 5, fontSize: 14 };
+  const label = { fontSize: 12, fontWeight: 700, color: "#6B7280" };
+
+  return (
+    <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#FAF7F2", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 14px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={onClose} style={{ background: "none", fontSize: 20, width: 36, height: 36 }}>←</button>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>راجعي المعلومات قبل إضافتها</p>
+      </div>
+
+      <div className="app-scroll" style={{ flex: 1, padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ background: "white", borderRadius: 16, padding: 14, border: "1px solid #EEEDE8" }}>
+          <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: "#1F2937" }}>
+            تم العثور على {countLabel(total, "عنصر", "عنصران", "عناصر")} لـ {child?.name || "الطالب/ة"}
+          </p>
+          {lines.length > 0 && (
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6B7280", lineHeight: 1.9 }}>
+              {lines.map(([n, one, two, plural]) => countLabel(n, one, two, plural)).join(" · ")}
+            </p>
+          )}
+          <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 10, padding: "8px 10px", lineHeight: 1.7 }}>
+            ما ينحفظ شي إلا بعد ما تعتمدينه. عدّلي أي معلومة أو احذفيها قبل الاعتماد.
+          </p>
+        </div>
+
+        {total === 0 && (
+          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>ما بقى أي عنصر — ارجعي وارفعي الخطة مرة ثانية.</p>
+        )}
+
+        {tasks.length > 0 && (
+          <div style={{ background: "white", borderRadius: 16, padding: "4px 14px 12px", border: "1px solid #EEEDE8" }}>
+            <p style={{ margin: "12px 0 0", fontWeight: 900, fontSize: 14, color: "#5C4B8C" }}>الواجبات والاختبارات</p>
+            {tasks.map((t, i) => (
+              <div key={`t${i}`} style={rowBox}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <button onClick={() => setOpenRow(openRow === `t${i}` ? null : `t${i}`)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>
+                      {t.subject} <span style={{ fontSize: 11, fontWeight: 800, background: "#F1EFFA", color: "#5C4B8C", borderRadius: 999, padding: "2px 8px" }}>{t.type}</span>
+                    </p>
+                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280", lineHeight: 1.6 }}>
+                      {t.dueDate ? fmtDate(t.dueDate) : t.dueText || "بدون موعد"}{t.details ? ` — ${t.details}` : ""}
+                    </p>
+                  </button>
+                  <button onClick={() => removeRow("tasks", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
+                </div>
+                {openRow === `t${i}` && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div>
+                      <span style={label}>المادة</span>
+                      <input value={t.subject || ""} onChange={(e) => setRow("tasks", i, { subject: e.target.value })} style={field} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <span style={label}>النوع</span>
+                        <select value={t.type} onChange={(e) => setRow("tasks", i, { type: e.target.value })} style={{ ...field, background: "white" }}>
+                          {TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <span style={label}>الموعد</span>
+                        <input type="date" value={t.dueDate || ""} onChange={(e) => setRow("tasks", i, { dueDate: e.target.value || null })} style={field} />
+                      </div>
+                    </div>
+                    <div>
+                      <span style={label}>التفاصيل</span>
+                      <textarea value={t.details || ""} onChange={(e) => setRow("tasks", i, { details: e.target.value })} rows={2} style={{ ...field, resize: "vertical", fontFamily: "inherit" }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {reqs.length > 0 && (
+          <div style={{ background: "white", borderRadius: 16, padding: "4px 14px 12px", border: "1px solid #EEEDE8" }}>
+            <p style={{ margin: "12px 0 0", fontWeight: 900, fontSize: 14, color: "#8C6027" }}>المستلزمات</p>
+            {reqs.map((r, i) => (
+              <div key={`r${i}`} style={rowBox}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <button onClick={() => setOpenRow(openRow === `r${i}` ? null : `r${i}`)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>{r.item}</p>
+                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280" }}>{r.dueDate ? fmtDate(r.dueDate) : r.dueText || "بدون موعد"}</p>
+                  </button>
+                  <button onClick={() => removeRow("requirements", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
+                </div>
+                {openRow === `r${i}` && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div>
+                      <span style={label}>الغرض</span>
+                      <input value={r.item || ""} onChange={(e) => setRow("requirements", i, { item: e.target.value })} style={field} />
+                    </div>
+                    <div>
+                      <span style={label}>الموعد</span>
+                      <input type="date" value={r.dueDate || ""} onChange={(e) => setRow("requirements", i, { dueDate: e.target.value || null })} style={field} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {memo.length > 0 && (
+          <div style={{ background: "white", borderRadius: 16, padding: "4px 14px 12px", border: "1px solid #EEEDE8" }}>
+            <p style={{ margin: "12px 0 0", fontWeight: 900, fontSize: 14, color: "#5B21B6" }}>الحفظ والتسميع</p>
+            {memo.map((m, i) => (
+              <div key={`m${i}`} style={rowBox}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <button onClick={() => setOpenRow(openRow === `m${i}` ? null : `m${i}`)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>{m.kind === "حديث" ? "حديث" : "قرآن"} · {m.reference}</p>
+                    {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280" }}>{m.details}</p>}
+                  </button>
+                  <button onClick={() => removeRow("memorization", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
+                </div>
+                {openRow === `m${i}` && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {["آية", "حديث"].map((v) => (
+                        <button key={v} onClick={() => setRow("memorization", i, { kind: v })} style={{ flex: 1, padding: 9, borderRadius: 10, border: `1px solid ${m.kind === v ? "#B7A6E8" : "#E5E7EB"}`, background: m.kind === v ? "#F1EFFA" : "white", color: m.kind === v ? "#5C4B8C" : "#6B7280", fontWeight: 700, fontSize: 13 }}>{v === "آية" ? "قرآن" : "حديث"}</button>
+                      ))}
+                    </div>
+                    <div>
+                      <span style={label}>المرجع</span>
+                      <input value={m.reference || ""} onChange={(e) => setRow("memorization", i, { reference: e.target.value })} style={field} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && <p style={{ color: "#B91C1C", fontSize: 13, fontWeight: 700, margin: 0 }}>{error}</p>}
+      </div>
+
+      <div style={{ flexShrink: 0, background: "white", borderTop: "1px solid #F0EEE8", padding: "12px 16px calc(env(safe-area-inset-bottom) + 12px)", display: "flex", flexDirection: "column", gap: 8 }}>
+        <button disabled={saving || total === 0} onClick={apply} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 50, opacity: saving || total === 0 ? 0.5 : 1 }}>
+          {saving ? "جارِ الإضافة..." : `اعتماد وإضافة ${countLabel(total, "عنصر", "عنصران", "عناصر")}`}
+        </button>
+        <button onClick={discard} disabled={saving} style={{ padding: 10, borderRadius: 12, background: "none", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 40 }}>
+          إلغاء بلا حفظ
+        </button>
       </div>
     </div>
   );

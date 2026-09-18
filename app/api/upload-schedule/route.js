@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
-import { kuwaitNow, kuwaitTodayLabel, kuwaitYear, kuwaitWeekMap } from "@/lib/kuwaitDate";
+import { kuwaitNow, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
 import { jobIdFrom, openJob, closeJob } from "@/lib/uploadJobs";
-import { markTrialUploadUsed } from "@/lib/appEntitlements";
+import { summarize } from "@/lib/planApply";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -141,119 +141,51 @@ async function handleUpload({ childId, images }, motherId) {
     return weekEnd;
   };
 
-  // الهوية = المادة + النوع + الموعد. كانت الهوية المادة والنوع فقط، فخطة
-  // فيها «واجب رياضيات» الأحد و«واجب رياضيات» الأربعاء كانت الثانية تكتب
-  // فوق الأولى وتضيّعها. وإعادة رفع نفس الخطة تحدّث التفاصيل بدل ما تكرر
-  // (نفس المعرّف يبقى، فالتذكير المرتبط به يتحدّث بدل ما يتكرر).
-  // المنجز (done) يدخل بالمطابقة كذلك — وإلا إعادة رفع نفس الخطة بعد ما
-  // علّمت الأم واجباً «تم» تنشئ نسخة ثانية منه غير منجزة.
-  const { data: activeTasks } = await sb
-    .from("tasks").select("id, subject, type, due_date").eq("child_id", child.id).in("status", ["active", "done"]);
-  const taskKey = (s, t, d) => `${s}|${t}|${d || ""}`;
-  const known = new Map((activeTasks || []).map((t) => [taskKey(t.subject, t.type, t.due_date), t.id]));
+  // نتيجة التحليل ما تدخل جداول الطالب/ة مباشرة — تُحفظ كمسودة تراجعها الأم
+  // وتعدّلها ثم تعتمدها (POST /api/upload-drafts/[id])، وهناك يصير الحفظ
+  // الفعلي واستهلاك التجربة المجانية. التواريخ تُحسب هنا بالخادم عشان تشوف
+  // الأم الموعد النهائي وتقدر تغيّره قبل الاعتماد.
+  const items = {
+    tasks: (parsed.entries || [])
+      .map((e) => ({
+        subject: String(e.subject || "").trim(),
+        // القاعدة تقبل خمسة أنواع فقط، وأي نوع غيرها كان يفجّر الإدخال —
+        // فنرجع للواجب بدل ما نخسر المهمة.
+        type: TASK_TYPES.has(e.type) ? e.type : "واجب",
+        dueDate: resolveDue(e),
+        // التفاصيل تُحفظ كما كتبتها المدرسة بالصورة، بلا أي إضافة من عندنا.
+        details: e.details || null,
+        dueText: e.dueText || null,
+      }))
+      .filter((e) => e.subject),
+    requirements: (parsed.requirements || [])
+      .map((r) => ({ item: String(r.item || "").trim(), dueDate: resolveDue(r), dueText: r.dueText || null }))
+      .filter((r) => r.item),
+    memorization: (parsed.memorization || [])
+      .map((m) => ({ kind: m.kind === "حديث" ? "حديث" : "آية", reference: String(m.reference || "").trim(), details: m.details || null }))
+      .filter((m) => m.reference),
+  };
 
-  let matchedTasks = 0;
-  let updatedTasks = 0;
-  let matchedReqs = 0;
-  let updatedReqs = 0;
-  let matchedMemorization = 0;
+  // مسودة معلّقة سابقة لنفس الطالب/ة ما لها معنى بعد رفعة جديدة — الأم
+  // تراجع الأحدث. نلغيها بدل ما تتراكم مسودات تتنافس على نفس البيانات.
+  await sb.from("upload_drafts").update({ status: "discarded" }).eq("child_id", child.id).eq("status", "pending");
 
-  for (const e of parsed.entries || []) {
-    const subject = String(e.subject || "").trim();
-    if (!subject) continue;
-    const dueDate = resolveDue(e);
-    // التفاصيل تُحفظ كما كتبتها المدرسة بالصورة، بلا أي إضافة من عندنا.
-    const details = e.details || null;
-    // القاعدة تقبل أربعة أنواع فقط، وأي نوع غيرها كان يفجّر الإدخال
-    // ويضيّع الرفعة كاملة — فنرجع للواجب بدل ما نخسر المهمة.
-    const type = TASK_TYPES.has(e.type) ? e.type : "واجب";
-
-    const key = taskKey(subject, type, dueDate);
-    const existingId = known.get(key);
-    if (existingId) {
-      await sb.from("tasks").update({ details }).eq("id", existingId);
-      updatedTasks++;
-    } else {
-      const { data: inserted } = await sb.from("tasks").insert({
-        child_id: child.id,
-        subject,
-        type,
-        due_date: dueDate,
-        details,
-        status: "active",
-        source: "image",
-      }).select("id").single();
-      if (inserted) known.set(key, inserted.id);
-      matchedTasks++;
-    }
+  const { data: draft, error: dErr } = await sb
+    .from("upload_drafts")
+    .insert({ mother_id: motherId, child_id: child.id, kind: "plan", items, images_count: images.length })
+    .select("id")
+    .single();
+  if (dErr || !draft) {
+    console.error("upload-schedule: draft insert failed:", dErr?.message);
+    return NextResponse.json({ error: "فيه خلل مؤقت عندنا بحفظ النتيجة. جربي بعد شوي." }, { status: 500 });
   }
 
-  const { data: openReqs } = await sb
-    .from("requirements").select("id, item").eq("child_id", child.id).eq("bought", false);
-  const knownReqs = new Map((openReqs || []).map((r) => [r.item, r.id]));
-
-  for (const r of parsed.requirements || []) {
-    const item = String(r.item || "").trim();
-    if (!item) continue;
-    const dueDate = resolveDue(r);
-    const existingId = knownReqs.get(item);
-    if (existingId) {
-      await sb.from("requirements").update({ due_date: dueDate }).eq("id", existingId);
-      updatedReqs++;
-    } else {
-      const { data: inserted } = await sb.from("requirements").insert({
-        child_id: child.id,
-        item,
-        due_date: dueDate,
-        bought: false,
-      }).select("id").single();
-      if (inserted) knownReqs.set(item, inserted.id);
-      matchedReqs++;
-    }
-  }
-
-  for (const m of parsed.memorization || []) {
-    if (!m.reference) continue;
-    const kind = m.kind === "حديث" ? "حديث" : "آية";
-
-    // لو نفس مرجع الحفظ موجود وما تحفظ بعد لهذا الطالب/ة، لا نكرره برفع نفس الخطة مرتين
-    const { data: existingMem } = await sb
-      .from("memorization")
-      .select("id")
-      .eq("child_id", child.id)
-      .eq("reference", m.reference)
-      .eq("done", false)
-      .maybeSingle();
-
-    if (!existingMem) {
-      await sb.from("memorization").insert({
-        child_id: child.id,
-        kind,
-        reference: m.reference,
-        details: m.details || null,
-      });
-      matchedMemorization++;
-    }
-  }
-
-  // التجربة المجانية تُستهلك هنا فقط — بعد نجاح الحفظ فعلياً، لا عند مجرد
-  // المحاولة. آمنة النداء حتى لو الأم مشتركة أصلاً (راجع appEntitlements.js).
-  await markTrialUploadUsed(motherId, "plan");
-
-  // رفعة خطة جديدة = فرصة تنظيف: المنجز من أسابيع فاتت (أو بلا تاريخ أصلاً
-  // — عبارات نسبية مثل «نهاية الفصل الدراسي») ما له داعٍ يبقى بالواجهة
-  // للأبد. المُنجز غير المرتبط بتاريخ ما يختفي من نفسه أبداً بخلاف المؤرَّخ،
-  // فكان يتراكم بالرئيسية مع كل رفعة. الحذف نهائي وللمنجز فقط — غير المنجز
-  // (حتى لو قديم) يبقى كما هو، ما نضيّع شي الأم ما خلصته بعد.
-  await cleanupCompletedBeforeThisWeek(sb, child.id);
-
-  return NextResponse.json({ ok: true, matchedTasks, updatedTasks, matchedReqs, updatedReqs, matchedMemorization, imagesProcessed: images.length });
-}
-
-async function cleanupCompletedBeforeThisWeek(sb, childId) {
-  const { sunday } = kuwaitWeekMap();
-  await sb.from("tasks").delete().eq("child_id", childId).eq("status", "done").or(`due_date.is.null,due_date.lt.${sunday}`);
-  // التسميع ما له تاريخ استحقاق بالقاعدة أصلاً، فكل منجز منه (من أي وقت
-  // مضى) يعتبر «قديم» بمجرد رفع خطة جديدة.
-  await sb.from("memorization").delete().eq("child_id", childId).eq("done", true);
+  return NextResponse.json({
+    ok: true,
+    draftId: draft.id,
+    childId: child.id,
+    items,
+    summary: summarize(items),
+    imagesProcessed: images.length,
+  });
 }
