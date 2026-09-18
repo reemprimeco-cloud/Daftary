@@ -1613,7 +1613,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   const lessons = all.filter((t) => t.type === "درس" && show(t));
   if (lessons.length) groups.push({ key: "lessons", label: "دروس الأسبوع (المنهج)", items: lessons, tone: "lesson" });
   const upcoming = all.filter((t) => t.type !== "درس" && t.due_date && saturday && t.due_date > saturday && show(t));
-  if (upcoming.length) groups.push({ key: "upcoming", label: "بعد هذا الأسبوع", items: upcoming, tone: "upcoming" });
+  if (upcoming.length) groups.push({ key: "upcoming", label: "واجبات الأسبوع", items: upcoming, tone: "upcoming" });
   const undated = all.filter((t) => t.type !== "درس" && !t.due_date && show(t));
   if (undated.length) groups.push({ key: "undated", label: "بدون تاريخ محدد", items: undated, tone: "undated" });
 
@@ -2234,6 +2234,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
         ) : (
           <>
             {task.details && <div style={{ background: color.bg, borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 13 }}>{task.details}</div>}
+            {task.source_text && <div style={{ marginBottom: 14 }}><SourceText text={task.source_text} /></div>}
 
             {task.due_date && !native && (
               <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
@@ -2678,6 +2679,18 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   );
 }
 
+// النص كما جاء بالصورة حرفياً — يبقى محفوظاً جنب البيانات المنظّمة عشان
+// تقدر الأم تقارن بما فهمه البرنامج وتتأكد بنفسها.
+function SourceText({ text, compact }) {
+  if (!text) return null;
+  return (
+    <div style={{ background: "#F7F7F5", border: "1px dashed #D9D6CE", borderRadius: 10, padding: "8px 10px" }}>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: "#9CA3AF" }}>النص كما جاء بالصورة</p>
+      <p style={{ margin: "3px 0 0", fontSize: compact ? 12 : 12.5, color: "#4B5563", lineHeight: 1.7, whiteSpace: "pre-line" }}>{text}</p>
+    </div>
+  );
+}
+
 // «عنصر / عنصران / ٥ عناصر» — عربية سليمة بدل «5 عنصر».
 function countLabel(n, one, two, plural) {
   if (n === 1) return one;
@@ -2711,8 +2724,13 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
     [memo.length, "تسميع", "تسميعان", "تسميعات"],
   ].filter(([n]) => n > 0);
 
+  // أي تعديل تسويه الأم يعلّم الصف — فإعادة رفع نفس الخطة ما تكتب فوقه
+  // (lib/planApply.js). وتعديل حقل غير واضح يرفع عنه علامة التنبيه.
   const setRow = (group, i, patch) =>
-    setItems((prev) => ({ ...prev, [group]: prev[group].map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
+    setItems((prev) => ({
+      ...prev,
+      [group]: prev[group].map((r, idx) => (idx === i ? { ...r, ...patch, editedByUser: true } : r)),
+    }));
   const removeRow = (group, i) => {
     setItems((prev) => ({ ...prev, [group]: prev[group].filter((_, idx) => idx !== i) }));
     setOpenRow(null);
@@ -2746,6 +2764,15 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
   const field = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 10, padding: "8px 10px", marginTop: 5, fontSize: 14 };
   const label = { fontSize: 12, fontWeight: 700, color: "#6B7280" };
 
+  // المعلومة اللي ما قدر النموذج يحددها بثقة تطلع بعلامة تنبيه بدل ما
+  // يخمّنها — والأم تحددها بنفسها. تختفي العلامة أول ما تعدّل الصف.
+  const unclearFields = (t) => {
+    if (t.editedByUser || !t.confidence) return [];
+    const names = { subject: "المادة", type: "النوع", due: "الموعد" };
+    return Object.entries(t.confidence).filter(([, v]) => v === "unclear").map(([k]) => names[k]).filter(Boolean);
+  };
+  const needsReviewCount = tasks.filter((t) => unclearFields(t).length > 0).length;
+
   return (
     <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#FAF7F2", display: "flex", flexDirection: "column" }}>
       <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 14px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
@@ -2766,6 +2793,11 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
           <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 10, padding: "8px 10px", lineHeight: 1.7 }}>
             ما ينحفظ شي إلا بعد ما تعتمدينه. عدّلي أي معلومة أو احذفيها قبل الاعتماد.
           </p>
+          {needsReviewCount > 0 && (
+            <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "#B45309", background: "#FEF3C7", borderRadius: 10, padding: "8px 10px", lineHeight: 1.7, fontWeight: 700 }}>
+              ⚠️ {countLabel(needsReviewCount, "بند", "بندان", "بنود")} فيها معلومة ما كانت واضحة بالصورة — حدّديها بنفسك.
+            </p>
+          )}
         </div>
 
         {total === 0 && (
@@ -2785,11 +2817,17 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
                     <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280", lineHeight: 1.6 }}>
                       {t.dueDate ? fmtDate(t.dueDate) : t.dueText || "بدون موعد"}{t.details ? ` — ${t.details}` : ""}
                     </p>
+                    {unclearFields(t).length > 0 && (
+                      <p style={{ margin: "4px 0 0", fontSize: 11.5, fontWeight: 800, color: "#B45309", background: "#FEF3C7", borderRadius: 8, padding: "3px 8px", display: "inline-block" }}>
+                        ⚠️ {unclearFields(t).join(" و")} غير واضح بالصورة
+                      </p>
+                    )}
                   </button>
                   <button onClick={() => removeRow("tasks", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
                 </div>
                 {openRow === `t${i}` && (
                   <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <SourceText text={t.sourceText} />
                     <div>
                       <span style={label}>المادة</span>
                       <input value={t.subject || ""} onChange={(e) => setRow("tasks", i, { subject: e.target.value })} style={field} />
@@ -2831,6 +2869,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
                 </div>
                 {openRow === `r${i}` && (
                   <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <SourceText text={r.sourceText} />
                     <div>
                       <span style={label}>الغرض</span>
                       <input value={r.item || ""} onChange={(e) => setRow("requirements", i, { item: e.target.value })} style={field} />
@@ -2860,6 +2899,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
                 </div>
                 {openRow === `m${i}` && (
                   <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <SourceText text={m.sourceText} />
                     <div style={{ display: "flex", gap: 8 }}>
                       {["آية", "حديث"].map((v) => (
                         <button key={v} onClick={() => setRow("memorization", i, { kind: v })} style={{ flex: 1, padding: 9, borderRadius: 10, border: `1px solid ${m.kind === v ? "#B7A6E8" : "#E5E7EB"}`, background: m.kind === v ? "#F1EFFA" : "white", color: m.kind === v ? "#5C4B8C" : "#6B7280", fontWeight: 700, fontSize: 13 }}>{v === "آية" ? "قرآن" : "حديث"}</button>

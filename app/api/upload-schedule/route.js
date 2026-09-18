@@ -13,6 +13,15 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const FEATURE = "upload_homework";
+// درجة ثقة النموذج بكل معلومة حساسة — «unclear» تطلع للأم بعلامة تنبيه
+// بشاشة المراجعة عشان تحددها بنفسها بدل ما يخمّنها البرنامج.
+const CONFIDENCE = new Set(["confirmed", "inferred", "unclear"]);
+const cleanConfidence = (c) => {
+  if (!c || typeof c !== "object") return null;
+  const out = {};
+  for (const k of ["subject", "type", "due"]) if (CONFIDENCE.has(c[k])) out[k] = c[k];
+  return Object.keys(out).length ? out : null;
+};
 // القيمة الوحيدة اللي تقبلها القاعدة (tasks_type_check).
 const TASK_TYPES = new Set(["واجب", "حفظ", "اختبار", "مشروع", "درس"]);
 const DAY_INDEX = { "الأحد": 0, "الاثنين": 1, "الثلاثاء": 2, "الأربعاء": 3, "الخميس": 4, "الجمعة": 5, "السبت": 6 };
@@ -105,8 +114,16 @@ async function handleUpload({ childId, images }, motherId) {
 
 انقلي ما هو مكتوب بالصورة حرفياً: أسماء المواد والمستلزمات ونصوص التفاصيل تُكتب كما هي، بلا تصحيح ولا توحيد ولا اختصار ولا إضافة أي كلمة من عندك. وتكرار نفس المادة أو نفس الغرض أمر طبيعي — انقليه كل مرة كما هو ولا تحذفي أي تكرار.
 
+لكل بند (بما فيه المستلزمات والحفظ) اكتبي حقل sourceText: النص الأصلي كما هو مكتوب بالصورة في الخلية أو السطر اللي استخرجتِ منه البند، منقولاً حرفياً بلا تلخيص ولا إعادة صياغة ولا حذف. هذا الحقل يُعرض لولي الأمر ليقارن بالصورة، فلا تكتبي فيه استنتاجك بل ما هو مكتوب فقط.
+
+ولكل بند من entries اكتبي حقل confidence يوضّح مدى تأكدك من ثلاث معلومات حساسة، بثلاث قيم فقط:
+- "confirmed": مكتوبة صراحةً بالصورة وواضحة.
+- "inferred": غير مكتوبة صراحةً لكن استنتجتِها من موقع الخلية أو عنوان العمود أو سياق الجدول.
+- "unclear": غير واضحة أو غير موجودة، وما قدرتِ تحدّدينها بثقة.
+القيمة "unclear" مطلوبة ومفيدة ولا تُعدّ خطأً — ولي الأمر هو من يحدّدها بنفسه. لا تخمّني أبداً لمجرد تجنّبها، وخصوصاً بموعد الاختبار وموعد التسليم.
+
 أرجعي JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"weekEnd":"YYYY-MM-DD أو null","entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع|درس","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","details":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري"}]}`;
+{"weekEnd":"YYYY-MM-DD أو null","entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع|درس","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","details":"نص اختياري","sourceText":"النص الأصلي بالصورة","confidence":{"subject":"confirmed|inferred|unclear","type":"confirmed|inferred|unclear","due":"confirmed|inferred|unclear"}}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","sourceText":"النص الأصلي بالصورة"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري","sourceText":"النص الأصلي بالصورة"}]}`;
 
   const res = await extractFromImages({ images, prompt, motherId, childId, feature: FEATURE });
   if (!res.ok) {
@@ -156,13 +173,15 @@ async function handleUpload({ childId, images }, motherId) {
         // التفاصيل تُحفظ كما كتبتها المدرسة بالصورة، بلا أي إضافة من عندنا.
         details: e.details || null,
         dueText: e.dueText || null,
+        sourceText: e.sourceText || null,
+        confidence: cleanConfidence(e.confidence),
       }))
       .filter((e) => e.subject),
     requirements: (parsed.requirements || [])
-      .map((r) => ({ item: String(r.item || "").trim(), dueDate: resolveDue(r), dueText: r.dueText || null }))
+      .map((r) => ({ item: String(r.item || "").trim(), dueDate: resolveDue(r), dueText: r.dueText || null, sourceText: r.sourceText || null }))
       .filter((r) => r.item),
     memorization: (parsed.memorization || [])
-      .map((m) => ({ kind: m.kind === "حديث" ? "حديث" : "آية", reference: String(m.reference || "").trim(), details: m.details || null }))
+      .map((m) => ({ kind: m.kind === "حديث" ? "حديث" : "آية", reference: String(m.reference || "").trim(), details: m.details || null, sourceText: m.sourceText || null }))
       .filter((m) => m.reference),
   };
 

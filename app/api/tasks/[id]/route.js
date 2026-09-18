@@ -34,6 +34,9 @@ export async function PATCH(req, { params }) {
   }
   if ("details" in body) update.details = body.details?.trim() || null;
   if (Object.keys(update).length === 0) return NextResponse.json({ error: "لا يوجد شيء للتحديث" }, { status: 400 });
+  // تعديل الأم يتقدّم على إعادة القراءة — الصف المعلَّم هنا ما تكتب فوقه
+  // رفعة جديدة لنفس الخطة (lib/planApply.js).
+  update.edited_by_user = true;
 
   const { error } = await sb.from("tasks").update(update).eq("id", params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
