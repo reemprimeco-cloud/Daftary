@@ -598,6 +598,10 @@ export default function Home() {
   // وهذا أسوأ من انتظار: يخوّف الأم إن بياناتها راحت. ما نرجّعه false
   // أبداً بعد أول تحميل، عشان السحب للتحديث ما يومض شاشة انتظار.
   const [dataLoaded, setDataLoaded] = useState(false);
+  // مشتركة قديمة دخلت قبل ما يصير الرقم السري إلزامياً: جلستها سارية
+  // وتثبت هويتها، فنطلب منها الرقم السري **داخل التطبيق** بلا أي كود.
+  // بدون هذا تبقى بلا رقم سري وما تقدر تدخل من جهاز جديد بعد إلغاء الكود.
+  const [needsPassword, setNeedsPassword] = useState(false);
   const scrollRef = useRef(null);
 
   // WebKit «يكبّر النص تلقائياً» بالفقرات الطويلة داخل كتل عريضة، والتكبير
@@ -693,6 +697,7 @@ export default function Home() {
     setRequirements(data.requirements || []);
     setClassSchedule(data.classSchedule || []);
     setFeedbackDue(!!data.feedbackDue);
+    setNeedsPassword(!!data.needsPassword);
     // تذكيرات على الجهاز نفسه — تشتغل تلقائياً وحتى بدون إنترنت داخل تطبيق آبل
     syncTaskReminders([...(data.tasks || []), ...(data.upcomingTasks || [])]);
     // وتسجيل الجهاز لإشعارات السيرفر — تكمّل المحلية: توصل والتطبيق مقفل،
@@ -912,6 +917,18 @@ export default function Home() {
     return (
       <>
         <Onboarding onDone={handleAuthenticated} />
+        <InstallPrompt />
+      </>
+    );
+  }
+
+  // مشتركة قديمة بلا رقم سري: نطلبه أول ما تفتح التطبيق، قبل أي شي ثاني.
+  // جلستها الحالية هي إثبات الهوية، فما نحتاج كوداً ولا تكلفة Twilio —
+  // وبعدها يصير دخولها من أي جهاز بالموبايل + الرقم السري.
+  if (mother && dataLoaded && needsPassword) {
+    return (
+      <>
+        <ExistingUserPasswordSetup name={mother.name} onDone={() => setNeedsPassword(false)} />
         <InstallPrompt />
       </>
     );
@@ -1270,20 +1287,29 @@ function InstallPrompt() {
 function Onboarding({ onDone }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  // step: "phone" (اسم ورقم) → "password" (رقم سري لحساب سبق تحديده) أو
-  // "code" (كود التحقق، مرة واحدة لكل رقم) → "setPassword" (اختياري بعد
-  // أول كود ناجح، عشان الدخول القادم يصير بلا كود ولا تكلفة).
-  const [step, setStep] = useState("phone");
+  // step: "login" (موبايل + رقم سري) | "signup" (اسم + موبايل + رقم سري)
+  // — الاثنان بلا أي كود. و"code"/"setPassword" ما تُستخدمان إلا بمسار
+  // «نسيت الرقم السري»، وهو المكان الوحيد اللي بقي فيه Twilio: بدون أي
+  // قناة تحقق يقدر أي شخص يعيد تعيين رقم سري لأي حساب ويدخل بيانات عياله.
+  const [step, setStep] = useState("login");
+  // دخلنا من «نسيت الرقم السري»؟ لازم نعرف: verify-otp يرجّع
+  // needsPassword=false لمن عندها رقم سري أصلاً، فبدون هالعلم كانت اللي
+  // نسيت رقمها تدخل بالكود وتطلع بلا ما تحدّد رقماً جديداً — ويبقى القديم
+  // المنسي هو الوحيد اللي يدخّلها.
+  const [forgot, setForgot] = useState(false);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resendIn, setResendIn] = useState(0);
-  const canSubmit = name.trim().length > 1 && /^[0-9]{8}$/.test(phone.trim());
   // نتيجة الكود الناجح (ولي الأمر + الجلسة) نخزّنها هنا لين تنتهي خطوة
   // الرقم السري (اختيارية) — عشان onDone يُنادى مرة وحدة بالنهاية.
   const [verified, setVerified] = useState(null);
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
+
+  const phoneOk = /^[0-9]{8}$/.test(phone.trim());
+  const canLogin = phoneOk && password.trim().length >= 4;
+  const canSignup = phoneOk && name.trim().length > 1 && password.trim().length >= 4 && password === password2;
 
   // عدّاد تنازلي قبل ما نسمح بإعادة الإرسال — Twilio يحدّها بـ٥ مرات كل ١٠ دقائق،
   // فنمنع المستخدمة من حرق محاولاتها بالضغط المتكرر.
@@ -1315,6 +1341,7 @@ function Onboarding({ onDone }) {
   async function sendCode(isResend = false, bypassPassword = false) {
     setBusy(true);
     setError("");
+    if (bypassPassword) setForgot(true);
     try {
       const data = await post("/api/auth/request-otp", { phone: phone.trim(), resend: isResend === true, bypassPassword });
       if (data.channel === "password") {
@@ -1341,7 +1368,7 @@ function Onboarding({ onDone }) {
         phone: phone.trim(),
         code: code.trim(),
       });
-      if (data.needsPassword) {
+      if (data.needsPassword || forgot) {
         // خطوة اختيارية — الحساب مسجَّل دخول فعلياً، بس نعرض فرصة تحديد
         // رقم سري قبل ما نكمّل، عشان الدخول القادم يصير بلا كود.
         setVerified(data);
@@ -1368,6 +1395,29 @@ function Onboarding({ onDone }) {
     }
   }
 
+  // إنشاء حساب بلا كود: الاسم + الموبايل + رقم سري.
+  async function submitSignup() {
+    if (password.trim().length < 4) { setError("الرقم السري لازم يكون ٤ أحرف/أرقام على الأقل"); return; }
+    if (password !== password2) { setError("الرقمان غير متطابقين"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const data = await post("/api/auth/signup", { name: name.trim(), phone: phone.trim(), password });
+      onDone(data.mother, data.token);
+    } catch (err) {
+      setError(friendly(err));
+      setBusy(false);
+    }
+  }
+
+  function goto(next) {
+    setStep(next);
+    setError("");
+    setPassword("");
+    setPassword2("");
+    setForgot(false);
+  }
+
   async function saveNewPassword() {
     if (password.trim().length < 4) { setError("الرقم السري لازم يكون ٤ أحرف/أرقام على الأقل"); return; }
     if (password !== password2) { setError("الرقمان غير متطابقين"); return; }
@@ -1387,19 +1437,6 @@ function Onboarding({ onDone }) {
     }
   }
 
-  if (step === "password") {
-    return (
-      <PasswordLoginScreen
-        password={password}
-        setPassword={setPassword}
-        busy={busy}
-        error={error}
-        onSubmit={submitPassword}
-        onForgot={() => sendCode(false, true)}
-        onBack={() => { setStep("phone"); setError(""); setPassword(""); }}
-      />
-    );
-  }
 
   if (step === "setPassword") {
     return (
@@ -1411,7 +1448,8 @@ function Onboarding({ onDone }) {
         busy={busy}
         error={error}
         onSave={saveNewPassword}
-        onSkip={() => onDone(verified.mother, verified.token)}
+        title={forgot ? "اختاري رقماً سرياً جديداً" : undefined}
+        subtitle={forgot ? "تأكدنا من رقمك بالكود — حدّدي رقمك السري الجديد وبتدخلين فيه من أي جهاز" : undefined}
       />
     );
   }
@@ -1427,51 +1465,160 @@ function Onboarding({ onDone }) {
         resendIn={resendIn}
         onSubmit={submitCode}
         onResend={() => sendCode(true)}
-        onBack={() => { setStep("phone"); setError(""); }}
+        onBack={() => goto("login")}
       />
     );
   }
 
   return (
-    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 40 }}>
-        <div style={{ textAlign: "center", marginBottom: 20 }}>
-          <img src="/logo.png" alt="دفتري" style={{ width: 132, height: 132, borderRadius: 30, margin: "0 auto 14px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
-          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
-          <p style={{ color: "#6B7280", fontSize: 13, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
-          {/* سطر ترويجي للتجربة المجانية (قرار ١٦ سبتمبر) — يوضّح من أول شاشة
-              إن التسجيل ما يطلب دفعاً فوراً، بدون وعد بمدة زمنية محددة. */}
-          <p style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: "10px 0 0", background: "#FFF7E6", color: "#8C6027", fontWeight: 800, fontSize: 12.5, padding: "7px 14px", borderRadius: 999 }}>
-            🎁 جرّبي مجاناً: طالب واحد + جدول حصص + خطة أسبوعية، بلا اشتراك
-          </p>
-        </div>
-        <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>ولي الأمر</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسمك الكامل" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 12 }} />
-          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>رقم الموبايل</label>
-          <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-            <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
-            {/* لوحة أرقام بدل لوحة الحروف — والتنظيف يقبل اللصق بمسافات أو
-                شرطات (65 068 000) بدل ما يرفضه التحقق بلا ما تعرف السبب. */}
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="XXXXXXXX"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel"
-              maxLength={8}
-              style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, direction: "ltr" }}
-            />
+    <AuthShell>
+      {step === "signup" ? (
+        <>
+          <div style={{ textAlign: "center", marginBottom: 18 }}>
+            <img src="/logo.png" alt="دفتري" style={{ width: 96, height: 96, borderRadius: 24, margin: "0 auto 12px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
+            <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 22, fontWeight: 800 }}>إنشاء حساب</h1>
+            <p style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: "10px 0 0", background: "#FFF7E6", color: "#8C6027", fontWeight: 800, fontSize: 12.5, padding: "7px 14px", borderRadius: 999 }}>
+              🎁 جرّبي مجاناً: طالب واحد + جدول حصص + خطة أسبوعية، بلا اشتراك
+            </p>
           </div>
-          <button disabled={!canSubmit || busy} onClick={sendCode} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit && !busy ? 1 : 0.4 }}>
-            {busy ? "جاري الإرسال..." : "متابعة"}
+
+          <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <label style={AUTH_LABEL}>الاسم</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسمك الكامل" style={{ ...AUTH_FIELD, marginBottom: 12 }} />
+
+            <label style={AUTH_LABEL}>رقم الموبايل</label>
+            <PhoneField phone={phone} setPhone={setPhone} />
+
+            <label style={AUTH_LABEL}>الرقم السري</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="٤ أحرف/أرقام على الأقل"
+              autoComplete="new-password" style={{ ...AUTH_FIELD, marginBottom: 10, direction: "ltr", textAlign: "center" }} />
+            <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="أعيدي كتابته"
+              autoComplete="new-password" style={{ ...AUTH_FIELD, marginBottom: 14, direction: "ltr", textAlign: "center" }} />
+
+            <button disabled={!canSignup || busy} onClick={submitSignup}
+              style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSignup && !busy ? 1 : 0.4 }}>
+              {busy ? "جاري الإنشاء..." : "إنشاء الحساب"}
+            </button>
+            {error && <p style={AUTH_ERROR}>{error}</p>}
+          </div>
+
+          <button onClick={() => goto("login")} style={AUTH_SWITCH}>
+            عندك حساب؟ <span style={{ color: "#5C4B8C", fontWeight: 800 }}>سجّلي دخول</span>
           </button>
-          {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 }}>{error}</p>}
-          <p style={{ color: "#9CA3AF", fontSize: 11.5, margin: "10px 0 0", lineHeight: 1.7, textAlign: "center" }}>
-            بنرسل لك كود تحقق على واتساب للتأكد أن الرقم رقمك
-          </p>
-        </div>
+        </>
+      ) : (
+        <>
+          <div style={{ textAlign: "center", marginBottom: 18 }}>
+            <img src="/logo.png" alt="دفتري" style={{ width: 120, height: 120, borderRadius: 28, margin: "0 auto 12px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
+            <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
+            <p style={{ color: "#6B7280", fontSize: 13, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
+          </div>
+
+          <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <label style={AUTH_LABEL}>رقم الموبايل</label>
+            <PhoneField phone={phone} setPhone={setPhone} />
+
+            <label style={AUTH_LABEL}>الرقم السري</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رقمك السري"
+              autoComplete="current-password" style={{ ...AUTH_FIELD, marginBottom: 14, direction: "ltr", textAlign: "center" }} />
+
+            <button disabled={!canLogin || busy} onClick={submitPassword}
+              style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canLogin && !busy ? 1 : 0.4 }}>
+              {busy ? "جاري الدخول..." : "تسجيل الدخول"}
+            </button>
+            {error && <p style={AUTH_ERROR}>{error}</p>}
+
+            {/* المكان الوحيد اللي بقي فيه كود تحقق: بدونه يقدر أي شخص يعيد
+                تعيين رقم سري لأي رقم ويدخل حساب غيره. */}
+            <button disabled={busy || !/^[0-9]{8}$/.test(phone.trim())} onClick={() => sendCode(false, true)}
+              style={{ width: "100%", padding: 10, background: "none", color: "#6B7280", fontWeight: 700, fontSize: 12.5, minHeight: 40, marginTop: 4, opacity: /^[0-9]{8}$/.test(phone.trim()) ? 1 : 0.45 }}>
+              نسيت الرقم السري
+            </button>
+          </div>
+
+          <button onClick={() => goto("signup")} style={AUTH_SWITCH}>
+            ما عندك حساب؟ <span style={{ color: "#5C4B8C", fontWeight: 800 }}>أنشئي حساب</span>
+          </button>
+        </>
+      )}
+    </AuthShell>
+  );
+}
+
+const AUTH_LABEL = { fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 };
+const AUTH_FIELD = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16 };
+const AUTH_ERROR = { color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 };
+const AUTH_SWITCH = { width: "100%", padding: 12, marginTop: 12, background: "none", color: "#6B7280", fontWeight: 700, fontSize: 13.5, minHeight: 44 };
+
+// لوحة أرقام بدل لوحة الحروف — والتنظيف يقبل اللصق بمسافات أو شرطات
+// (65 068 000) بدل ما يرفضه التحقق بلا ما تعرف السبب.
+function PhoneField({ phone, setPhone }) {
+  return (
+    <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+      <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
+      <input
+        value={phone}
+        onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
+        placeholder="XXXXXXXX"
+        type="tel"
+        inputMode="numeric"
+        autoComplete="tel"
+        maxLength={8}
+        style={{ ...AUTH_FIELD, flex: 1, direction: "ltr" }}
+      />
+    </div>
+  );
+}
+
+// شاشة إلزامية للمشتركات القديمات بعد إلغاء الكود (قرار ١٩ سبتمبر):
+// حساباتهن انفتحت أيام كان الرقم السري اختيارياً، و٨٠٪ تخطّوه. الحين
+// الدخول صار بالموبايل + الرقم السري بس، فبدون رقم سري ما يقدرن يدخلن
+// من جهاز جديد. نطلبه منهن وهن داخلات أصلاً — الجلسة السارية تثبت
+// الهوية، فبلا كود ولا رسالة.
+function ExistingUserPasswordSetup({ name, onDone }) {
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    if (password.trim().length < 4) { setError("الرقم السري لازم يكون ٤ أحرف/أرقام على الأقل"); return; }
+    if (password !== password2) { setError("الرقمان غير متطابقين"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "تعذّر الحفظ");
+      onDone();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <AuthShell>
+      <SetPasswordScreenBody
+        title={`أهلاً ${name || ""}، أكملي حسابك`}
+        subtitle="صار الدخول بالموبايل + رقم سري بدل الكود. حدّدي رقمك السري مرة وحدة الحين — بياناتك وعيالك كلهم باقين كما هم."
+        password={password} setPassword={setPassword}
+        password2={password2} setPassword2={setPassword2}
+        busy={busy} error={error} onSave={save}
+      />
+    </AuthShell>
+  );
+}
+
+// الإطار المشترك لشاشات الدخول — نفس الخلفية والتذييل بكل الشاشات.
+function AuthShell({ children }) {
+  return (
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 24 }}>
+        {children}
       </div>
       <div style={{ textAlign: "center", flexShrink: 0, width: "100%", maxWidth: 380, margin: "0 auto" }}>
         <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
@@ -1572,16 +1719,29 @@ function PasswordLoginScreen({ password, setPassword, busy, error, onSubmit, onF
   );
 }
 
-// خطوة اختيارية بعد أول كود ناجح — تحديد رقم سري يغني عن الكود بالمرات
-// القادمة. قابلة للتخطي: الحساب دخل أصلاً بنجاح الكود.
-function SetPasswordScreen({ password, setPassword, password2, setPassword2, busy, error, onSave, onSkip }) {
+// تحديد الرقم السري — **إلزامي** (قرار صاحبة التطبيق ١٩ سبتمبر). كان
+// اختيارياً بزر «تخطي الآن»، والنتيجة إن ٨٠٪ من الحسابات (١٢٦ من ١٥٨)
+// تخطّوه فصار يوصلهم كود بكل دخول، وهذا هو مصدر فاتورة Twilio كلها.
+// بالإلزام يصير الكود مرة واحدة لكل رقم مدى الحياة بدل مرة كل دخول.
+function SetPasswordScreen(props) {
   return (
-    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 40 }}>
+    <AuthShell>
+      <SetPasswordScreenBody {...props} />
+    </AuthShell>
+  );
+}
+
+// جسم شاشة الرقم السري بلا إطار — تستخدمه شاشتان: بعد «نسيت الرقم السري»
+// وشاشة المشتركات القديمات.
+function SetPasswordScreenBody({ password, setPassword, password2, setPassword2, busy, error, onSave, title, subtitle }) {
+  return (
+    <>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <span style={{ fontSize: 40 }}>🔒</span>
-          <h1 style={{ color: "#5C4B8C", margin: "8px 0 0", fontSize: 20, fontWeight: 800 }}>حدّدي رقماً سرياً</h1>
-          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>عشان دخولك القادم — حتى من جهاز جديد — يصير بلا كود</p>
+          <h1 style={{ color: "#5C4B8C", margin: "8px 0 0", fontSize: 20, fontWeight: 800 }}>{title || "حدّدي رقماً سرياً"}</h1>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>
+            {subtitle || "عشان دخولك القادم — حتى من جهاز جديد — يصير بلا كود"}
+          </p>
         </div>
 
         <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
@@ -1601,16 +1761,12 @@ function SetPasswordScreen({ password, setPassword, password2, setPassword2, bus
             autoComplete="new-password"
             style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 14, direction: "ltr", textAlign: "center" }}
           />
-          <button disabled={busy} onClick={onSave} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: busy ? 0.6 : 1, marginBottom: 8 }}>
+          <button disabled={busy} onClick={onSave} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: busy ? 0.6 : 1 }}>
             {busy ? "جاري الحفظ..." : "حفظ"}
-          </button>
-          <button disabled={busy} onClick={onSkip} style={{ width: "100%", padding: 10, background: "none", color: "#6B7280", fontWeight: 700, fontSize: 13, minHeight: 40 }}>
-            تخطي الآن
           </button>
           {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "6px 0 0", lineHeight: 1.7, textAlign: "center" }}>{error}</p>}
         </div>
-      </div>
-    </div>
+    </>
   );
 }
 

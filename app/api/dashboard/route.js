@@ -27,7 +27,7 @@ export async function GET(req) {
     return sb.from("children").select("*").eq("family_id", familyId).order("created_at");
   };
   const [{ data: profile }, { data: rated }, { data: children, error: cErr }] = await Promise.all([
-    sb.from("mothers").select("created_at").eq("id", motherId).maybeSingle(),
+    sb.from("mothers").select("created_at, password_hash").eq("id", motherId).maybeSingle(),
     sb.from("app_feedback").select("mother_id").eq("mother_id", motherId).maybeSingle(),
     // أبناء العائلة لا أبناء هذا الحساب وحده — فالأب يشوف نفس الأبناء.
     // (كل حساب بلا شريك = عائلة من شخص واحد، فالنتيجة ما تتغير له.)
@@ -78,5 +78,10 @@ export async function GET(req) {
     doneTasks = dn || [];
   }
 
-  return NextResponse.json({ children, tasks, undatedTasks, upcomingTasks, doneTasks, requirements, classSchedule, feedbackDue, weekRange: { sunday, thursday, saturday } });
+  // حساب ما حدّد رقماً سرياً لسه: التطبيق يطلبه منه داخل التطبيق بجلسته
+  // الحالية — بلا كود ولا تكلفة Twilio. نرجّع القيمة كنعم/لا فقط، البصمة
+  // نفسها ما تطلع للعميل أبداً.
+  const needsPassword = !profile?.password_hash;
+
+  return NextResponse.json({ children, tasks, undatedTasks, upcomingTasks, doneTasks, requirements, classSchedule, feedbackDue, needsPassword, weekRange: { sunday, thursday, saturday } });
 }
