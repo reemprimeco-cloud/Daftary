@@ -21,7 +21,7 @@ export async function POST(req) {
 
   // ————— التحقق من الكود —————
   if (isReviewPhone(to)) {
-    if (!isReviewCode(code)) {
+    if (!isReviewCode(to, code)) {
       return NextResponse.json({ error: "الكود غير صحيح" }, { status: 401 });
     }
   } else {
