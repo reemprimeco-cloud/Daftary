@@ -4078,6 +4078,9 @@ function TeacherView({ children, motherId }) {
   // بعد التصوير أو الاختيار تمر الصورة بشاشة قص: الأم تحدد السؤال فقط
   // بدل الصفحة كلها. الماسح يقص الصفحة أصلاً فما يحتاجها.
   const [cropSrc, setCropSrc] = useState(null);
+  // الصورة المعروضة بالحجم الكامل — تنفتح بالضغط على المصغّرة، بالمرفق
+  // قبل الإرسال وبالرسالة بعده، عشان تشوف الأم بالضبط وش راح للمعلم.
+  const [viewImage, setViewImage] = useState(null);
 
   async function handlePickImage(e) {
     const file = e.target.files?.[0];
@@ -4116,7 +4119,9 @@ function TeacherView({ children, motherId }) {
     const attachedImage = image;
     setSending(true);
     setErrorMsg("");
-    setMessages((prev) => [...prev, { role: "user", content: questionText || "📷 صورة مرفقة", had_image: !!attachedImage, id: `local-${Date.now()}` }]);
+    // نحتفظ بالصورة نفسها بالرسالة (مو بس had_image) عشان تبقى معروضة
+    // بالمحادثة — الخادم ما يخزّن الصورة، فهي تبقى لين ما تقفل الشاشة.
+    setMessages((prev) => [...prev, { role: "user", content: questionText || "📷 صورة مرفقة", had_image: !!attachedImage, image: attachedImage || null, id: `local-${Date.now()}` }]);
     setInput("");
     setImage(null);
     try {
@@ -4320,8 +4325,18 @@ function TeacherView({ children, motherId }) {
                 background: m.role === "user" ? "#B7A6E8" : "#F3F2FA",
                 color: m.role === "user" ? "white" : "#374151",
               }}>
+                {m.image ? (
+                  // الصورة فوق النص: أول شي تشوفه الأم هو وش أرسلت
+                  <img
+                    src={m.image}
+                    alt="الصورة المرسلة"
+                    onClick={() => setViewImage(m.image)}
+                    style={{ display: "block", width: "100%", maxHeight: 190, objectFit: "cover", borderRadius: 10, marginBottom: m.content ? 8 : 0, cursor: "zoom-in" }}
+                  />
+                ) : null}
                 {renderWithNumbers(m.content)}
-                {m.had_image && (
+                {m.had_image && !m.image && (
+                  // محادثة قديمة انحمّلت من الخادم — الصورة ما تُخزَّن، فنكتفي بالإشارة
                   <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
                     <TileIcon name="camera" size={14} />
                     مع صورة
@@ -4353,6 +4368,22 @@ function TeacherView({ children, motherId }) {
 
       {cropSrc && <CropModal src={cropSrc} onDone={(u) => { setImage(u); setCropSrc(null); }} onCancel={() => setCropSrc(null)} />}
 
+      {viewImage && (
+        <div
+          onClick={() => setViewImage(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(0,0,0,.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 44px) 12px calc(env(safe-area-inset-bottom) + 12px)" }}
+        >
+          <img src={viewImage} alt="الصورة بالحجم الكامل" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8 }} />
+          <button
+            aria-label="إغلاق الصورة"
+            onClick={() => setViewImage(null)}
+            style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 10px)", left: 14, background: "rgba(255,255,255,.18)", color: "white", borderRadius: 999, width: 34, height: 34, fontSize: 18, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <div style={{ flexShrink: 0, borderTop: "1px solid #F0EEE8", background: "white", padding: "8px 16px calc(env(safe-area-inset-bottom) + 10px)", display: "flex", flexDirection: "column", gap: 8 }}>
         {/* أكثر سبب لرد «أرسلي صورة أوضح»: ظل اليد على الصفحة. نقولها قبل التصوير. */}
         <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.6 }}>
@@ -4372,9 +4403,24 @@ function TeacherView({ children, motherId }) {
           </div>
         )}
         {image && (
-          <div style={{ position: "relative", width: 64, height: 64, borderRadius: 10, overflow: "hidden" }}>
-            <img src={image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            <button onClick={() => setImage(null)} style={{ position: "absolute", top: 2, left: 2, background: "rgba(0,0,0,.6)", color: "white", borderRadius: "50%", width: 18, height: 18, fontSize: 12 }}>×</button>
+          // المرفق قبل الإرسال: مصغّرة أكبر + «اضغطي للتكبير» — الأم لازم
+          // تتأكد إن السؤال بيّن بالصورة قبل ما ينخصم سؤال من رصيدها.
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ position: "relative", width: 88, height: 88, borderRadius: 12, overflow: "hidden", flexShrink: 0, border: "1px solid #E5E7EB" }}>
+              <img
+                src={image}
+                alt="الصورة المرفقة"
+                onClick={() => setViewImage(image)}
+                style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
+              />
+              <button aria-label="حذف الصورة" onClick={() => setImage(null)} style={{ position: "absolute", top: 3, left: 3, background: "rgba(0,0,0,.6)", color: "white", borderRadius: "50%", width: 20, height: 20, fontSize: 13, lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 12.5, color: "#374151", fontWeight: 700 }}>الصورة اللي بتنرسل</p>
+              <button onClick={() => setViewImage(image)} style={{ marginTop: 4, background: "#F1EFFA", color: "#5C4B8C", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 700 }}>
+                اضغطي للتكبير
+              </button>
+            </div>
           </div>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
