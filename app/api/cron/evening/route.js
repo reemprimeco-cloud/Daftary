@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { kuwaitTodayStr, kuwaitNow } from "@/lib/kuwaitDate";
 import { mapPool, CONCURRENCY, configureWebPush, deliverToMother } from "@/lib/pushDelivery";
+import { purgeExpiredSources } from "@/lib/uploadSources";
 
 // التذكير المسائي اليومي: إشعار واحد بسيط لكل ولي أمر بين ٢ و٥ العصر
 // (بتوقيت الكويت) يذكّره بمتابعة دروس وواجبات أبنائه — طلب صاحبة التطبيق
@@ -84,5 +85,15 @@ export async function GET(req) {
   });
 
   const sent = results.reduce((a, b) => a + b, 0);
-  return NextResponse.json({ ok: true, families: byFamily.size, sent });
+
+  // مرور تنظيف ثانٍ بنفس اليوم: صور المعلم الذكي عمرها ٢٤ ساعة، وكرون
+  // الصباح وحده كان يخلي المنتهية تقعد بالتخزين لين بكرة.
+  let purgedSources = 0;
+  try {
+    purgedSources = await purgeExpiredSources(sb);
+  } catch (e) {
+    console.warn("purgeExpiredSources failed:", e.message);
+  }
+
+  return NextResponse.json({ ok: true, families: byFamily.size, sent, purgedSources });
 }

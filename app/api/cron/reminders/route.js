@@ -314,8 +314,10 @@ export async function GET(req) {
   sent += await sendRecitationReminders(sb, today, tomorrow, parents);
   sent += await sendMemorizationReminders(sb, today, parents);
 
-  // تنظيف صور المصدر المنتهية (أسبوع من الرفع) — معلّق على كرون يومي موجود
-  // بدل كرون جديد. فشله ما يخص التذكيرات، فلا يوقفها.
+  // تنظيف صور المصدر المنتهية (أسبوع لصور الخطة، ٢٤ ساعة لصور المعلم
+  // الذكي) — معلّق على كرون يومي موجود بدل كرون جديد، ويشتغل بكرون المساء
+  // كذلك عشان ما تقعد الصورة المنتهية بالتخزين لين بكرة. فشله ما يخص
+  // التذكيرات، فلا يوقفها.
   let purgedSources = 0;
   try {
     purgedSources = await purgeExpiredSources(sb);

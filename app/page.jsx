@@ -4325,21 +4325,23 @@ function TeacherView({ children, motherId }) {
                 background: m.role === "user" ? "#B7A6E8" : "#F3F2FA",
                 color: m.role === "user" ? "white" : "#374151",
               }}>
-                {m.image ? (
-                  // الصورة فوق النص: أول شي تشوفه الأم هو وش أرسلت
+                {/* الصورة فوق النص: أول شي تشوفه الأم هو وش أرسلت.
+                    `image` للّي انرسلت توّها بهالجلسة، و`image_url` رابط
+                    موقّع يجي مع المحادثة من الخادم (تُحفظ ٢٤ ساعة). */}
+                {(m.image || m.image_url) ? (
                   <img
-                    src={m.image}
+                    src={m.image || m.image_url}
                     alt="الصورة المرسلة"
-                    onClick={() => setViewImage(m.image)}
+                    onClick={() => setViewImage(m.image || m.image_url)}
                     style={{ display: "block", width: "100%", maxHeight: 190, objectFit: "cover", borderRadius: 10, marginBottom: m.content ? 8 : 0, cursor: "zoom-in" }}
                   />
                 ) : null}
                 {renderWithNumbers(m.content)}
-                {m.had_image && !m.image && (
-                  // محادثة قديمة انحمّلت من الخادم — الصورة ما تُخزَّن، فنكتفي بالإشارة
+                {m.had_image && !m.image && !m.image_url && (
+                  // أقدم من ٢٤ ساعة: الصورة انحذفت فنكتفي بالإشارة
                   <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
                     <TileIcon name="camera" size={14} />
-                    مع صورة
+                    مع صورة (انحذفت بعد ٢٤ ساعة)
                   </div>
                 )}
                 {native && m.role === "assistant" && (

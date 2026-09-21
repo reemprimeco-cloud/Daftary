@@ -22,6 +22,12 @@ export async function GET(req, { params }) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
+  // الكرون يحذف الملفات مرة باليوم، فالصف المنتهي قد يعيش ساعات بعد
+  // موعده. المدة اللي نوعد فيها لازم تكون دقيقة، فنرفض من هنا بلا انتظار.
+  if (source.expires_at && new Date(source.expires_at) <= new Date()) {
+    return NextResponse.json({ error: "انتهت مدة حفظ هذه الصورة." }, { status: 404 });
+  }
+
   const urls = await signedSourceUrls(sb, source.paths);
   if (!urls.length) {
     return NextResponse.json({ error: "الصورة انحذفت — الصور تُحفظ أسبوعاً واحداً بعد الرفع." }, { status: 404 });

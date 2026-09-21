@@ -4,6 +4,7 @@ import { familyIdOf } from "@/lib/family";
 import { logAiUsage } from "@/lib/aiUsage";
 import { consumeQuestion, refundQuestion } from "@/lib/entitlements";
 import { detectRotation } from "@/lib/visionExtract";
+import { storeSourceImages, AI_IMAGE_TTL_HOURS } from "@/lib/uploadSources";
 import {
   moeGradeInfo,
   kuwaitTerm,
@@ -267,8 +268,19 @@ ${questionText}
     refunded = true;
   }
 
+  // الصورة تبقى ٢٤ ساعة بالمحادثة عشان تعرف الأم وش أرسلت لما ترجع
+  // للشاشة. نفس دلو صور الخطة الخاص وكرون تنظيفه، بمدة أقصر.
+  // الفشل ما يوقف شي: الجواب طلع والسؤال انخصم، وخسارة العرض أهون من
+  // خسارة الإجابة نفسها.
+  let sourceId = null;
+  if (image) {
+    sourceId = await storeSourceImages(sb, {
+      motherId, childId: child.id, images: [image], ttlHours: AI_IMAGE_TTL_HOURS,
+    });
+  }
+
   await sb.from("ai_messages").insert([
-    { child_id: child.id, role: "user", content: questionText, had_image: !!image, subject: matchedSubject?.name || null },
+    { child_id: child.id, role: "user", content: questionText, had_image: !!image, subject: matchedSubject?.name || null, source_id: sourceId },
     { child_id: child.id, role: "assistant", content: answer, had_image: false, subject: matchedSubject?.name || null },
   ]);
 
