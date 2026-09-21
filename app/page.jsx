@@ -4083,8 +4083,12 @@ function TeacherView({ children, motherId }) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    // صفحة الكتاب فيها خط صغير — نفس دقة رفع الجداول عشان تنقرأ.
-    const url = await resizeToDataUrl(file, 1568, false, 0.9);
+    // نمرّر الصورة بدقتها الأصلية لشاشة القص، والتصغير لـ١٥٦٨ يصير على
+    // **المقصوص** لا على الصفحة كاملة. عكسه كان يرمي الدقة قبل القص:
+    // صفحة ٤٠٣٢ تصغّر لـ١٥٦٨، ويقص منها السؤال (٣٠٪) فيطلع ٤٧٠ بكسل —
+    // وخط عربي بهالمقاس ما ينقرأ، فتضطر الأم تكتب السؤال بيدها.
+    // السقف ٤٠٩٦ يمرّر صور الجوالات كما هي ويحمي من صورة ضخمة شاذة.
+    const url = await resizeToDataUrl(file, 4096, false, 0.92);
     setCropSrc(url);
   }
 
@@ -4097,11 +4101,13 @@ function TeacherView({ children, motherId }) {
 
   async function pickImageNative(mode = "camera") {
     setPickMenu(false);
-    const { url } = mode === "scan" ? await nativeScanDocument() : await nativePickImage(mode);
+    // القص يحتاج الدقة الأصلية (راجع handlePickImage) — وهذا يشمل الماسح
+    // كذلك: هو يعدّل ميلان **الصفحة** ويقصها من الخلفية، لكن السؤال يبقى
+    // جزءاً صغيراً منها، فتحديده بالإطار هو اللي يعطيه الدقة الكاملة.
+    const { url } = mode === "scan" ? await nativeScanDocument(4096) : await nativePickImage(mode, 4096);
     if (!url) return;
     hapticLight();
-    if (mode === "scan") setImage(url);
-    else setCropSrc(url);
+    setCropSrc(url);
   }
 
   async function send() {
@@ -4350,7 +4356,7 @@ function TeacherView({ children, motherId }) {
       <div style={{ flexShrink: 0, borderTop: "1px solid #F0EEE8", background: "white", padding: "8px 16px calc(env(safe-area-inset-bottom) + 10px)", display: "flex", flexDirection: "column", gap: 8 }}>
         {/* أكثر سبب لرد «أرسلي صورة أوضح»: ظل اليد على الصفحة. نقولها قبل التصوير. */}
         <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.6 }}>
-          📸 صوّري الصفحة بلا ظل، أو اختاري صورة عالية الجودة من الألبوم — وبعدها حدّدي السؤال بالقص.
+          📸 صوّري الصفحة بلا ظل — وبعدها حدّدي السؤال بالإطار عشان يطلع بأوضح صورة، أو أرسلي الصفحة كاملة.
         </p>
         {/* الصورة من ألبوم الجوال أعلى جودة من كاميرا داخل التطبيق، فنعرض
             الخيارين (والماسح لو متوفر) بقائمة صغيرة بدل الكاميرا مباشرة. */}

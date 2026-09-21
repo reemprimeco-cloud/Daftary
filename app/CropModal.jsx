@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { resizeDataUrl } from "@/lib/native";
 import "cropperjs/dist/cropper.css";
+
+// أقصى ضلع تستفيد منه واجهة التحليل — أكبر منه يكبّر الطلب بلا أي مكسب
+// بالوضوح. الصورة الداخلة لهالشاشة تجي بدقتها الأصلية عشان القص يقص من
+// بكسلات حقيقية، والتصغير لهذا السقف يصير على الناتج لا على المصدر.
+const MAX_SIDE = 1568;
 
 // شاشة قص بعد التصوير: الأم تحدد السؤال فقط بدل الصفحة كلها، فيقرأ المعلم
 // المطلوب بدقة أعلى ولا يتشتت بباقي الصفحة. تشتغل بالويب وداخل التطبيق
@@ -45,9 +51,16 @@ export default function CropModal({ src, onDone, onCancel }) {
   function useSelection() {
     const c = cropperRef.current;
     if (!c) return;
-    // نفس سقف دقة الرفع (١٥٦٨) عشان الجزء المقصوص يوصل بأعلى وضوح ممكن.
-    const canvas = c.getCroppedCanvas({ maxWidth: 1568, maxHeight: 1568, imageSmoothingQuality: "high" });
+    const canvas = c.getCroppedCanvas({ maxWidth: MAX_SIDE, maxHeight: MAX_SIDE, imageSmoothingQuality: "high" });
     onDone(canvas.toDataURL("image/jpeg", 0.9));
+  }
+
+  // «الصفحة كاملة»: المصدر بدقته الأصلية (ممكن ٤٠٠٠ بكسل وعدة ميجات)،
+  // فما ينرسل كما هو — نصغّره للسقف أولاً.
+  const [wholeBusy, setWholeBusy] = useState(false);
+  async function useWholePage() {
+    setWholeBusy(true);
+    onDone(await resizeDataUrl(src, MAX_SIDE));
   }
 
   if (!mounted) return null;
@@ -70,8 +83,8 @@ export default function CropModal({ src, onDone, onCancel }) {
         </div>
       </div>
       <div style={{ flexShrink: 0, display: "flex", gap: 8, padding: "10px 16px calc(env(safe-area-inset-bottom) + 12px)" }}>
-        <button onClick={() => onDone(src)} style={{ flex: 1, background: "rgba(255,255,255,.12)", color: "white", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 700 }}>
-          الصفحة كاملة
+        <button onClick={useWholePage} disabled={wholeBusy} style={{ flex: 1, background: "rgba(255,255,255,.12)", color: "white", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 700, opacity: wholeBusy ? 0.5 : 1 }}>
+          {wholeBusy ? "..." : "الصفحة كاملة"}
         </button>
         <button onClick={useSelection} disabled={!ready} style={{ flex: 2, background: "#B7A6E8", color: "white", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 800, opacity: ready ? 1 : 0.5 }}>
           استخدمي المحدد ✓
