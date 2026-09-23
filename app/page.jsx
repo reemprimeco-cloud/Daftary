@@ -698,10 +698,10 @@ export default function Home() {
     setClassSchedule(data.classSchedule || []);
     setFeedbackDue(!!data.feedbackDue);
     setNeedsPassword(!!data.needsPassword);
-    // تذكيرات على الجهاز نفسه — تشتغل تلقائياً وحتى بدون إنترنت داخل تطبيق آبل
-    syncTaskReminders([...(data.tasks || []), ...(data.upcomingTasks || [])]);
-    // وتسجيل الجهاز لإشعارات السيرفر — تكمّل المحلية: توصل والتطبيق مقفل،
-    // وتخبر ولي الأمر بواجب أضافه شخص ثاني بلا ما يفتح التطبيق.
+    // التذكيرات المحلية انلغت (قرار ٢٣ سبتمبر) — الخادم صار يغطيها كلها
+    // ويوصّلها لوليَّي الأمر. النداء باقٍ ليمسح المجدول سابقاً من الأجهزة.
+    syncTaskReminders();
+    // تسجيل الجهاز لإشعارات السيرفر — هي مصدر كل التذكيرات الحين.
     registerPushDevice();
   }
 
@@ -2478,8 +2478,8 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const changed = subject.trim() !== (task.subject || "") || type !== task.type || (details.trim() || "") !== (task.details || "") || dateValue !== (task.due_date || "");
-  // داخل التطبيق التذكيرات تُجدول تلقائياً على الجهاز (syncTaskReminders)، وملف
-  // الـ .ics ما ينفتح أصلاً داخل WebView — فنخفي الزر ونخليه بنسخة الويب بس.
+  // داخل التطبيق التذكيرات تجي من الخادم تلقائياً، وملف الـ .ics ما ينفتح
+  // أصلاً داخل WebView — فنخفي الزر ونخليه بنسخة الويب بس.
   const [native, setNative] = useState(false);
   useEffect(() => setNative(isNativeApp()), []);
 

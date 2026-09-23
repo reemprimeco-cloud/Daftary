@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { kuwaitTodayStr, kuwaitNow } from "@/lib/kuwaitDate";
 import { mapPool, CONCURRENCY, configureWebPush, deliverToMother } from "@/lib/pushDelivery";
 import { purgeExpiredSources } from "@/lib/uploadSources";
+import { loadFamilyParents, sendExamRounds, EXAM_ROUNDS } from "@/lib/reminderBatch";
 
 // التذكير المسائي اليومي: إشعار واحد بسيط لكل ولي أمر بين ٢ و٥ العصر
 // (بتوقيت الكويت) يذكّره بمتابعة دروس وواجبات أبنائه — طلب صاحبة التطبيق
@@ -84,7 +85,20 @@ export async function GET(req) {
     return count;
   });
 
-  const sent = results.reduce((a, b) => a + b, 0);
+  let sent = results.reduce((a, b) => a + b, 0);
+
+  // الاختبارات صار لها تذكير مسائي كذلك (قرار صاحبة التطبيق ٢٣ سبتمبر):
+  // قبل الاختبار بيومين وقبله بيوم، مرة صبحاً بكرون التذكيرات ومرة هنا.
+  // بمفاتيح `kind` مستقلة عن تذكيري الصباح، وإلا منع التكرار بـreminder_log
+  // خلّى أحدهما يبلع الثاني.
+  let examsPm = 0;
+  try {
+    examsPm = await sendExamRounds(sb, await loadFamilyParents(sb), EXAM_ROUNDS.evening, kuwaitNow());
+    sent += examsPm;
+  } catch (e) {
+    // فشل تذكير الاختبار ما يمنع رسالة المتابعة اللي انرسلت فوق
+    console.warn("evening exam reminders failed:", e.message);
+  }
 
   // مرور تنظيف ثانٍ بنفس اليوم: صور المعلم الذكي عمرها ٢٤ ساعة، وكرون
   // الصباح وحده كان يخلي المنتهية تقعد بالتخزين لين بكرة.
@@ -95,5 +109,5 @@ export async function GET(req) {
     console.warn("purgeExpiredSources failed:", e.message);
   }
 
-  return NextResponse.json({ ok: true, families: byFamily.size, sent, purgedSources });
+  return NextResponse.json({ ok: true, families: byFamily.size, sent, examsPm, purgedSources });
 }
