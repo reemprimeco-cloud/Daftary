@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { purgeAttachmentFiles } from "@/lib/attachments";
 
 // حذف الحساب نهائياً مع كل البيانات المرتبطة به.
 // مطلوب من آبل لأي تطبيق يسمح بإنشاء حساب (App Store Review Guideline 5.1.1(v)).
@@ -64,7 +65,9 @@ export async function POST(req) {
   }
 
   if (childIds.length) {
-    for (const table of ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages", "teacher_notes"]) {
+    // ملفات المرفقات بالتخزين — قبل حذف صفوفها، وإلا ضاع أثرها وبقيت.
+    await purgeAttachmentFiles(sb, childIds);
+    for (const table of ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages", "teacher_notes", "plan_attachments"]) {
       const { error } = await sb.from(table).delete().in("child_id", childIds);
       if (error) return NextResponse.json({ error: `فشل حذف ${table}: ${error.message}` }, { status: 400 });
     }

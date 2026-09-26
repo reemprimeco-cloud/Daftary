@@ -579,6 +579,9 @@ export default function Home() {
   const [view, setView] = useState("dashboard");
   // التبديل داخل تبويب «الطلبات والجداول» بين قسم الجداول وقسم الطلبات
   const [scheduleSubTab, setScheduleSubTab] = useState("schedule");
+  // يتغيّر بعد كل رفعة عشان تعيد بطاقة المرفقات جلب قائمتها — الروابط
+  // موقّعة وتنتهي، فالتحديث جلب جديد لا مجرد إعادة رسم.
+  const [attachmentsKey, setAttachmentsKey] = useState(0);
   const [showAddChild, setShowAddChild] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -1085,6 +1088,7 @@ export default function Home() {
                 {children.map((c) => (
                   <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} onCellClick={(day, period, entry) => setEditingCell({ child: c, day, period, entry })} />
                 ))}
+                <AttachmentsCard children={children} refreshKey={attachmentsKey} />
                   </>
                 )}
               </>
@@ -1159,7 +1163,7 @@ export default function Home() {
           motherId={mother.id}
           hint="ارفعي الخطط الأسبوعية، جدول الاختبارات ومتطلبات العام الدراسي هنا"
           onClose={() => setShowUpload(false)}
-          onDone={() => loadAll(mother.id)}
+          onDone={() => { loadAll(mother.id); setAttachmentsKey((k) => k + 1); }}
           onReview={(draft) => { setShowUpload(false); setReviewDraft(draft); }}
         />
       )}
@@ -1185,7 +1189,7 @@ export default function Home() {
             </div>
           )}
           onClose={() => setShowUploadSchedule(false)}
-          onDone={() => loadAll(mother.id)}
+          onDone={() => { loadAll(mother.id); setAttachmentsKey((k) => k + 1); }}
         />
       )}
       {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateTask={handleUpdateTask} />}
@@ -1861,6 +1865,144 @@ function ChildSwitcher({ children, selectedId, onSelect }) {
 // الخطة الأسبوعية للطالب/ة كقائمة إنجاز — وهي الواجهة الرئيسية للتطبيق
 // (قرار صاحبة التطبيق ١٥ سبتمبر): كل واجب بسطر مع تفاصيله كما كُتبت بالخطة
 // وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر.
+// عارض صورة بملء الشاشة مع تكبير: قرصة بإصبعين، وضغطتان سريعتان للتبديل
+// بين ملء الشاشة و٢٫٥×، وأزرار − / + لمن ما تنفعه القرصة. التمرير
+// والسحب من الحاوية نفسها (overflow: auto) بدل حساب إزاحة يدوي — أقل
+// كوداً وأثبت سلوكاً على iOS.
+function ImageZoomViewer({ urls, startIndex = 0, onClose }) {
+  const [i, setI] = useState(startIndex);
+  const [zoom, setZoom] = useState(1);
+  const boxRef = useRef(null);
+  const pinch = useRef(null);
+  const lastTap = useRef(0);
+
+  useEffect(() => { setZoom(1); }, [i]);
+
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  function onTouchStart(e) {
+    if (e.touches.length === 2) pinch.current = { d: dist(e.touches), z: zoom };
+  }
+  function onTouchMove(e) {
+    if (e.touches.length === 2 && pinch.current) {
+      e.preventDefault();
+      const next = pinch.current.z * (dist(e.touches) / pinch.current.d);
+      setZoom(Math.min(5, Math.max(1, next)));
+    }
+  }
+  function onTouchEnd(e) {
+    if (e.touches.length < 2) pinch.current = null;
+  }
+  function onImgClick() {
+    const now = Date.now();
+    if (now - lastTap.current < 320) setZoom((z) => (z > 1 ? 1 : 2.5));
+    lastTap.current = now;
+  }
+
+  return (
+    <div dir="rtl" style={{ position: "fixed", inset: 0, zIndex: 130, background: "#0B0B10", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "calc(env(safe-area-inset-top) + 10px) 14px 10px" }}>
+        <button onClick={onClose} aria-label="إغلاق الصورة" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 999, width: 34, height: 34, fontSize: 18, lineHeight: 1 }}>×</button>
+        {urls.length > 1 && (
+          <span style={{ color: "rgba(255,255,255,.75)", fontSize: 12.5, fontWeight: 700 }}>صورة {i + 1} من {urls.length}</span>
+        )}
+        <div style={{ marginInlineStart: "auto", display: "flex", gap: 6 }}>
+          <button onClick={() => setZoom((z) => Math.max(1, z - 0.5))} aria-label="تصغير" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, width: 36, height: 34, fontSize: 18, lineHeight: 1 }}>−</button>
+          <button onClick={() => setZoom((z) => Math.min(5, z + 0.5))} aria-label="تكبير" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, width: 36, height: 34, fontSize: 18, lineHeight: 1 }}>+</button>
+        </div>
+      </div>
+
+      <div
+        ref={boxRef}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{ flex: 1, minHeight: 0, overflow: "auto", display: "grid", placeItems: zoom > 1 ? "start" : "center", touchAction: zoom > 1 ? "pan-x pan-y" : "none" }}
+      >
+        <img
+          src={urls[i]}
+          alt="الجدول المرفق"
+          onClick={onImgClick}
+          style={{ width: `${zoom * 100}%`, maxWidth: "none", display: "block", cursor: zoom > 1 ? "grab" : "zoom-in" }}
+        />
+      </div>
+
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "10px 14px calc(env(safe-area-inset-bottom) + 12px)" }}>
+        {urls.length > 1 && (
+          <>
+            <button onClick={() => setI((n) => (n - 1 + urls.length) % urls.length)} style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>السابقة</button>
+            <button onClick={() => setI((n) => (n + 1) % urls.length)} style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>التالية</button>
+          </>
+        )}
+        {zoom > 1 && (
+          <button onClick={() => setZoom(1)} style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>ملء الشاشة</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// «الصور المرفقة»: الجداول اللي رفعتها الأم بوضع «إرفاق فقط» — تُعرض
+// للرجوع إليها لا أكثر، فما فيها علامة إنجاز ولا تذكير.
+function AttachmentsCard({ children, refreshKey }) {
+  const [items, setItems] = useState(null);
+  const [view, setView] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/attachments")
+      .then((r) => r.json())
+      .then((d) => { if (alive) setItems(d.attachments || []); })
+      .catch(() => { if (alive) setItems([]); });
+    return () => { alive = false; };
+  }, [refreshKey]);
+
+  async function remove(id) {
+    if (!confirm("حذف هذه الصورة المرفقة نهائياً؟")) return;
+    const res = await fetch(`/api/attachments/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    setItems((prev) => (prev || []).filter((a) => a.id !== id));
+  }
+
+  if (!items || items.length === 0) return null;
+  const nameOf = (id) => children.find((c) => c.id === id)?.name || "";
+
+  return (
+    <div style={{ background: "white", borderRadius: 18, border: "1px solid #EEEDE8", overflow: "hidden" }}>
+      <div style={{ padding: "11px 14px", background: "#F6F4FB", display: "flex", alignItems: "center", gap: 8 }}>
+        <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: "#5C4B8C" }}>الصور المرفقة</p>
+        <span style={{ marginInlineStart: "auto", fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>بلا تذكير</span>
+      </div>
+      <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        {items.map((a) => (
+          <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              onClick={() => a.urls.length && setView(a.urls)}
+              style={{ width: 54, height: 54, borderRadius: 10, overflow: "hidden", flexShrink: 0, border: "1px solid #E5E7EB", padding: 0, background: "#F3F4F6" }}
+            >
+              {a.urls[0] && <img src={a.urls[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "#374151" }}>
+                {a.kind === "class_schedule" ? "جدول حصص" : "خطة أسبوعية"}
+                {nameOf(a.child_id) ? ` — ${nameOf(a.child_id)}` : ""}
+              </p>
+              <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#9CA3AF" }}>
+                {shortDate(String(a.created_at).slice(0, 10))}
+                {a.count > 1 ? ` · ${a.count} صور` : ""}
+              </p>
+            </div>
+            <button onClick={() => a.urls.length && setView(a.urls)} style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 10, padding: "7px 12px", fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>فتح</button>
+            <button onClick={() => remove(a.id)} aria-label="حذف" style={{ background: "none", padding: 6, flexShrink: 0 }}>
+              <TileIcon name="trash" size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+      {view && <ImageZoomViewer urls={view} onClose={() => setView(null)} />}
+    </div>
+  );
+}
+
 function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit, onAddTask, onClearedDone }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const [filter, setFilter] = useState("all");
@@ -2826,6 +2968,12 @@ function AddTaskModal({ child, onClose, onSave }) {
 }
 
 function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, selectChild = true, hint, onClose, onDone, onReview }) {
+  // وضع الرفع (قرار صاحبة التطبيق ٢٦ سبتمبر): إما تحليل الصورة كالمعتاد،
+  // أو حفظها كصورة تفتحها وتكبّرها بس — بلا استخراج وبلا تذكير. الثاني
+  // ما يمر بأي نموذج ولا يكتب صفاً بجداول المهام، فما فيه شي يتذكّر عنه
+  // كرون التذكيرات. ولهذا التحذير إلزامي قبل اختياره.
+  const [mode, setMode] = useState("analyze");
+  const ATTACH_KIND = endpoint === "/api/upload-class-schedule" ? "class_schedule" : "plan";
   const [school, setSchool] = useState("");
   const [childId, setChildId] = useState("");
   const [images, setImages] = useState([]);
@@ -2896,7 +3044,46 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
     return postUpload(endpoint, body);
   }
 
+  // «إرفاق فقط»: الصورة تنحفظ كما هي وتنعرض بتبويب «الطلبات والجداول».
+  // ما تمر بأي تحليل، فما فيه بنود ولا مواعيد ولا تذكير.
+  async function runAttach() {
+    setStatus("loading");
+    setErrorMsg("");
+    setErrorTips([]);
+    try {
+      let payload = images;
+      if (images.reduce((n, s) => n + s.length, 0) > 3_500_000) {
+        payload = await Promise.all(images.map((img) => resizeDataUrl(img, 1800)));
+      }
+      const res = await fetch("/api/attachments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childId: effectiveChildId, kind: ATTACH_KIND, images: payload }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "تعذّر حفظ الصورة، حاولي مرة ثانية.");
+      setImages([]);
+      setSummary({ attached: payload.length });
+      setStatus("done");
+      onDone();
+    } catch (err) {
+      setErrorMsg(err.message || "تعذّر حفظ الصورة، حاولي مرة ثانية.");
+      setStatus("error");
+      reportError("attachments", { reason: "attach_failed", detail: err.message || "" });
+    }
+  }
+
+  // التحذير إلزامي وبقرار صريح: الأم تفقد التذكيرات كلها بهذا الاختيار،
+  // وهذا شي ما تكتشفه إلا بعد ما يفوت الموعد.
+  function chooseAttach() {
+    const ok = confirm(
+      "عند اختيارك إرفاق الجدول فقط:\n\n• ما يوصلك أي تذكير عن الواجبات أو الاختبارات.\n• الصورة تنحفظ بس عشان ترجعين لها وتكبّرينها.\n\nللحصول على التذكيرات لازم تختارين «تحليل الجدول».\n\nتكملين؟"
+    );
+    if (ok) { setMode("attach"); hapticLight(); }
+  }
+
   async function run() {
+    if (mode === "attach") return runAttach();
     setStatus("loading");
     setErrorMsg("");
     setErrorTips([]);
@@ -2943,6 +3130,41 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
       </div>
       <div className="app-scroll" style={{ padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 14 }}>
         {hint && <HintBanner id={`upload:${endpoint}`} style={{ fontSize: 12.5, lineHeight: 1.6 }}>{hint}</HintBanner>}
+
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 700 }}>وش تبين نسوي بالصورة؟</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {[
+              { key: "analyze", title: "تحليل الجدول", desc: "نستخرج الواجبات والاختبارات والمستلزمات، وتوصلك التذكيرات." },
+              { key: "attach", title: "إرفاق الجدول فقط", desc: "نحفظ الصورة عشان ترجعين لها وتكبّرينها — بلا تحليل وبلا تذكير." },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => (opt.key === "attach" ? chooseAttach() : setMode("analyze"))}
+                style={{
+                  textAlign: "start", padding: "11px 13px", borderRadius: 14,
+                  border: `1px solid ${mode === opt.key ? "#B7A6E8" : "#E5E7EB"}`,
+                  background: mode === opt.key ? "#F1EFFA" : "white",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0, border: `2px solid ${mode === opt.key ? "#7B68C4" : "#D1D5DB"}`, background: mode === opt.key ? "#7B68C4" : "white", boxShadow: mode === opt.key ? "inset 0 0 0 2.5px white" : "none" }} />
+                  <span style={{ fontSize: 13.5, fontWeight: 800, color: "#1F2937" }}>{opt.title}</span>
+                </span>
+                <span style={{ display: "block", fontSize: 12, color: "#6B7280", marginTop: 4, lineHeight: 1.6 }}>{opt.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* رسالة حالة لا شرح — تبقى بلا ✕ لأنها تخفي أثراً قائماً على
+            التذكيرات لازم تعرفه الأم كل مرة ترفع بهالوضع. */}
+        {mode === "attach" && (
+          <p style={{ margin: 0, fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 12, padding: "10px 12px", lineHeight: 1.7 }}>
+            ⚠️ باختيارك «إرفاق الجدول فقط» ما يوصلك أي تذكير عن هالجدول. للتذكيرات اختاري «تحليل الجدول».
+          </p>
+        )}
+
         <div>
           <label style={{ fontSize: 13, fontWeight: 700 }}>هذي الصور من مدرسة:</label>
           <select value={school} onChange={(e) => { setSchool(e.target.value); setChildId(""); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
@@ -3008,14 +3230,22 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
           </div>
         )}
         <button disabled={!canRun || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, opacity: canRun ? 1 : 0.4 }}>
-          {status === "loading" ? (onReview ? "🤖 جاري فهم الخطة..." : "جاري التحليل...") : buttonLabel}
+          {status === "loading"
+            ? (mode === "attach" ? "...جاري الحفظ" : onReview ? "🤖 جاري فهم الخطة..." : "جاري التحليل...")
+            : mode === "attach" ? "احفظي الصورة للرجوع إليها" : buttonLabel}
         </button>
         {blockedReason && status !== "loading" && (
           <p style={{ margin: "-4px 0 0", fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 10, padding: "9px 12px", textAlign: "center" }}>
             {blockedReason}
           </p>
         )}
-        {status === "done" && summary && (renderSummary ? renderSummary(summary) : (
+        {status === "done" && summary?.attached ? (
+          <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13, lineHeight: 1.7 }}>
+            انحفظت {summary.attached} صورة ✓ — تلقينها بتبويب «الطلبات والجداول» تحت «الصور المرفقة»، وتقدرين تفتحينها وتكبّرينها.
+            <div style={{ marginTop: 6, opacity: 0.85 }}>ما فيه تذكير عن هالصورة — للتذكيرات ارفعيها مرة ثانية باختيار «تحليل الجدول».</div>
+          </div>
+        ) : null}
+        {status === "done" && summary && !summary.attached && (renderSummary ? renderSummary(summary) : (
           <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
             تم تحليل {summary.imagesProcessed} صورة ✓ — أُضيف {summary.matchedTasks} واجب/اختبار و {summary.matchedReqs} طلب مستلزمات.
             {(summary.updatedTasks > 0 || summary.updatedReqs > 0) && (
