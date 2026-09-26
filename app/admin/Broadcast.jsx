@@ -65,9 +65,15 @@ export default function Broadcast() {
     }
   }
 
+  // **١٦px إلزامي**: سفاري بالآيفون يكبّر الصفحة تلقائياً أول ما تنضغط
+  // خانة خطها أصغر من ١٦، ويطلع الزوم مقفولاً عليها — والصفحة ما فيها
+  // maximum-scale بالقصد (عشان تقدر تكبّر بنفسها)، فالحماية الوحيدة إن
+  // كل الحقول ١٦px. كانت ١٣٫٥ هنا فصار الزوم يقفز بكل كتابة إشعار.
+  // وboxSizing يمنع عرض ١٠٠٪ + الحشو من تجاوز عرض البطاقة.
   const input = {
-    width: "100%", border: "1px solid #E5E7EB", borderRadius: 10,
-    padding: "9px 11px", fontSize: 13.5, marginBottom: 8, fontFamily: "inherit",
+    width: "100%", boxSizing: "border-box", border: "1px solid #E5E7EB", borderRadius: 10,
+    padding: "11px 12px", fontSize: 16, marginBottom: 8, fontFamily: "inherit",
+    color: "#1F2937", background: "white",
   };
 
   const th = { textAlign: "start", padding: "6px 8px", fontWeight: 700 };

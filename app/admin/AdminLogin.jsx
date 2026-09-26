@@ -33,9 +33,9 @@ export default function AdminLogin() {
         <h1 style={{ margin: "0 0 4px", fontSize: 20, color: "#5C4B8C", textAlign: "center", fontWeight: 800 }}>لوحة تحكم دفتري</h1>
         <p style={{ margin: "0 0 20px", fontSize: 13, color: "#9CA3AF", textAlign: "center" }}>دخول المشرف فقط</p>
         <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>البريد الإلكتروني</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14, marginBottom: 14 }} />
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%", boxSizing: "border-box", border: "1px solid #E5E7EB", borderRadius: 12, padding: "11px 12px", fontSize: 16, marginBottom: 14 }} />
         <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>كلمة المرور</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 14, marginBottom: 16 }} />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%", boxSizing: "border-box", border: "1px solid #E5E7EB", borderRadius: 12, padding: "11px 12px", fontSize: 16, marginBottom: 16 }} />
         {error && <p style={{ color: "#B91C1C", fontSize: 13, margin: "0 0 12px" }}>{error}</p>}
         <button disabled={loading} type="submit" style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, border: "none", opacity: loading ? 0.6 : 1 }}>
           {loading ? "جاري الدخول..." : "دخول"}
