@@ -1970,7 +1970,7 @@ function AttachmentsCard({ children, refreshKey }) {
     <div style={{ background: "white", borderRadius: 18, border: "1px solid #EEEDE8", overflow: "hidden" }}>
       <div style={{ padding: "11px 14px", background: "#F6F4FB", display: "flex", alignItems: "center", gap: 8 }}>
         <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: "#5C4B8C" }}>الصور المرفقة</p>
-        <span style={{ marginInlineStart: "auto", fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>بلا تذكير</span>
+        <span style={{ marginInlineStart: "auto", fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>للعرض فقط — بلا تذكير</span>
       </div>
       <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
         {items.map((a) => (
@@ -2969,11 +2969,17 @@ function AddTaskModal({ child, onClose, onSave }) {
 
 function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, selectChild = true, hint, onClose, onDone, onReview }) {
   // وضع الرفع (قرار صاحبة التطبيق ٢٦ سبتمبر): إما تحليل الصورة كالمعتاد،
-  // أو حفظها كصورة تفتحها وتكبّرها بس — بلا استخراج وبلا تذكير. الثاني
+  // أو حفظها كصورة تفتحها وتكبّرها بس — بلا استخراج وبلا تذكير عن بنودها.
+  // (تذكير المتابعة اليومي ٣ العصر عام لكل ولي أمر عنده طالب/ة، ما يخص
+  // جدولاً بعينه، فيبقى يوصلها — والتحذير يقولها صراحةً.) الثاني
   // ما يمر بأي نموذج ولا يكتب صفاً بجداول المهام، فما فيه شي يتذكّر عنه
   // كرون التذكيرات. ولهذا التحذير إلزامي قبل اختياره.
   const [mode, setMode] = useState("analyze");
-  const ATTACH_KIND = endpoint === "/api/upload-class-schedule" ? "class_schedule" : "plan";
+  // الخيار للخطة الأسبوعية (الواجبات) وحدها — قرار صاحبة التطبيق
+  // ٢٦ سبتمبر. جدول الحصص يبقى تحليلاً دائماً: شبكته هي اللي تبني عرض
+  // «الجداول» ومواد ملاحظات المعلم والدرجات، فصورة بلا تحليل تعطّلها.
+  const canAttach = endpoint === "/api/upload-schedule";
+  const ATTACH_KIND = "plan";
   const [school, setSchool] = useState("");
   const [childId, setChildId] = useState("");
   const [images, setImages] = useState([]);
@@ -3063,7 +3069,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "تعذّر حفظ الصورة، حاولي مرة ثانية.");
       setImages([]);
-      setSummary({ attached: payload.length });
+      setSummary({ attached: payload.length, replaced: data.attachment?.replaced || 0 });
       setStatus("done");
       onDone();
     } catch (err) {
@@ -3077,7 +3083,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   // وهذا شي ما تكتشفه إلا بعد ما يفوت الموعد.
   function chooseAttach() {
     const ok = confirm(
-      "عند اختيارك إرفاق الجدول فقط:\n\n• ما يوصلك أي تذكير عن الواجبات أو الاختبارات.\n• الصورة تنحفظ بس عشان ترجعين لها وتكبّرينها.\n\nللحصول على التذكيرات لازم تختارين «تحليل الجدول».\n\nتكملين؟"
+      "عند اختيارك «رفع صورة فقط»:\n\n• ما يوصلك تذكير عن أي واجب أو اختبار أو مستلزم بهالجدول.\n• الصورة تنحفظ بس عشان ترجعين لها وتكبّرينها.\n• تذكير المتابعة اليومي (٣ العصر) يبقى يوصلك كالعادة — هو عام ما يخص جدولاً بعينه.\n\nللحصول على تذكيرات هذه الخطة لازم تختارين «تحليل وتذكير».\n\nتكملين؟"
     );
     if (ok) { setMode("attach"); hapticLight(); }
   }
@@ -3131,12 +3137,13 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
       <div className="app-scroll" style={{ padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 14 }}>
         {hint && <HintBanner id={`upload:${endpoint}`} style={{ fontSize: 12.5, lineHeight: 1.6 }}>{hint}</HintBanner>}
 
+        {canAttach && (
         <div>
-          <label style={{ fontSize: 13, fontWeight: 700 }}>وش تبين نسوي بالصورة؟</label>
+          <label style={{ fontSize: 13, fontWeight: 700 }}>الخطة الأسبوعية — وش تبين نسوي فيها؟</label>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {[
-              { key: "analyze", title: "تحليل الجدول", desc: "نستخرج الواجبات والاختبارات والمستلزمات، وتوصلك التذكيرات." },
-              { key: "attach", title: "إرفاق الجدول فقط", desc: "نحفظ الصورة عشان ترجعين لها وتكبّرينها — بلا تحليل وبلا تذكير." },
+              { key: "analyze", title: "تحليل وتذكير", desc: "نستخرج الواجبات والاختبارات والمستلزمات، وتوصلك التذكيرات." },
+              { key: "attach", title: "رفع صورة فقط", desc: "نحفظ الصورة عشان ترجعين لها وتكبّرينها — بلا تحليل، وبلا تذكير عن بنودها. الصورة الجديدة تحل محل السابقة." },
             ].map((opt) => (
               <button
                 key={opt.key}
@@ -3156,12 +3163,13 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             ))}
           </div>
         </div>
+        )}
 
         {/* رسالة حالة لا شرح — تبقى بلا ✕ لأنها تخفي أثراً قائماً على
             التذكيرات لازم تعرفه الأم كل مرة ترفع بهالوضع. */}
         {mode === "attach" && (
           <p style={{ margin: 0, fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 12, padding: "10px 12px", lineHeight: 1.7 }}>
-            ⚠️ باختيارك «إرفاق الجدول فقط» ما يوصلك أي تذكير عن هالجدول. للتذكيرات اختاري «تحليل الجدول».
+            ⚠️ باختيارك «رفع صورة فقط» ما يوصلك تذكير عن واجبات هالخطة ولا اختباراتها. للتذكيرات اختاري «تحليل وتذكير». (تذكير المتابعة اليومي ٣ العصر يبقى كالعادة.)
           </p>
         )}
 
@@ -3242,7 +3250,8 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         {status === "done" && summary?.attached ? (
           <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13, lineHeight: 1.7 }}>
             انحفظت {summary.attached} صورة ✓ — تلقينها بتبويب «الطلبات والجداول» تحت «الصور المرفقة»، وتقدرين تفتحينها وتكبّرينها.
-            <div style={{ marginTop: 6, opacity: 0.85 }}>ما فيه تذكير عن هالصورة — للتذكيرات ارفعيها مرة ثانية باختيار «تحليل الجدول».</div>
+            {summary.replaced > 0 && <div style={{ marginTop: 6 }}>وحلّت محل الصورة السابقة لنفس الطالب/ة.</div>}
+            <div style={{ marginTop: 6, opacity: 0.85 }}>ما فيه تذكير عن بنود هالصورة — لو تبينها ترفعيها مرة ثانية باختيار «تحليل وتذكير». وتذكير المتابعة اليومي ٣ العصر ما يتأثر.</div>
           </div>
         ) : null}
         {status === "done" && summary && !summary.attached && (renderSummary ? renderSummary(summary) : (
