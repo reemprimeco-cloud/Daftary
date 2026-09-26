@@ -29,6 +29,9 @@ export default function Broadcast() {
   const [state, setState] = useState("idle");
   const [detail, setDetail] = useState("");
   const [stats, setStats] = useState(null);
+  // بطاقة داخل التطبيق: إشعار آبل يعرض سطرين، فالطويل ينقص. مفعّلة
+  // افتراضياً، وتنطفي للإعلان القصير اللي ما يستاهل بطاقة.
+  const [showInApp, setShowInApp] = useState(true);
 
   const loadStats = useCallback(() => {
     fetch("/api/admin/broadcast/stats", { cache: "no-store" })
@@ -40,14 +43,15 @@ export default function Broadcast() {
   useEffect(loadStats, [loadStats]);
 
   async function send() {
-    if (!confirm(`سيُرسل هذا الإشعار لكل المستخدمين المسجَّلين.\n\n«${title}»\n${body}\n\nمتأكدة؟`)) return;
+    const cardLine = showInApp ? "\n\n(وبيشوفونه كبطاقة كاملة داخل التطبيق)" : "";
+    if (!confirm(`سيُرسل هذا الإشعار لكل المستخدمين المسجَّلين.\n\n«${title}»\n${body}${cardLine}\n\nمتأكدة؟`)) return;
     setState("sending");
     setDetail("");
     try {
       const res = await fetch("/api/admin/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, body }),
+        body: JSON.stringify({ title, body, showInApp }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "فشل الإرسال");
@@ -100,6 +104,15 @@ export default function Broadcast() {
 
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="العنوان" style={input} />
       <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="النص" style={{ ...input, resize: "vertical" }} />
+      <label style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "2px 0 12px", cursor: "pointer" }}>
+        <input type="checkbox" checked={showInApp} onChange={(e) => setShowInApp(e.target.checked)} style={{ accentColor: "#B7A6E8", marginTop: 3, flexShrink: 0 }} />
+        <span style={{ fontSize: 12.5, color: "#6B7280", lineHeight: 1.7 }}>
+          اعرضيه كبطاقة كاملة داخل التطبيق
+          <span style={{ display: "block", color: "#9CA3AF", fontSize: 11.5 }}>
+            إشعار الآيفون يعرض سطرين بشاشة القفل — البطاقة تخلّي الإعلان الطويل يُقرأ كاملاً، وتنقفل بزر ولا ترجع.
+          </span>
+        </span>
+      </label>
 
       <button
         onClick={send}
@@ -138,6 +151,7 @@ export default function Broadcast() {
                   <th style={th}>الإعلان</th>
                   <th style={th}>وصل</th>
                   <th style={th}>فتح الإشعار</th>
+                  <th style={th}>قرأ البطاقة</th>
                   <th style={th}>فتح التطبيق</th>
                 </tr>
               </thead>
@@ -152,6 +166,7 @@ export default function Broadcast() {
                     </td>
                     <td style={td}>{c.recipients}</td>
                     <td style={td}>{c.opened}</td>
+                    <td style={td}>{c.showInApp === false ? "—" : c.read}</td>
                     <td style={td}>{c.openedApp}</td>
                   </tr>
                 ))}

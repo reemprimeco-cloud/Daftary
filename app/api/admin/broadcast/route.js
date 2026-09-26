@@ -28,7 +28,7 @@ function cleanVapidKey(key) {
 export async function POST(req) {
   if (!isAuthed()) return NextResponse.json({ error: "غير مصرّح" }, { status: 401 });
 
-  const { title, body } = await req.json().catch(() => ({}));
+  const { title, body, showInApp } = await req.json().catch(() => ({}));
   if (!title?.trim() || !body?.trim()) {
     return NextResponse.json({ error: "العنوان والنص مطلوبان" }, { status: 400 });
   }
@@ -42,7 +42,7 @@ export async function POST(req) {
   // اللي يرجع لنا وقت ما يفتحه ولي الأمر فنعرف منو فتحه فعلاً.
   const { data: campaign, error: cErr } = await sb
     .from("broadcasts")
-    .insert({ title: title.trim(), body: body.trim() })
+    .insert({ title: title.trim(), body: body.trim(), show_in_app: showInApp !== false })
     .select("id")
     .single();
   if (cErr) return NextResponse.json({ error: `تعذّر تسجيل الإعلان: ${cErr.message}` }, { status: 500 });

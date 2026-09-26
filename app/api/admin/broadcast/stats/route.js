@@ -20,7 +20,7 @@ export async function GET() {
   const sb = supabaseAdmin();
   const { data: campaigns, error } = await sb
     .from("broadcasts")
-    .select("id, title, sent_at, recipients")
+    .select("id, title, sent_at, recipients, show_in_app")
     .order("sent_at", { ascending: false })
     .limit(10);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,6 +34,9 @@ export async function GET() {
 
     const sentTo = (events || []).filter((e) => e.kind === "sent").map((e) => e.mother_id);
     const opened = (events || []).filter((e) => e.kind === "opened").length;
+    // «قرأ البطاقة» = قفل بطاقة الإعلان داخل التطبيق — مستقل عن نقر
+    // إشعار آبل، فأم تفتح التطبيق بنفسها وتقرأ البطاقة تُحسب هنا لا هناك.
+    const read = (events || []).filter((e) => e.kind === "read").length;
 
     let openedApp = 0;
     if (sentTo.length) {
@@ -45,7 +48,7 @@ export async function GET() {
       openedApp = count || 0;
     }
 
-    rows.push({ ...c, opened, openedApp });
+    rows.push({ ...c, opened, read, openedApp, showInApp: c.show_in_app });
   }
 
   return NextResponse.json({ campaigns: rows });

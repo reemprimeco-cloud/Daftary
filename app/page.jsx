@@ -582,6 +582,7 @@ export default function Home() {
   // يتغيّر بعد كل رفعة عشان تعيد بطاقة المرفقات جلب قائمتها — الروابط
   // موقّعة وتنتهي، فالتحديث جلب جديد لا مجرد إعادة رسم.
   const [attachmentsKey, setAttachmentsKey] = useState(0);
+  const [broadcast, setBroadcast] = useState(null);
   const [showAddChild, setShowAddChild] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -706,6 +707,11 @@ export default function Home() {
     syncTaskReminders();
     // تسجيل الجهاز لإشعارات السيرفر — هي مصدر كل التذكيرات الحين.
     registerPushDevice();
+    // إعلان ما قرأته بعد — يُعرض كبطاقة كاملة، لأن إشعار القفل يقص الطويل.
+    fetch("/api/broadcasts/latest")
+      .then((r) => r.json())
+      .then((d) => d.broadcast && setBroadcast(d.broadcast))
+      .catch(() => {});
   }
 
   function handleLogout() {
@@ -1192,6 +1198,7 @@ export default function Home() {
           onDone={() => { loadAll(mother.id); setAttachmentsKey((k) => k + 1); }}
         />
       )}
+      {broadcast && <BroadcastCard broadcast={broadcast} onClose={() => setBroadcast(null)} />}
       {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateTask={handleUpdateTask} />}
       {showProfile && (
         <ProfileView
@@ -1865,6 +1872,51 @@ function ChildSwitcher({ children, selectedId, onSelect }) {
 // الخطة الأسبوعية للطالب/ة كقائمة إنجاز — وهي الواجهة الرئيسية للتطبيق
 // (قرار صاحبة التطبيق ١٥ سبتمبر): كل واجب بسطر مع تفاصيله كما كُتبت بالخطة
 // وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر.
+// بطاقة الإعلان: إشعار آبل يعرض سطرين بشاشة القفل، فالإعلان الطويل ينقص
+// ويضيع نصفه. البطاقة تعرضه كاملاً أول ما تفتح الأم التطبيق، وتقفلها بزر
+// واحد فما يرجع يطلع لها (قرار صاحبة التطبيق ٢٦ سبتمبر).
+function BroadcastCard({ broadcast, onClose }) {
+  const [closing, setClosing] = useState(false);
+
+  async function close() {
+    setClosing(true);
+    // نقفلها محلياً مهما صار بالشبكة: البطاقة اللي ما تنقفل أسوأ من
+    // بطاقة ترجع تطلع مرة ثانية بفتحة جاية.
+    await fetch(`/api/broadcasts/${broadcast.id}/read`, { method: "POST" }).catch(() => {});
+    hapticLight();
+    onClose();
+  }
+
+  return (
+    <div
+      dir="rtl"
+      style={{ position: "fixed", inset: 0, zIndex: 140, background: "rgba(24,20,35,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 24px) 14px calc(env(safe-area-inset-bottom) + 18px)" }}
+    >
+      <div style={{ background: "white", borderRadius: 20, width: "100%", maxWidth: 460, maxHeight: "100%", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 12px 40px rgba(0,0,0,.25)" }}>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 10, padding: "16px 16px 10px", background: "#F6F4FB" }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: "#B7A6E8", color: "white", display: "grid", placeItems: "center", flexShrink: 0, fontSize: 17 }}>🔔</div>
+          <p style={{ margin: 0, fontWeight: 900, fontSize: 15.5, color: "#1F2937", lineHeight: 1.6, flex: 1, minWidth: 0 }}>{broadcast.title}</p>
+        </div>
+
+        {/* النص كاملاً وقابل للتمرير — الإعلان الطويل هو سبب البطاقة أصلاً */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 16px" }}>
+          <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.95, color: "#374151", whiteSpace: "pre-wrap" }}>{broadcast.body}</p>
+        </div>
+
+        <div style={{ flexShrink: 0, padding: "10px 16px 16px", borderTop: "1px solid #F0EEE8" }}>
+          <button
+            onClick={close}
+            disabled={closing}
+            style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, opacity: closing ? 0.6 : 1 }}
+          >
+            {closing ? "..." : "إغلاق"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // عارض صورة بملء الشاشة مع تكبير: قرصة بإصبعين، وضغطتان سريعتان للتبديل
 // بين ملء الشاشة و٢٫٥×، وأزرار − / + لمن ما تنفعه القرصة. التمرير
 // والسحب من الحاوية نفسها (overflow: auto) بدل حساب إزاحة يدوي — أقل
