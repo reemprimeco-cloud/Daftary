@@ -17,6 +17,7 @@ import {
   permissionStatus,
   requestPermission,
   registerPushDevice,
+  registerWebPush,
   attachPullToRefresh,
   rotateDataUrl,
   resizeDataUrl,
@@ -690,6 +691,22 @@ export default function Home() {
     // نرفع العلم بكل الحالات (نجاح، حجب، فشل شبكة) — وإلا تبقى شاشة
     // «جاري التحميل» للأبد بدل ما يشوف المستخدم شي يتصرف معه.
     setDataLoaded(true);
+
+    // ————— قبل أي رجوع مبكر —————
+    // تسجيل الجهاز وبطاقة الإعلان لازم يشتغلان **لكل من عنده حساب**، مشتركة
+    // أو لا (طلبها ٢٦ سبتمبر). كانا تحت شرط `access.allowed` فكانت غير
+    // المشتركة ما تسجّل جهازها أبداً — فما يوصلها ولا إعلان، ومنهم إعلان
+    // الاشتراك نفسه اللي هي أكثر وحدة تحتاجه.
+    // والتذكيرات المحلية انلغت (قرار ٢٣ سبتمبر)؛ النداء باقٍ ليمسح المجدول
+    // سابقاً من الأجهزة، وهذا كذلك يخص الجميع.
+    syncTaskReminders();
+    registerPushDevice();
+    registerWebPush();
+    fetch("/api/broadcasts/latest")
+      .then((r) => r.json())
+      .then((d) => d.broadcast && setBroadcast(d.broadcast))
+      .catch(() => {});
+
     if (!access.allowed || !data) return;
 
     setChildren(data.children || []);
@@ -702,16 +719,6 @@ export default function Home() {
     setClassSchedule(data.classSchedule || []);
     setFeedbackDue(!!data.feedbackDue);
     setNeedsPassword(!!data.needsPassword);
-    // التذكيرات المحلية انلغت (قرار ٢٣ سبتمبر) — الخادم صار يغطيها كلها
-    // ويوصّلها لوليَّي الأمر. النداء باقٍ ليمسح المجدول سابقاً من الأجهزة.
-    syncTaskReminders();
-    // تسجيل الجهاز لإشعارات السيرفر — هي مصدر كل التذكيرات الحين.
-    registerPushDevice();
-    // إعلان ما قرأته بعد — يُعرض كبطاقة كاملة، لأن إشعار القفل يقص الطويل.
-    fetch("/api/broadcasts/latest")
-      .then((r) => r.json())
-      .then((d) => d.broadcast && setBroadcast(d.broadcast))
-      .catch(() => {});
   }
 
   function handleLogout() {
@@ -950,6 +957,11 @@ export default function Home() {
     return (
       <>
         <AppAccessPaywall studentsCount={appAccess.studentsCount || children.length} subscription={appAccess.subscription} onUnlocked={() => loadAll(mother.id)} motherId={mother.id} onLogout={handleLogout} />
+        {/* بطاقة الإعلان فوق شاشة الاشتراك كذلك (طلبها ٢٦ سبتمبر):
+            الإعلانات توصل الجميع، وأهمها — إعلان الاشتراك نفسه — هذي
+            بالضبط هي اللي لازم تشوفه. بدونها كانت الشاشة ترجع قبل ما
+            تُركَّب البطاقة فما تشوفها غير المشتركة أبداً. */}
+        {broadcast && <BroadcastCard broadcast={broadcast} onClose={() => setBroadcast(null)} />}
         <InstallPrompt />
       </>
     );
@@ -3905,6 +3917,10 @@ function PermissionsBanner() {
     setBusy(true);
     const results = {};
     for (const kind of missing) results[kind] = await requestPermission(kind);
+
+    // بالمتصفح، الموافقة وحدها ما تسجّل شي — لازم اشتراك PushManager بعدها،
+    // وهذي أفضل لحظة له: الإذن انعطى توّه بتفاعل صريح.
+    if (results.notifications === "granted") registerWebPush({ force: true });
 
     // نثق بنتيجة الطلب المباشرة فوق إعادة الفحص: بعض المنصات تتأخر بتحديث
     // checkPermissions بعد الموافقة مباشرة، فيبقى الشريط ظاهراً بعد ما
