@@ -1039,6 +1039,7 @@ export default function Home() {
                   onOpenTask={setOpenTask}
                   onEdit={() => setEditingChild(planChild)}
                   onAddTask={() => setShowAddTask(true)}
+                  onClearedDone={(childId) => setDoneTasks((prev) => prev.filter((t) => t.child_id !== childId))}
                 />
               </>
             )}
@@ -1860,11 +1861,12 @@ function ChildSwitcher({ children, selectedId, onSelect }) {
 // الخطة الأسبوعية للطالب/ة كقائمة إنجاز — وهي الواجهة الرئيسية للتطبيق
 // (قرار صاحبة التطبيق ١٥ سبتمبر): كل واجب بسطر مع تفاصيله كما كُتبت بالخطة
 // وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر.
-function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit, onAddTask }) {
+function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit, onAddTask, onClearedDone }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const [filter, setFilter] = useState("all");
   const [memo, setMemo] = useState([]);
   const [editingMemo, setEditingMemo] = useState(null);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     fetch(`/api/memorization?childId=${child.id}&motherId=${motherId}`)
@@ -1932,6 +1934,34 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   const chips = [["all", "الكل"], ["open", "غير مكتمل"], ["done", "مكتمل"], ["exam", "اختبارات"]];
   const groupDone = (items) => items.filter(isDone).length;
 
+  // مسح المنجز: حذف نهائي، فنقول لها بالضبط وش بينمسح قبل ما تضغط —
+  // بالتفصيل حسب النوع، لأن «المكتمل» يشمل الدروس المراجَعة والحفظ كذلك
+  // لا الواجبات وحدها.
+  const doneNow = all.filter(isDone);
+  const doneMemoNow = memo.filter((m) => m.done);
+  async function clearDone() {
+    const parts = [];
+    const homework = doneNow.filter((t) => t.type !== "درس").length;
+    const lessons = doneNow.filter((t) => t.type === "درس").length;
+    if (homework) parts.push(`${homework} واجب/اختبار`);
+    if (lessons) parts.push(`${lessons} درس`);
+    if (doneMemoNow.length) parts.push(`${doneMemoNow.length} حفظ`);
+    if (!parts.length) return;
+    if (!confirm(`مسح المنجز لـ ${child.name} نهائياً؟\n\n${parts.join(" · ")}\n\nغير المنجز يبقى كما هو.`)) return;
+
+    setClearing(true);
+    const res = await fetch("/api/tasks/clear-done", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ childId: child.id }),
+    }).catch(() => null);
+    setClearing(false);
+    if (!res?.ok) { alert("تعذّر المسح، حاولي مرة ثانية."); return; }
+    hapticSuccess();
+    setMemo((prev) => prev.filter((m) => !m.done));
+    onClearedDone?.(child.id);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}`, background: color.bg }}>
@@ -1980,6 +2010,19 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
             </button>
           ))}
         </div>
+
+        {doneCount > 0 && (
+          <button
+            onClick={clearDone}
+            disabled={clearing}
+            style={{ alignSelf: "flex-start", background: "none", color: "#9CA3AF", fontSize: 12.5, fontWeight: 700, padding: "2px 2px 6px", minHeight: 32, opacity: clearing ? 0.5 : 1 }}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <TileIcon name="trash" size={14} />
+              {clearing ? "...جاري المسح" : `امسحي المنجز (${doneCount})`}
+            </span>
+          </button>
+        )}
 
         {groups.length === 0 && memoShown.length === 0 && (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>
