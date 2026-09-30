@@ -704,7 +704,14 @@ export default function Home() {
     registerWebPush();
     fetch("/api/broadcasts/latest")
       .then((r) => r.json())
-      .then((d) => d.broadcast && setBroadcast(d.broadcast))
+      .then((d) => {
+        if (!d.broadcast) return;
+        // الخادم هو المرجع، والحارس المحلي احتياط: لو انقفلت على هذا الجهاز
+        // وما وصل التسجيل للخادم، ما نطلعها له مرة ثانية.
+        let seen = false;
+        try { seen = localStorage.getItem(`daftary_bc_read_${d.broadcast.id}`) === "1"; } catch {}
+        if (!seen) setBroadcast(d.broadcast);
+      })
       .catch(() => {});
 
     if (!access.allowed || !data) return;
@@ -1892,9 +1899,24 @@ function BroadcastCard({ broadcast, onClose }) {
 
   async function close() {
     setClosing(true);
-    // نقفلها محلياً مهما صار بالشبكة: البطاقة اللي ما تنقفل أسوأ من
-    // بطاقة ترجع تطلع مرة ثانية بفتحة جاية.
-    await fetch(`/api/broadcasts/${broadcast.id}/read`, { method: "POST" }).catch(() => {});
+
+    // حارس محلي قبل الشبكة: لو فشل الحفظ بالخادم لأي سبب، البطاقة ما ترجع
+    // تطلع على هذا الجهاز على الأقل. شوهد بالإنتاج ٣٠ سبتمبر — قيد بالقاعدة
+    // كان يرفض نوع `read`، فكل إقفال يفشل والبطاقة ترجع بكل فتحة.
+    try { localStorage.setItem(`daftary_bc_read_${broadcast.id}`, "1"); } catch {}
+
+    // والفشل ما ينبلع بصمت بعد اليوم: يُبلَّغ فنشوفه بسجل الأخطاء بدل ما
+    // تكتشفه الأم بنفسها بعد أسبوع.
+    try {
+      const res = await fetch(`/api/broadcasts/${broadcast.id}/read`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        reportError("broadcast_read", { reason: `http_${res.status}`, detail: data.error || "" });
+      }
+    } catch (e) {
+      reportError("broadcast_read", { reason: "network", detail: e?.message || "" });
+    }
+
     hapticLight();
     onClose();
   }
