@@ -583,6 +583,7 @@ export default function Home() {
   // يتغيّر بعد كل رفعة عشان تعيد بطاقة المرفقات جلب قائمتها — الروابط
   // موقّعة وتنتهي، فالتحديث جلب جديد لا مجرد إعادة رسم.
   const [attachmentsKey, setAttachmentsKey] = useState(0);
+  const [broadcast, setBroadcast] = useState(null);
   const [showAddChild, setShowAddChild] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -692,15 +693,26 @@ export default function Home() {
     setDataLoaded(true);
 
     // ————— قبل أي رجوع مبكر —————
-    // تسجيل الجهاز لازم يشتغل **لكل من عنده حساب**، مشتركة أو لا (طلبها
-    // ٢٦ سبتمبر). كان تحت شرط `access.allowed` فكانت غير المشتركة ما
-    // تسجّل جهازها أبداً — فما يوصلها ولا إشعار، ومنها إشعار الاشتراك
-    // نفسه اللي هي أكثر وحدة تحتاجه.
+    // تسجيل الجهاز وبطاقة الإعلان لازم يشتغلان **لكل من عنده حساب**، مشتركة
+    // أو لا (طلبها ٢٦ سبتمبر). كانا تحت شرط `access.allowed` فكانت غير
+    // المشتركة ما تسجّل جهازها أبداً — فما يوصلها ولا إعلان، ومنهم إعلان
+    // الاشتراك نفسه اللي هي أكثر وحدة تحتاجه.
     // والتذكيرات المحلية انلغت (قرار ٢٣ سبتمبر)؛ النداء باقٍ ليمسح المجدول
     // سابقاً من الأجهزة، وهذا كذلك يخص الجميع.
     syncTaskReminders();
     registerPushDevice();
     registerWebPush();
+    fetch("/api/broadcasts/latest")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.broadcast) return;
+        // الخادم هو المرجع، والحارس المحلي احتياط: لو انقفلت على هذا الجهاز
+        // وما وصل التسجيل للخادم، ما نطلعها له مرة ثانية.
+        let seen = false;
+        try { seen = localStorage.getItem(`daftary_bc_read_${d.broadcast.id}`) === "1"; } catch {}
+        if (!seen) setBroadcast(d.broadcast);
+      })
+      .catch(() => {});
 
     if (!access.allowed || !data) return;
 
@@ -952,6 +964,11 @@ export default function Home() {
     return (
       <>
         <AppAccessPaywall studentsCount={appAccess.studentsCount || children.length} subscription={appAccess.subscription} onUnlocked={() => loadAll(mother.id)} motherId={mother.id} onLogout={handleLogout} />
+        {/* بطاقة الإعلان فوق شاشة الاشتراك كذلك (طلبها ٢٦ سبتمبر):
+            الإعلانات توصل الجميع، وأهمها — إعلان الاشتراك نفسه — هذي
+            بالضبط هي اللي لازم تشوفه. بدونها كانت الشاشة ترجع قبل ما
+            تُركَّب البطاقة فما تشوفها غير المشتركة أبداً. */}
+        {broadcast && <BroadcastCard broadcast={broadcast} onClose={() => setBroadcast(null)} />}
         <InstallPrompt />
       </>
     );
@@ -1200,6 +1217,7 @@ export default function Home() {
           onDone={() => { loadAll(mother.id); setAttachmentsKey((k) => k + 1); }}
         />
       )}
+      {broadcast && <BroadcastCard broadcast={broadcast} onClose={() => setBroadcast(null)} />}
       {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateTask={handleUpdateTask} />}
       {showProfile && (
         <ProfileView
@@ -1870,6 +1888,69 @@ function ChildSwitcher({ children, selectedId, onSelect }) {
   );
 }
 
+// الخطة الأسبوعية للطالب/ة كقائمة إنجاز — وهي الواجهة الرئيسية للتطبيق
+// (قرار صاحبة التطبيق ١٥ سبتمبر): كل واجب بسطر مع تفاصيله كما كُتبت بالخطة
+// وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر.
+// بطاقة الإعلان: إشعار آبل يعرض سطرين بشاشة القفل، فالإعلان الطويل ينقص
+// ويضيع نصفه. البطاقة تعرضه كاملاً أول ما تفتح الأم التطبيق، وتقفلها بزر
+// واحد فما يرجع يطلع لها (قرار صاحبة التطبيق ٢٦ سبتمبر).
+function BroadcastCard({ broadcast, onClose }) {
+  const [closing, setClosing] = useState(false);
+
+  async function close() {
+    setClosing(true);
+
+    // حارس محلي قبل الشبكة: لو فشل الحفظ بالخادم لأي سبب، البطاقة ما ترجع
+    // تطلع على هذا الجهاز على الأقل. شوهد بالإنتاج ٣٠ سبتمبر — قيد بالقاعدة
+    // كان يرفض نوع `read`، فكل إقفال يفشل والبطاقة ترجع بكل فتحة.
+    try { localStorage.setItem(`daftary_bc_read_${broadcast.id}`, "1"); } catch {}
+
+    // والفشل ما ينبلع بصمت بعد اليوم: يُبلَّغ فنشوفه بسجل الأخطاء بدل ما
+    // تكتشفه الأم بنفسها بعد أسبوع.
+    try {
+      const res = await fetch(`/api/broadcasts/${broadcast.id}/read`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        reportError("broadcast_read", { reason: `http_${res.status}`, detail: data.error || "" });
+      }
+    } catch (e) {
+      reportError("broadcast_read", { reason: "network", detail: e?.message || "" });
+    }
+
+    hapticLight();
+    onClose();
+  }
+
+  return (
+    <div
+      dir="rtl"
+      style={{ position: "fixed", inset: 0, zIndex: 140, background: "rgba(24,20,35,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 24px) 14px calc(env(safe-area-inset-bottom) + 18px)" }}
+    >
+      <div style={{ background: "white", borderRadius: 20, width: "100%", maxWidth: 460, maxHeight: "100%", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 12px 40px rgba(0,0,0,.25)" }}>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 10, padding: "16px 16px 10px", background: "#F6F4FB" }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: "#B7A6E8", color: "white", display: "grid", placeItems: "center", flexShrink: 0, fontSize: 17 }}>🔔</div>
+          <p style={{ margin: 0, fontWeight: 900, fontSize: 15.5, color: "#1F2937", lineHeight: 1.6, flex: 1, minWidth: 0 }}>{broadcast.title}</p>
+        </div>
+
+        {/* النص كاملاً وقابل للتمرير — الإعلان الطويل هو سبب البطاقة أصلاً */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 16px" }}>
+          <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.95, color: "#374151", whiteSpace: "pre-wrap" }}>{broadcast.body}</p>
+        </div>
+
+        <div style={{ flexShrink: 0, padding: "10px 16px 16px", borderTop: "1px solid #F0EEE8" }}>
+          <button
+            onClick={close}
+            disabled={closing}
+            style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, opacity: closing ? 0.6 : 1 }}
+          >
+            {closing ? "..." : "إغلاق"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // عارض صورة بملء الشاشة مع تكبير: قرصة بإصبعين، وضغطتان سريعتان للتبديل
 // بين ملء الشاشة و٢٫٥×، وأزرار − / + لمن ما تنفعه القرصة. التمرير
 // والسحب من الحاوية نفسها (overflow: auto) بدل حساب إزاحة يدوي — أقل
@@ -2008,9 +2089,6 @@ function AttachmentsCard({ children, refreshKey }) {
   );
 }
 
-// الخطة الأسبوعية للطالب/ة كقائمة إنجاز — وهي الواجهة الرئيسية للتطبيق
-// (قرار صاحبة التطبيق ١٥ سبتمبر): كل واجب بسطر مع تفاصيله كما كُتبت بالخطة
-// وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر.
 function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit, onAddTask, onClearedDone }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const [filter, setFilter] = useState("all");

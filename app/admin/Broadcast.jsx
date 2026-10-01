@@ -29,6 +29,11 @@ export default function Broadcast() {
   const [state, setState] = useState("idle");
   const [detail, setDetail] = useState("");
   const [stats, setStats] = useState(null);
+  // بطاقة داخل التطبيق: إشعار آبل يعرض سطرين، فالطويل ينقص. **مطفأة
+  // افتراضياً** (قرار ١ أكتوبر: «لا يكون الارسال تلقائي، فقط لما الادمن
+  // يرسل اشعار») — تنفتح بفعل صريح للإعلان الطويل وحده، فما يطلع للأم
+  // شي داخل التطبيق ما قررته صاحبة التطبيق بنفسها لهذا الإعلان بعينه.
+  const [showInApp, setShowInApp] = useState(false);
 
   const loadStats = useCallback(() => {
     fetch("/api/admin/broadcast/stats", { cache: "no-store" })
@@ -40,14 +45,15 @@ export default function Broadcast() {
   useEffect(loadStats, [loadStats]);
 
   async function send() {
-    if (!confirm(`سيُرسل هذا الإشعار لكل المستخدمين المسجَّلين.\n\n«${title}»\n${body}\n\nمتأكدة؟`)) return;
+    const cardLine = showInApp ? "\n\n(وبيشوفونه كبطاقة كاملة داخل التطبيق)" : "";
+    if (!confirm(`سيُرسل هذا الإشعار لكل المستخدمين المسجَّلين.\n\n«${title}»\n${body}${cardLine}\n\nمتأكدة؟`)) return;
     setState("sending");
     setDetail("");
     try {
       const res = await fetch("/api/admin/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, body }),
+        body: JSON.stringify({ title, body, showInApp }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "فشل الإرسال");
@@ -76,6 +82,11 @@ export default function Broadcast() {
     color: "#1F2937", background: "white",
   };
 
+  // إشعار قفل الآيفون يعرض سطرين تقريباً. ما نفعّل البطاقة من عندنا لو
+  // طال النص — بس ننبّه، لأن النقصان شي ما تشوفه صاحبة التطبيق بنفسها
+  // وهي تكتب: الإشعار يطلع على جهاز الأم لا على شاشتها.
+  const bodyIsLong = body.trim().length > 110;
+
   const th = { textAlign: "start", padding: "6px 8px", fontWeight: 700 };
   const td = { padding: "8px", color: "#374151", verticalAlign: "top" };
 
@@ -100,6 +111,23 @@ export default function Broadcast() {
 
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="العنوان" style={input} />
       <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="النص" style={{ ...input, resize: "vertical" }} />
+      <label style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "2px 0 12px", cursor: "pointer" }}>
+        <input type="checkbox" checked={showInApp} onChange={(e) => setShowInApp(e.target.checked)} style={{ accentColor: "#B7A6E8", marginTop: 3, flexShrink: 0 }} />
+        <span style={{ fontSize: 12.5, color: "#6B7280", lineHeight: 1.7 }}>
+          اعرضيه كبطاقة كاملة داخل التطبيق
+          <span style={{ display: "block", color: "#9CA3AF", fontSize: 11.5 }}>
+            لهذا الإعلان وحده: تطلع لمن فتح التطبيق خلال يومين من إرسالك، مرة وحدة، وتنقفل بزر.
+            الإعلانات القديمة ما ترجع تطلع أبداً.
+          </span>
+        </span>
+      </label>
+
+      {bodyIsLong && !showInApp && (
+        <p style={{ margin: "-6px 0 12px", fontSize: 11.5, color: "#92400E", background: "#FEF3C7", borderRadius: 8, padding: "8px 10px", lineHeight: 1.8 }}>
+          النص طويل ({body.trim().length} حرف) — إشعار قفل الآيفون بيعرض أول سطرين وبينقص الباقي.
+          فعّلي البطاقة عشان يُقرأ كاملاً.
+        </p>
+      )}
 
       <button
         onClick={send}
@@ -138,6 +166,7 @@ export default function Broadcast() {
                   <th style={th}>الإعلان</th>
                   <th style={th}>وصل</th>
                   <th style={th}>فتح الإشعار</th>
+                  <th style={th}>قرأ البطاقة</th>
                   <th style={th}>فتح التطبيق</th>
                 </tr>
               </thead>
@@ -152,6 +181,7 @@ export default function Broadcast() {
                     </td>
                     <td style={td}>{c.recipients}</td>
                     <td style={td}>{c.opened}</td>
+                    <td style={td}>{c.showInApp === false ? "—" : c.read}</td>
                     <td style={td}>{c.openedApp}</td>
                   </tr>
                 ))}
