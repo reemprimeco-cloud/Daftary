@@ -710,7 +710,13 @@ export default function Home() {
         // وما وصل التسجيل للخادم، ما نطلعها له مرة ثانية.
         let seen = false;
         try { seen = localStorage.getItem(`daftary_bc_read_${d.broadcast.id}`) === "1"; } catch {}
-        if (!seen) setBroadcast(d.broadcast);
+        if (!seen) { setBroadcast(d.broadcast); return; }
+
+        // الجهاز يقول «قرأتها» والخادم لا — يعني تسجيل الإقفال ضاع
+        // (انقطعت الشبكة لحظة الضغط). نعيده الحين عشان ما ترجع البطاقة
+        // على **جهازها الثاني**: الحارس المحلي ما يعبر الأجهزة، والخادم
+        // وحده هو اللي يعبرها. والمسار يتحمّل التكرار (23505 مو خطأ).
+        fetch(`/api/broadcasts/${d.broadcast.id}/read`, { method: "POST" }).catch(() => {});
       })
       .catch(() => {});
 
