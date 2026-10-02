@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { childInFamily } from "@/lib/family";
 import { extractFromImages, QUALITY_TIPS } from "@/lib/visionExtract";
 import { kuwaitNow, kuwaitTodayLabel, kuwaitYear } from "@/lib/kuwaitDate";
 import { jobIdFrom, openJob, closeJob } from "@/lib/uploadJobs";
+import { summarize } from "@/lib/planApply";
+import { storeSourceImages } from "@/lib/uploadSources";
 
 // تحليل صورة بالذكاء الاصطناعي يطول أكثر من المهلة الافتراضية،
 // وتجاوزها يظهر للأم كـ«Load failed» بلا أي تفسير.
@@ -12,6 +15,30 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const FEATURE = "upload_homework";
+// درجة ثقة النموذج بكل معلومة حساسة — «unclear» تطلع للأم بعلامة تنبيه
+// بشاشة المراجعة عشان تحددها بنفسها بدل ما يخمّنها البرنامج.
+const CONFIDENCE = new Set(["confirmed", "inferred", "unclear"]);
+// هل الخطة مكتوب عليها صف/شعبة غير صف الطالب/ة المختار؟ نقارن فقط لما
+// يكون الرقم مكتوباً صراحةً بالصورة — الغائب ما يولّد تنبيهاً، وإلا صار
+// كل جدول بلا صف مكتوب يطلع تحذيراً كاذباً ويفقد التنبيه قيمته.
+export function gradeMismatch(planFor, child) {
+  const grade = Number(planFor?.grade);
+  if (!Number.isInteger(grade) || grade < 1 || grade > 12) return null;
+  if (grade === child.grade) return null;
+  return { planGrade: grade, childGrade: child.grade, childName: child.name };
+}
+
+// رقم آية: عدد صحيح موجب معقول فقط — وأي شي غيره يبقى null بدل ما يُخمَّن.
+const ayahNumber = (v) => {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 && n <= 300 ? n : null;
+};
+const cleanConfidence = (c) => {
+  if (!c || typeof c !== "object") return null;
+  const out = {};
+  for (const k of ["subject", "type", "due"]) if (CONFIDENCE.has(c[k])) out[k] = c[k];
+  return Object.keys(out).length ? out : null;
+};
 // القيمة الوحيدة اللي تقبلها القاعدة (tasks_type_check).
 const TASK_TYPES = new Set(["واجب", "حفظ", "اختبار", "مشروع", "درس"]);
 const DAY_INDEX = { "الأحد": 0, "الاثنين": 1, "الثلاثاء": 2, "الأربعاء": 3, "الخميس": 4, "الجمعة": 5, "السبت": 6 };
@@ -64,12 +91,8 @@ async function handleUpload({ childId, images }, motherId) {
   }
 
   const sb = supabaseAdmin();
-  const { data: child, error: cErr } = await sb
-    .from("children")
-    .select("*")
-    .eq("id", childId)
-    .eq("mother_id", motherId)
-    .single();
+  const child = await childInFamily(sb, childId, motherId);
+  const cErr = null;
   if (cErr || !child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
 
   const todayLabel = kuwaitTodayLabel();
@@ -92,6 +115,8 @@ async function handleUpload({ childId, images }, motherId) {
 3) لو مذكورة عبارة نسبية بلا يوم ولا تاريخ (مثل "نهاية الفصل الدراسي" أو "الأسبوع الثامن")، لا تخترعي موعداً — خلّي الاثنين null، واكتبي العبارة كما هي بحقل dueText، وكذلك بحقل details (مثلاً "تسليم: نهاية الفصل الدراسي").
 4) لو المهمة بلا أي موعد ولا يوم ولا عبارة (مجرد صف مادة داخل خطة أسبوعية)، خلّي dueDate وdueDay وdueText كلها null — الخادم يربطها بأسبوع الخطة.
 
+صاحب الخطة: لو الصورة مكتوب فيها صراحةً لمن هذي الخطة، اكتبيه بحقل planFor: grade رقم الصف بالأرقام الإنجليزية (الصف الرابع = 4)، وsection رقم الشعبة لو مذكور، وstudentName اسم الطالب/ة لو مكتوب، وschool اسم المدرسة لو مكتوب. أي واحد منها غير مكتوب بالصورة اتركيه null — لا تستنتجيه من المحتوى ولا من صعوبة المواد، فهذا الحقل يُستخدم للتنبيه لو رُفعت الخطة لطالب غير صاحبها.
+
 مدى الخطة: لو الصورة تذكر صراحةً مدى أسبوع الخطة (مثل "من الاثنين ٢٠٢٦/٩/١٤ إلى الخميس ٢٠٢٦/٩/١٧")، اكتبي تاريخ آخر يوم بالمدى بحقل weekEnd بصيغة YYYY-MM-DD؛ وإلا null.
 
 نفس المادة قد تتكرر بأيام مختلفة (واجب رياضيات الأحد وواجب رياضيات الأربعاء) — هذي مهمتان منفصلتان، اكتبي كل واحدة على حدة بيومها.
@@ -102,10 +127,25 @@ async function handleUpload({ childId, images }, motherId) {
 
 بالإضافة لذلك، استخرجي كل مطلوبات الحفظ (قرآن كريم أو حديث) بقسم منفصل تماماً عن entries، بهذا الشكل: لكل عنصر حفظ حدّدي kind ("آية" لو قرآن أو "حديث" لو حديث نبوي)، وreference هو نص المرجع بالضبط زي ما هو مكتوب بالخطة (مثل "سورة البقرة من آية ١٠ إلى ١٥" أو "حديث: إنما الأعمال بالنيات")، وdetails لأي ملاحظة إضافية (رقم الصفحة، طريقة التسميع...). لا تخترعي نطاق آيات لو مو مكتوب بالصورة بالضبط.
 
+ولكل عنصر حفظ أضيفي هذي الحقول المنظّمة، وكلها اختيارية تتركينها null لو مو مكتوبة صراحةً بالصورة:
+- surah: اسم السورة كما كُتب بالصورة (بلا كلمة "سورة")، للقرآن فقط.
+- fromAyah وtoAyah: رقمَي أول وآخر آية بالأرقام الإنجليزية (1 و10). لو مذكورة آية وحدة فقط اكتبي نفس الرقم بالاثنين. لو النطاق مو مكتوب اتركيهما null — لا تخمّني.
+- reciteDay أو reciteDate: موعد التسميع لو مذكور، بنفس منطق المواعيد أعلاه (اسم يوم بـreciteDay، أو تاريخ صريح YYYY-MM-DD بـreciteDate). لو ما فيه موعد اتركيهما null.
+
+وللمستلزمات: لو كان الغرض مرتبطاً بوضوح بمادة أو مشروع مذكور بنفس الصورة (مثل "مشروع اللغة الإنجليزية: إحضار لوحة وصور")، اكتبي اسم تلك المادة بحقل relatedSubject بالضبط كما كتبتِها بـsubject بقائمة entries. لو الربط مو واضح أو الغرض عام (مثل قائمة مستلزمات أول العام) اتركيه null — لا تربطي بالتخمين.
+
 انقلي ما هو مكتوب بالصورة حرفياً: أسماء المواد والمستلزمات ونصوص التفاصيل تُكتب كما هي، بلا تصحيح ولا توحيد ولا اختصار ولا إضافة أي كلمة من عندك. وتكرار نفس المادة أو نفس الغرض أمر طبيعي — انقليه كل مرة كما هو ولا تحذفي أي تكرار.
 
+لكل بند (بما فيه المستلزمات والحفظ) اكتبي حقل sourceText: النص الأصلي كما هو مكتوب بالصورة في الخلية أو السطر اللي استخرجتِ منه البند، منقولاً حرفياً بلا تلخيص ولا إعادة صياغة ولا حذف. هذا الحقل يُعرض لولي الأمر ليقارن بالصورة، فلا تكتبي فيه استنتاجك بل ما هو مكتوب فقط.
+
+ولكل بند من entries اكتبي حقل confidence يوضّح مدى تأكدك من ثلاث معلومات حساسة، بثلاث قيم فقط:
+- "confirmed": مكتوبة صراحةً بالصورة وواضحة.
+- "inferred": غير مكتوبة صراحةً لكن استنتجتِها من موقع الخلية أو عنوان العمود أو سياق الجدول.
+- "unclear": غير واضحة أو غير موجودة، وما قدرتِ تحدّدينها بثقة.
+القيمة "unclear" مطلوبة ومفيدة ولا تُعدّ خطأً — ولي الأمر هو من يحدّدها بنفسه. لا تخمّني أبداً لمجرد تجنّبها، وخصوصاً بموعد الاختبار وموعد التسليم.
+
 أرجعي JSON فقط بدون أي شرح أو Markdown، بهذا الشكل بالضبط:
-{"weekEnd":"YYYY-MM-DD أو null","entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع|درس","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","details":"نص اختياري"}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري"}]}`;
+{"planFor":{"grade":null,"section":null,"studentName":null,"school":null},"weekEnd":"YYYY-MM-DD أو null","entries":[{"subject":"اسم المادة","type":"واجب|اختبار|مشروع|درس","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","details":"نص اختياري","sourceText":"النص الأصلي بالصورة","confidence":{"subject":"confirmed|inferred|unclear","type":"confirmed|inferred|unclear","due":"confirmed|inferred|unclear"}}],"requirements":[{"item":"اسم الغرض","dueDate":"YYYY-MM-DD أو null","dueDay":"اسم اليوم أو null","dueText":"عبارة نسبية أو null","sourceText":"النص الأصلي بالصورة","relatedSubject":"اسم المادة المرتبطة أو null"}],"memorization":[{"kind":"آية|حديث","reference":"نص المرجع بالضبط","details":"نص اختياري","sourceText":"النص الأصلي بالصورة","surah":"اسم السورة أو null","fromAyah":null,"toAyah":null,"reciteDay":"اسم اليوم أو null","reciteDate":"YYYY-MM-DD أو null"}]}`;
 
   const res = await extractFromImages({ images, prompt, motherId, childId, feature: FEATURE });
   if (!res.ok) {
@@ -140,100 +180,82 @@ async function handleUpload({ childId, images }, motherId) {
     return weekEnd;
   };
 
-  // الهوية = المادة + النوع + الموعد. كانت الهوية المادة والنوع فقط، فخطة
-  // فيها «واجب رياضيات» الأحد و«واجب رياضيات» الأربعاء كانت الثانية تكتب
-  // فوق الأولى وتضيّعها. وإعادة رفع نفس الخطة تحدّث التفاصيل بدل ما تكرر
-  // (نفس المعرّف يبقى، فالتذكير المرتبط به يتحدّث بدل ما يتكرر).
-  // المنجز (done) يدخل بالمطابقة كذلك — وإلا إعادة رفع نفس الخطة بعد ما
-  // علّمت الأم واجباً «تم» تنشئ نسخة ثانية منه غير منجزة.
-  const { data: activeTasks } = await sb
-    .from("tasks").select("id, subject, type, due_date").eq("child_id", child.id).in("status", ["active", "done"]);
-  const taskKey = (s, t, d) => `${s}|${t}|${d || ""}`;
-  const known = new Map((activeTasks || []).map((t) => [taskKey(t.subject, t.type, t.due_date), t.id]));
-
-  let matchedTasks = 0;
-  let updatedTasks = 0;
-  let matchedReqs = 0;
-  let updatedReqs = 0;
-  let matchedMemorization = 0;
-
-  for (const e of parsed.entries || []) {
-    const subject = String(e.subject || "").trim();
-    if (!subject) continue;
-    const dueDate = resolveDue(e);
-    // التفاصيل تُحفظ كما كتبتها المدرسة بالصورة، بلا أي إضافة من عندنا.
-    const details = e.details || null;
-    // القاعدة تقبل أربعة أنواع فقط، وأي نوع غيرها كان يفجّر الإدخال
-    // ويضيّع الرفعة كاملة — فنرجع للواجب بدل ما نخسر المهمة.
-    const type = TASK_TYPES.has(e.type) ? e.type : "واجب";
-
-    const key = taskKey(subject, type, dueDate);
-    const existingId = known.get(key);
-    if (existingId) {
-      await sb.from("tasks").update({ details }).eq("id", existingId);
-      updatedTasks++;
-    } else {
-      const { data: inserted } = await sb.from("tasks").insert({
-        child_id: child.id,
-        subject,
-        type,
-        due_date: dueDate,
-        details,
-        status: "active",
-        source: "image",
-      }).select("id").single();
-      if (inserted) known.set(key, inserted.id);
-      matchedTasks++;
-    }
-  }
-
-  const { data: openReqs } = await sb
-    .from("requirements").select("id, item").eq("child_id", child.id).eq("bought", false);
-  const knownReqs = new Map((openReqs || []).map((r) => [r.item, r.id]));
-
-  for (const r of parsed.requirements || []) {
-    const item = String(r.item || "").trim();
-    if (!item) continue;
-    const dueDate = resolveDue(r);
-    const existingId = knownReqs.get(item);
-    if (existingId) {
-      await sb.from("requirements").update({ due_date: dueDate }).eq("id", existingId);
-      updatedReqs++;
-    } else {
-      const { data: inserted } = await sb.from("requirements").insert({
-        child_id: child.id,
-        item,
-        due_date: dueDate,
-        bought: false,
-      }).select("id").single();
-      if (inserted) knownReqs.set(item, inserted.id);
-      matchedReqs++;
-    }
-  }
-
-  for (const m of parsed.memorization || []) {
-    if (!m.reference) continue;
-    const kind = m.kind === "حديث" ? "حديث" : "آية";
-
-    // لو نفس مرجع الحفظ موجود وما تحفظ بعد لهذا الطالب/ة، لا نكرره برفع نفس الخطة مرتين
-    const { data: existingMem } = await sb
-      .from("memorization")
-      .select("id")
-      .eq("child_id", child.id)
-      .eq("reference", m.reference)
-      .eq("done", false)
-      .maybeSingle();
-
-    if (!existingMem) {
-      await sb.from("memorization").insert({
-        child_id: child.id,
-        kind,
-        reference: m.reference,
+  // نتيجة التحليل ما تدخل جداول الطالب/ة مباشرة — تُحفظ كمسودة تراجعها الأم
+  // وتعدّلها ثم تعتمدها (POST /api/upload-drafts/[id])، وهناك يصير الحفظ
+  // الفعلي واستهلاك التجربة المجانية. التواريخ تُحسب هنا بالخادم عشان تشوف
+  // الأم الموعد النهائي وتقدر تغيّره قبل الاعتماد.
+  const items = {
+    tasks: (parsed.entries || [])
+      .map((e) => ({
+        subject: String(e.subject || "").trim(),
+        // القاعدة تقبل خمسة أنواع فقط، وأي نوع غيرها كان يفجّر الإدخال —
+        // فنرجع للواجب بدل ما نخسر المهمة.
+        type: TASK_TYPES.has(e.type) ? e.type : "واجب",
+        dueDate: resolveDue(e),
+        // التفاصيل تُحفظ كما كتبتها المدرسة بالصورة، بلا أي إضافة من عندنا.
+        details: e.details || null,
+        dueText: e.dueText || null,
+        sourceText: e.sourceText || null,
+        confidence: cleanConfidence(e.confidence),
+      }))
+      .filter((e) => e.subject),
+    requirements: (parsed.requirements || [])
+      .map((r) => ({
+        item: String(r.item || "").trim(),
+        dueDate: resolveDue(r),
+        dueText: r.dueText || null,
+        sourceText: r.sourceText || null,
+        relatedSubject: r.relatedSubject ? String(r.relatedSubject).trim() || null : null,
+      }))
+      .filter((r) => r.item),
+    memorization: (parsed.memorization || [])
+      .map((m) => ({
+        kind: m.kind === "حديث" ? "حديث" : "آية",
+        reference: String(m.reference || "").trim(),
         details: m.details || null,
-      });
-      matchedMemorization++;
-    }
+        sourceText: m.sourceText || null,
+        surah: m.surah ? String(m.surah).trim() || null : null,
+        fromAyah: ayahNumber(m.fromAyah),
+        toAyah: ayahNumber(m.toAyah),
+        // موعد التسميع: تاريخ صريح ثم اسم يوم — وبلا موعد يبقى null. ما
+        // نستخدم resolveDue هنا لأن فيها رجوع لآخر يوم بالخطة، وهذا يعطي
+        // كل حفظ بلا موعد تاريخاً مخترعاً ويحوّل تذكيره من السبت والثلاثاء
+        // لتذكير موعد ما ذكرته المدرسة أصلاً.
+        reciteOn: isDate(m.reciteDate) ? m.reciteDate : dateForDayName(m.reciteDay),
+      }))
+      .filter((m) => m.reference),
+  };
+
+  // مسودة معلّقة سابقة لنفس الطالب/ة ما لها معنى بعد رفعة جديدة — الأم
+  // تراجع الأحدث. نلغيها بدل ما تتراكم مسودات تتنافس على نفس البيانات.
+  await sb.from("upload_drafts").update({ status: "discarded" }).eq("child_id", child.id).eq("status", "pending");
+
+  // تنبيه اختيار طالب/ة غير صاحب الخطة (شوهد بالإنتاج ١٨ سبتمبر: رُفعت
+  // خطة الصف الرابع على طالب بالصف السادس وما طلع أي تنبيه). ما نمنع
+  // الرفع — الأم قد ترفع خطة مشتركة أو صورة ما فيها صف — بس نقولها.
+  const mismatch = gradeMismatch(parsed.planFor, child);
+
+  // الصورة الأصلية تُحفظ أسبوعاً عشان تقدر الأم ترجع لها من «عرض المصدر».
+  const sourceId = await storeSourceImages(sb, { motherId, childId: child.id, images });
+
+  const { data: draft, error: dErr } = await sb
+    .from("upload_drafts")
+    .insert({ mother_id: motherId, child_id: child.id, kind: "plan", items, images_count: images.length, source_id: sourceId })
+    .select("id")
+    .single();
+  if (dErr || !draft) {
+    console.error("upload-schedule: draft insert failed:", dErr?.message);
+    return NextResponse.json({ error: "فيه خلل مؤقت عندنا بحفظ النتيجة. جربي بعد شوي." }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, matchedTasks, updatedTasks, matchedReqs, updatedReqs, matchedMemorization, imagesProcessed: images.length });
+  return NextResponse.json({
+    ok: true,
+    draftId: draft.id,
+    childId: child.id,
+    sourceId,
+    mismatch,
+    items,
+    summary: summarize(items),
+    imagesProcessed: images.length,
+  });
 }

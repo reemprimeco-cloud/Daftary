@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { kuwaitTodayStr, kuwaitNow } from "@/lib/kuwaitDate";
-import { mapPool, CONCURRENCY, configureWebPush, deliverToMother } from "@/lib/pushDelivery";
+import { mapPool, CONCURRENCY, configureWebPush } from "@/lib/pushDelivery";
+import { purgeExpiredSources } from "@/lib/uploadSources";
+import {
+  loadFamilyParents,
+  deliverToFamily,
+  countTasks,
+  sendTaskBatch,
+  sendExamRounds,
+  sendRecitationFor,
+  EXAM_ROUNDS,
+} from "@/lib/reminderBatch";
 
 // APNs يحتاج HTTP/2 عبر node:http2، وهو غير متوفر على Edge runtime.
 export const runtime = "nodejs";
@@ -12,47 +22,9 @@ export const runtime = "nodejs";
 // فالي يفوت ما يُعاد إلا بكرا.
 export const maxDuration = 300;
 
-// دوال الإرسال المشتركة (mapPool، Web Push، APNs) في lib/pushDelivery.js
-
-const KIND_TITLES = {
-  exam_day_before: "تذكير اختبار غداً",
-  exam_today: "اختبار اليوم",
-  new_task: "واجب جديد",
-  task_day_before: "تذكير تسليم غداً",
-  task_today: "موعد التسليم اليوم",
-};
-const GROUP_TITLES = {
-  exam_day_before: "اختبارات غداً",
-  exam_today: "اختبارات اليوم",
-  new_task: "واجبات جديدة",
-  task_day_before: "تسليم غداً",
-  task_today: "تسليم اليوم",
-};
-
-// «واجبان» / «٥ واجبات» / «١٢ واجباً» — عربية سليمة بدل «5 واجب».
-function countTasks(n) {
-  if (n === 2) return "واجبان";
-  if (n <= 10) return `${n} واجبات`;
-  return `${n} واجباً`;
-}
-
-// نص الإشعار المجمّع: المواد بأسمائها كما بالخطة (والنوع لو مو واجباً عادياً)،
-// ولكل طالب/ة سطر لو الأم عندها أكثر من واحد بنفس الإشعار.
-function groupedText(tasks, kind, groupFn) {
-  const byChild = new Map();
-  for (const t of tasks) {
-    const name = t.children?.name || "";
-    if (!byChild.has(name)) byChild.set(name, []);
-    byChild.get(name).push(t);
-  }
-  const label = (t) => (kind.startsWith("exam") || t.type === "واجب" ? t.subject : `${t.subject} (${t.type})`);
-  if (byChild.size === 1) {
-    const [name, list] = [...byChild.entries()][0];
-    return groupFn(name, list.map(label).join("، "), list.length);
-  }
-  const lines = [...byChild.entries()].map(([name, list]) => `${name}: ${list.map(label).join("، ")}`);
-  return groupFn("أبنائك", `\n${lines.join("\n")}`, tasks.length);
-}
+// دوال الإرسال المشتركة (mapPool، Web Push، APNs) في lib/pushDelivery.js،
+// ومنطق التجميع ومنع التكرار وتذكيرات الاختبار في lib/reminderBatch.js —
+// يشاركها كرون المساء.
 
 // المحفوظات ما لها موعد بقاعدة البيانات (مرجع وحالة إنجاز فقط)، وغالباً
 // تجي ضمن الخطة الأسبوعية بلا تاريخ محدد — فما نقدر نذكّر «قبل الموعد
@@ -62,43 +34,36 @@ function groupedText(tasks, kind, groupFn) {
 //
 // رسالة واحدة مجمّعة لكل ولي أمر مو رسالة لكل محفوظ — عائلة عندها عشر
 // محفوظات ما تستاهل عشرة إشعارات بنفس الدقيقة.
-async function sendMemorizationReminders(sb, today) {
+async function sendMemorizationReminders(sb, today, parents) {
   const weekday = kuwaitNow().getUTCDay(); // ٠ الأحد .. ٦ السبت
   if (weekday !== 6 && weekday !== 2) return 0;
 
   const { data: pending } = await sb
     .from("memorization")
-    .select("id, children(mother_id, name)")
-    .eq("done", false);
+    .select("id, children(family_id, name)")
+    .eq("done", false)
+    // اللي له موعد تسميع مكتوب ياخذ تذكير موعده (قبله بيوم ويومه) —
+    // لو دخل هنا كمان صار عنه تذكيران بنفس الأسبوع.
+    .is("recite_on", null);
 
-  const byMother = new Map();
+  const byFamily = new Map();
   for (const m of pending || []) {
-    const motherId = m.children?.mother_id;
-    if (!motherId) continue;
-    const entry = byMother.get(motherId) || { count: 0, names: new Set() };
+    const familyId = m.children?.family_id;
+    if (!familyId) continue;
+    const entry = byFamily.get(familyId) || { count: 0, names: new Set() };
     entry.count++;
     entry.names.add(m.children.name);
-    byMother.set(motherId, entry);
+    byFamily.set(familyId, entry);
   }
 
-  const memoResults = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, { count, names }]) => {
-    // القيد الفريد بـreminder_log على (task_id, kind) وهنا ما فيه مهمة،
-    // فنمنع التكرار بفحص إن ما أُرسل شي لنفس ولي الأمر اليوم.
-    const { data: already } = await sb
-      .from("reminder_log")
-      .select("id")
-      .eq("mother_id", motherId)
-      .eq("kind", "memorization")
-      .gte("sent_at", `${today}T00:00:00+03:00`)
-      .limit(1);
-    if (already?.length) return 0;
-
+  const memoResults = await mapPool([...byFamily.entries()], CONCURRENCY, async ([familyId, { count, names }]) => {
     const who = names.size === 1 ? [...names][0] : "أبنائك";
-    const text = `🕌 عند ${who} ${count} للتسميع — وقت المراجعة`;
-
-    if (!(await deliverToMother(sb, motherId, "تذكير التسميع", text))) return 0;
-    await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind: "memorization" });
-    return 1;
+    return deliverToFamily(sb, parents.get(familyId), {
+      title: "تذكير التسميع",
+      text: `🕌 عند ${who} ${count} للتسميع — وقت المراجعة`,
+      kind: "memorization",
+      today,
+    });
   });
   return memoResults.reduce((a, b) => a + b, 0);
 }
@@ -107,40 +72,31 @@ async function sendMemorizationReminders(sb, today) {
 // تذكير — والأم تحتاج تعرف قبل بيوم عشان تشتريها، مو صبح يوم التسليم.
 // رسالة واحدة مجمّعة: خمسة أغراض لنفس اليوم رحلة شراء وحدة مو خمس رسائل.
 // وreminder_log.task_id مرتبط بجدول المهام، فنمنع التكرار باليوم وولي الأمر.
-async function sendRequirementReminders(sb, today, tomorrow) {
+async function sendRequirementReminders(sb, today, tomorrow, parents) {
   const { data: due } = await sb
     .from("requirements")
-    .select("item, children(mother_id, name)")
+    .select("item, children(family_id, name)")
     .eq("bought", false)
     .eq("due_date", tomorrow);
 
-  const byMother = new Map();
+  const byFamily = new Map();
   for (const r of due || []) {
-    const motherId = r.children?.mother_id;
-    if (!motherId) continue;
-    const entry = byMother.get(motherId) || { items: [], names: new Set() };
+    const familyId = r.children?.family_id;
+    if (!familyId) continue;
+    const entry = byFamily.get(familyId) || { items: [], names: new Set() };
     entry.items.push(r.item);
     entry.names.add(r.children.name);
-    byMother.set(motherId, entry);
+    byFamily.set(familyId, entry);
   }
 
-  const results = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, { items, names }]) => {
-    const { data: already } = await sb
-      .from("reminder_log")
-      .select("id")
-      .eq("mother_id", motherId)
-      .eq("kind", "requirement_day_before")
-      .gte("sent_at", `${today}T00:00:00+03:00`)
-      .limit(1);
-    if (already?.length) return 0;
-
+  const results = await mapPool([...byFamily.entries()], CONCURRENCY, async ([familyId, { items, names }]) => {
     const who = names.size === 1 ? [...names][0] : "العيال";
-    const text = `🎒 مستلزمات ${who} المطلوبة غداً: ${items.join("، ")}`;
-    const title = "مستلزمات غداً";
-
-    if (!(await deliverToMother(sb, motherId, title, text))) return 0;
-    await sb.from("reminder_log").insert({ mother_id: motherId, task_id: null, kind: "requirement_day_before" });
-    return 1;
+    return deliverToFamily(sb, parents.get(familyId), {
+      title: "مستلزمات غداً",
+      text: `🎒 مستلزمات ${who} المطلوبة غداً: ${items.join("، ")}`,
+      kind: "requirement_day_before",
+      today,
+    });
   });
   return results.reduce((a, b) => a + b, 0);
 }
@@ -154,28 +110,16 @@ export async function GET(req) {
   configureWebPush();
 
   const sb = supabaseAdmin();
+  // أولياء أمور كل عائلة — التذكير يوصل للأم والأب سواء.
+  const parents = await loadFamilyParents(sb);
   const today = kuwaitTodayStr();
   const tomorrowDate = kuwaitNow();
   tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
   const tomorrow = tomorrowDate.toISOString().slice(0, 10);
 
-  const { data: examsToday } = await sb
-    .from("tasks")
-    .select("*, children(mother_id, name)")
-    .eq("type", "اختبار")
-    .eq("due_date", today)
-    .eq("status", "active");
-
-  const { data: examsTomorrow } = await sb
-    .from("tasks")
-    .select("*, children(mother_id, name)")
-    .eq("type", "اختبار")
-    .eq("due_date", tomorrow)
-    .eq("status", "active");
-
   const { data: freshTasks } = await sb
     .from("tasks")
-    .select("*, children(mother_id, name)")
+    .select("*, children(family_id, name)")
     .eq("status", "active")
     // «درس» = محتوى المنهج بالخطة الأسبوعية، ما له موعد تسليم ولا يحتاج
     // تنبيهاً — التذكير للواجب والاختبار والمشروع والحفظ فقط.
@@ -188,59 +132,54 @@ export async function GET(req) {
   // يبقى وقت لعمله. نفس قاعدة الاختبار تنطبق عليه.
   const { data: tasksTomorrow } = await sb
     .from("tasks")
-    .select("*, children(mother_id, name)")
+    .select("*, children(family_id, name)")
     .neq("type", "اختبار")
     .neq("type", "درس")
     .eq("due_date", tomorrow)
     .eq("status", "active");
 
-  // الواجبات اللي موعد تسليمها اليوم. قبل هذا كان تذكير يوم التسليم تنبيهاً
-  // محلياً على الجهاز فقط، وهو يُجدول لما يُفتح التطبيق — فأم ما فتحته من
-  // أيام ما كان يوصلها شي أصلاً. الاختبارات مستثناة لأن لها تذكيرها الخاص.
-  const { data: tasksToday } = await sb
-    .from("tasks")
-    .select("*, children(mother_id, name)")
-    .neq("type", "اختبار")
-    .neq("type", "درس")
-    .eq("due_date", today)
-    .eq("status", "active");
-
+  // تذكير «موعد التسليم اليوم» انلغى (قرار صاحبة التطبيق ٢٣ سبتمبر): صبح
+  // يوم التسليم ما يبقى وقت للعمل، فتذكير «غداً» هو المفيد. وانشال معه
+  // التنبيه المحلي على الجهاز اللي كان يطلع ٤ العصر بنفس المعنى
+  // (`syncTaskReminders` بـlib/native.js) — وإلا انلغى نصفه فقط.
   let sent = 0;
+
+  // الاختبارات: قبل يومين وقبل يوم، صبحاً — والعصر بكرون المساء.
+  sent += await sendExamRounds(sb, parents, EXAM_ROUNDS.morning, kuwaitNow());
+
   const batches = [
-    [examsTomorrow || [], "exam_day_before", (t) => `⏰ تذكير: اختبار ${t.subject} لـ ${t.children.name} غداً — وقت المذاكرة 📚`, (who, list) => `⏰ غداً اختبارات لـ ${who}: ${list} — وقت المذاكرة 📚`],
-    [examsToday || [], "exam_today", (t) => `⏰ اليوم اختبار ${t.subject} لـ ${t.children.name} — بالتوفيق 🌟`, (who, list) => `⏰ اليوم اختبارات لـ ${who}: ${list} — بالتوفيق 🌟`],
-    [freshTasks || [], "new_task", (t) => `📝 واجب جديد لـ ${t.children.name}: ${t.subject} (${t.type}) — الموعد ${t.due_date}`, (who, list, n) => `📝 ${countTasks(n)} جديدة لـ ${who}: ${list}`],
-    [tasksTomorrow || [], "task_day_before", (t) => `⏰ تذكير: ${t.subject} (${t.type}) لـ ${t.children.name} موعد تسليمه غداً`, (who, list, n) => `⏰ غداً موعد تسليم ${countTasks(n)} لـ ${who}: ${list}`],
-    [tasksToday || [], "task_today", (t) => `📝 اليوم موعد تسليم ${t.subject} لـ ${t.children.name}`, (who, list, n) => `📝 اليوم موعد تسليم ${countTasks(n)} لـ ${who}: ${list}`],
+    {
+      rows: freshTasks || [], kind: "new_task", title: "واجب جديد", groupTitle: "واجبات جديدة",
+      textFn: (t) => `📝 واجب جديد لـ ${t.children.name}: ${t.subject} (${t.type}) — الموعد ${t.due_date}`,
+      groupFn: (who, list, n) => `📝 ${countTasks(n)} جديدة لـ ${who}: ${list}`,
+    },
+    {
+      rows: tasksTomorrow || [], kind: "task_day_before", title: "تذكير تسليم غداً", groupTitle: "تسليم غداً",
+      textFn: (t) => `⏰ تذكير: ${t.subject} (${t.type}) لـ ${t.children.name} موعد تسليمه غداً`,
+      groupFn: (who, list, n) => `⏰ غداً موعد تسليم ${countTasks(n)} لـ ${who}: ${list}`,
+    },
   ];
-
-  // إشعار واحد لكل ولي أمر لكل نوع، مو إشعار لكل واجب: خطة فيها خمسة واجبات
-  // ليوم الخميس كانت تطلّع خمسة إشعارات متتالية بنفس الدقيقة (طلب صاحبة
-  // التطبيق ١٦ سبتمبر). التكرار يبقى ممنوعاً بسجل reminder_log لكل واجب.
-  for (const [rows, kind, textFn, groupFn] of batches) {
-    if (!rows.length) continue;
-    const { data: logged } = await sb.from("reminder_log").select("task_id").eq("kind", kind).in("task_id", rows.map((t) => t.id));
-    const already = new Set((logged || []).map((r) => r.task_id));
-    const byMother = new Map();
-    for (const t of rows) {
-      const motherId = t.children?.mother_id;
-      if (!motherId || already.has(t.id)) continue;
-      if (!byMother.has(motherId)) byMother.set(motherId, []);
-      byMother.get(motherId).push(t);
-    }
-
-    const results = await mapPool([...byMother.entries()], CONCURRENCY, async ([motherId, tasks]) => {
-      const text = tasks.length === 1 ? textFn(tasks[0]) : groupedText(tasks, kind, groupFn);
-      const title = tasks.length === 1 ? KIND_TITLES[kind] || "دفتري" : GROUP_TITLES[kind] || KIND_TITLES[kind] || "دفتري";
-      if (!(await deliverToMother(sb, motherId, title, text))) return 0;
-      await sb.from("reminder_log").insert(tasks.map((t) => ({ mother_id: motherId, task_id: t.id, kind })));
-      return tasks.length;
-    });
-    sent += results.reduce((a, b) => a + b, 0);
+  for (const batch of batches) {
+    sent += await sendTaskBatch(sb, parents, batch);
   }
 
-  sent += await sendRequirementReminders(sb, today, tomorrow);
-  sent += await sendMemorizationReminders(sb, today);
+  sent += await sendRequirementReminders(sb, today, tomorrow, parents);
+  // تذكير «تسميع اليوم» انتقل لكرون ٦ الصبح (/api/cron/recitation).
+  sent += await sendRecitationFor(sb, parents, {
+    date: tomorrow, kind: "recitation_day_before", title: "تسميع غداً", phrase: "غداً موعد تسميع", today,
+  });
+  sent += await sendMemorizationReminders(sb, today, parents);
 
-  return NextResponse.json({ ok: true, sent });
+  // تنظيف صور المصدر المنتهية (أسبوع لصور الخطة، ٢٤ ساعة لصور المعلم
+  // الذكي) — معلّق على كرون يومي موجود بدل كرون جديد، ويشتغل بكرون المساء
+  // كذلك عشان ما تقعد الصورة المنتهية بالتخزين لين بكرة. فشله ما يخص
+  // التذكيرات، فلا يوقفها.
+  let purgedSources = 0;
+  try {
+    purgedSources = await purgeExpiredSources(sb);
+  } catch (e) {
+    console.warn("purgeExpiredSources failed:", e.message);
+  }
+
+  return NextResponse.json({ ok: true, sent, purgedSources });
 }

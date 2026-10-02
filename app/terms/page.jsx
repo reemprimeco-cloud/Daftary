@@ -53,8 +53,10 @@ export default function TermsPage() {
             باقتك الحالية، تحتاجين ترقية الباقة — والترقية تتم بضغطة واحدة وتُحسب الفروق تلقائياً عبر متجر آبل.
           </p>
           <p style={{ ...p, background: "#FDF3E7", padding: "12px 14px", borderRadius: 12, color: "#8C6027", fontSize: 14 }}>
-            يبدأ الاشتراك من لحظة إنشاء الحساب، ولا تتضمن خدمة دفتري فترة تجربة مجانية. يمكنك حذف حسابك في أي
-            وقت من صفحة «حسابي».
+            يبدأ الاشتراك من لحظة إنشاء الحساب. تحصلين مرة واحدة على تجربة مجانية بلا اشتراك وبلا بيانات دفع: إضافة
+            طالب/ة واحد، وتحليل جدول حصص واحد، وتحليل خطة أسبوعية واحدة — بلا حد زمني، تنتهي التجربة عند استخدام هذه
+            العناصر لا بمرور وقت. بعدها يلزم الاشتراك لأي طالب/ة أو تحليل إضافي. يمكنك حذف حسابك في أي وقت من صفحة
+            «حسابي».
           </p>
         </Section>
 
@@ -194,11 +196,15 @@ export default function TermsPage() {
         </Section>
 
         <Section title="تواصل معنا">
-          <p style={p}>لأي استفسار يخص الاشتراك أو هذه الشروط:</p>
+          <p style={p}>لأي استفسار يخص الاشتراك أو هذه الشروط راسلينا بالمسجات الدايركت:</p>
           <p style={{ ...p, textAlign: "center", marginTop: 16 }}>
-            <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "11px 26px", borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, textDecoration: "none", fontSize: 14 }}>
-              reemprimeco@gmail.com
+            <a href="https://ig.me/m/reemora.app" target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "11px 26px", borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, textDecoration: "none", fontSize: 14 }}>
+              @reemora.app
             </a>
+          </p>
+          {/* الايميل يبقى مكتوباً كقناة رسمية للطلبات القانونية */}
+          <p style={{ ...p, textAlign: "center", marginTop: 10, fontSize: 13, color: "#8B8397" }}>
+            أو بالبريد: <a href="mailto:reemprimeco@gmail.com" style={{ color: "#8B8397" }}>reemprimeco@gmail.com</a>
           </p>
         </Section>
 

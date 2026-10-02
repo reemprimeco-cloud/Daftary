@@ -14,7 +14,7 @@ export async function POST(req) {
   }
 
   const to = normalizeKuwaitPhone(phone);
-  if (!to) return NextResponse.json({ error: "رقم الجوال غير صحيح" }, { status: 400 });
+  if (!to) return NextResponse.json({ error: "رقم الموبايل غير صحيح" }, { status: 400 });
   if (!/^\d{4,10}$/.test(String(code || "").trim())) {
     return NextResponse.json({ error: "الكود غير صحيح" }, { status: 400 });
   }
@@ -90,5 +90,13 @@ export async function POST(req) {
     return NextResponse.json({ error: "إعدادات الجلسة ناقصة بالسيرفر" }, { status: 500 });
   }
 
-  return NextResponse.json({ mother, token });
+  // نجاح الكود دخول موثّق بذاته — لو كانت محاولات الرقم السري قفلت
+  // حسابها، هذا يفكّه بدل ما تنتظر ١٥ دقيقة بعد ما أثبتت هويتها بالكود.
+  if (mother.failed_login_attempts || mother.login_locked_until) {
+    await sb.from("mothers").update({ failed_login_attempts: 0, login_locked_until: null }).eq("id", mother.id);
+  }
+
+  // ما فيها رقم سري بعد (حساب جديد أو حساب قديم قبل هالميزة) — الواجهة
+  // تعرض خطوة اختيارية لتحديد رقم سري عشان الدخول القادم يصير بلا كود.
+  return NextResponse.json({ mother, token, needsPassword: !mother.password_hash });
 }

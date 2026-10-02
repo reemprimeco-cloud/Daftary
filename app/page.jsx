@@ -17,6 +17,7 @@ import {
   permissionStatus,
   requestPermission,
   registerPushDevice,
+  registerWebPush,
   attachPullToRefresh,
   rotateDataUrl,
   resizeDataUrl,
@@ -44,7 +45,13 @@ const APP_STORE_URL = "https://apps.apple.com/app/id6801521796";
 // wa.me يفتح تطبيق واتساب إذا كان منزّلاً، ونسخة الويب إذا لا — فيشتغل
 // داخل تطبيق آبل وبالمتصفح بنفس الرابط.
 const WHATSAPP_URL = "https://wa.me/96565068000";
+// المسجات الدايركت بالانستقرام بدل الايميل — ig.me يفتح المحادثة مباشرة
+// بالتطبيق لو منصّب، وإلا يحوّل للمتصفح.
+const INSTAGRAM_URL = "https://ig.me/m/reemora.app";
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"];
+// ترويسة أعمدة الحصص بنفس صيغة الجدول الورقي («الأولى» لا «الحصة ١») —
+// أقصر فتدخل بعمود ضيق. أي رقم فوق الثامنة يبان رقماً كما هو.
+const PERIOD_LABELS = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة"];
 const FULL_DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const TYPE_META = {
   "واجب": { done: "تم" },
@@ -54,11 +61,13 @@ const TYPE_META = {
   // محتوى المنهج خلال الأسبوع — الأم تعلّمه «تمت المراجعة»، وبلا أي تذكير
   "درس": { done: "تمت المراجعة" },
 };
+// «المتطلبات» انضم لتبويب «جدول الحصص» بتبويب واحد «الطلبات والجداول»
+// (طلب صاحبة التطبيق) — يفرّغ خانة بالشريط السفلي لميزة مستقبلية
+// (المشاريع)، والتبديل بين القسمين بمفتاح داخلي (scheduleSubTab بالأسفل).
 const TABS = [
   { key: "dashboard", label: "الرئيسية" },
-  { key: "requirements", label: "المتطلبات" },
-  { key: "schedule", label: "جدول الحصص" },
-  { key: "progress", label: "الحفظ والدرجات" },
+  { key: "schedule", label: "الطلبات والجداول" },
+  { key: "progress", label: "المتابعة والدرجات" },
   { key: "teacher", label: "المعلم الذكي" },
 ];
 
@@ -145,6 +154,13 @@ const TILE_GLYPHS = {
       <path d="M9.15 7.4c.2-.02.42-.02.6.02.22.05.35.42.45.66l.5 1.2c.08.2.04.42-.1.58l-.45.5a.4.4 0 0 0-.07.45 6 6 0 0 0 2.85 2.5c.17.07.36.02.47-.12l.5-.62c.14-.17.37-.23.57-.15l1.5.6c.2.08.33.28.32.5-.04.62-.32 1.2-.85 1.5-.6.34-1.35.4-2.02.2a8.4 8.4 0 0 1-5.1-4.6c-.3-.7-.35-1.48-.05-2.15.25-.55.72-.99 1.3-1.07" fill={sh} />
     </>
   ),
+  instagram: (sh) => (
+    <>
+      <path d="M7.9 2.4h8.2a5.5 5.5 0 0 1 5.5 5.5v8.2a5.5 5.5 0 0 1-5.5 5.5H7.9a5.5 5.5 0 0 1-5.5-5.5V7.9a5.5 5.5 0 0 1 5.5-5.5" />
+      <path d="M12 7.35A4.65 4.65 0 1 0 12 16.65 4.65 4.65 0 0 0 12 7.35m0 1.7a2.95 2.95 0 1 1 0 5.9 2.95 2.95 0 0 1 0-5.9" fill={sh} />
+      <circle cx="17.1" cy="6.9" r="1.2" fill={sh} />
+    </>
+  ),
   star: () => <path d="M12 2.2l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 18l-6.2 3.3 1.2-6.9-5-4.9 6.9-1z" />,
   gear: (sh) => (
     <>
@@ -208,6 +224,7 @@ const TILE_TINTS = {
   gear: "#A8A2C4",
   star: "#E8C05C",
   whatsapp: "#3FC45E",
+  instagram: "#D9518C",
   pencil: "#E0A873",
   refresh: "#7FA8E0",
   chart: "#7FC2A0",
@@ -323,6 +340,8 @@ const SUBJECT_ICON_MAP = [
   { file: "art", keywords: ["فنية", "رسم"] },
   { file: "music", keywords: ["موسيقى", "نشيد"] },
   { file: "computer", keywords: ["حاسوب", "حاسب", "كمبيوتر", "تقنية"] },
+  // مادة بمدرسة عجيل وعبدالله (الصف السادس) — طلبتها صاحبة التطبيق بأيقونة برق
+  { file: "electricity", keywords: ["كهرب"] },
 ];
 const PE_COLORS = [
   { value: "#3B82F6", label: "أزرق" },
@@ -426,15 +445,115 @@ function Avatar({ child, size = 52 }) {
   );
 }
 
+// أيقونات المواد: فيكتور فلات بلون واحد مصمت بلا تدرّج ولا لمعة (قرار
+// صاحبة التطبيق ١٨ سبتمبر). كانت صوراً PNG بنمط ثلاثي الأبعاد لامع —
+// يضيع تفصيلها بخانة جدول الحصص الصغيرة (١٧ بكسل) وتطلع ضبابية بشاشة
+// الريتينا. الفيكتور يبقى حاداً بأي مقاس وأوضح للعين.
+const SUBJECT_ICONS = {
+  islamic: { color: "#D2A046", glyph: (c) => (
+    <>
+      <path d="M13.9 4.6a7.4 7.4 0 1 0 0 14.8 8.9 8.9 0 0 1 0-14.8Z" fill="#fff" />
+      <path d="m18.4 5.6.95 1.98 2.15.3-1.55 1.5.37 2.14-1.92-1.02-1.92 1.02.37-2.14-1.55-1.5 2.15-.3z" fill="#fff" />
+    </>
+  ) },
+  arabic: { color: "#DB6489", glyph: () => <BookGlyph /> },
+  english: { color: "#4B8FD4", glyph: () => <BookGlyph /> },
+  math: { color: "#3DA37A", glyph: (c) => (
+    <>
+      <rect x="5" y="2.8" width="14" height="18.4" rx="2.6" fill="#fff" />
+      <rect x="7.1" y="5" width="9.8" height="3.7" rx="1.1" fill={c} />
+      {[0, 1, 2].map((r) => [0, 1, 2].map((k) => (
+        <circle key={`${r}-${k}`} cx={8.7 + k * 3.3} cy={11.9 + r * 3.1} r="1.15" fill={c} />
+      )))}
+    </>
+  ) },
+  science: { color: "#8A6DD4", glyph: (c) => (
+    <>
+      <path d="M9.6 2.9h4.8a.95.95 0 0 1 0 1.9h-.35v4.02l4.62 8.34A2.6 2.6 0 0 1 16.4 21.1H7.6a2.6 2.6 0 0 1-2.27-3.94l4.62-8.34V4.8H9.6a.95.95 0 0 1 0-1.9Z" fill="#fff" />
+      <circle cx="10.4" cy="16.6" r="1.25" fill={c} />
+      <circle cx="13.7" cy="18.1" r=".95" fill={c} />
+    </>
+  ) },
+  social: { color: "#DD8C3C", glyph: (c) => (
+    <>
+      <circle cx="12" cy="12" r="8.7" fill="#fff" />
+      <g fill="none" stroke={c} strokeWidth="1.35">
+        <path d="M3.5 12h17" />
+        <path d="M12 3.4c2.1 2.3 3.2 5.3 3.2 8.6s-1.1 6.3-3.2 8.6c-2.1-2.3-3.2-5.3-3.2-8.6S9.9 5.7 12 3.4Z" />
+      </g>
+    </>
+  ) },
+  pe: { color: "#56B05B", glyph: () => (
+    <g fill="#fff">
+      <rect x="2.2" y="9.6" width="2.8" height="4.8" rx="1.1" />
+      <rect x="19" y="9.6" width="2.8" height="4.8" rx="1.1" />
+      <rect x="5.4" y="7.6" width="3.2" height="8.8" rx="1.3" />
+      <rect x="15.4" y="7.6" width="3.2" height="8.8" rx="1.3" />
+      <rect x="8.4" y="10.7" width="7.2" height="2.6" />
+    </g>
+  ) },
+  art: { color: "#A56ED4", glyph: (c) => (
+    <>
+      <path d="M12 3.1c-5.1 0-8.9 3.7-8.9 8.4 0 4.8 3.9 8.5 8.9 8.5 1.6 0 2.5-.9 2.5-2.1 0-.6-.2-1.05-.6-1.45-.3-.4-.5-.8-.5-1.3 0-1.15.9-1.95 2.05-1.95h1.65c2.25 0 3.9-1.75 3.9-4.05 0-3.35-3.7-6.1-9-6.1Z" fill="#fff" />
+      <g fill={c}>
+        <circle cx="7.6" cy="11.9" r="1.35" />
+        <circle cx="9.9" cy="7.9" r="1.35" />
+        <circle cx="14.5" cy="7.5" r="1.35" />
+        <circle cx="17.6" cy="10.4" r="1.35" />
+      </g>
+    </>
+  ) },
+  music: { color: "#DB65A4", glyph: () => (
+    <path d="M18.6 2.6 8.9 4.65v10.1a3.35 3.35 0 1 0 1.9 3.02V8.1l5.9-1.25v5.55a3.35 3.35 0 1 0 1.9 3.02z" fill="#fff" />
+  ) },
+  electricity: { color: "#E0A526", glyph: () => (
+    <path d="M13.9 2.2 6.3 13.05a.8.8 0 0 0 .65 1.26h3.62l-1.5 7.35a.42.42 0 0 0 .75.33l7.85-11.02a.8.8 0 0 0-.65-1.27h-3.75l1.45-7.2a.42.42 0 0 0-.75-.3Z" fill="#fff" />
+  ) },
+  computer: { color: "#3CA69E", glyph: (c) => (
+    <>
+      <rect x="2.6" y="4.2" width="18.8" height="12.6" rx="2.1" fill="#fff" />
+      <rect x="4.7" y="6.3" width="14.6" height="8.4" rx="1" fill={c} />
+      <rect x="10.3" y="17.3" width="3.4" height="2.2" fill="#fff" />
+      <rect x="6.8" y="19.4" width="10.4" height="2" rx="1" fill="#fff" />
+    </>
+  ) },
+};
+
+// صفحتان مفتوحتان — نفس الرسم للغة العربية والإنجليزية، يفرّقهما اللون
+// (كما كان بالصور السابقة).
+function BookGlyph() {
+  return (
+    <g fill="#fff">
+      <path d="M11.35 7.2C9.75 6 7.7 5.3 5.3 5.3c-.62 0-1.1.45-1.1 1.03v10.44c0 .58.48 1.03 1.1 1.03 2.4 0 4.45.6 6.05 1.8z" />
+      <path d="M12.65 7.2C14.25 6 16.3 5.3 18.7 5.3c.62 0 1.1.45 1.1 1.03v10.44c0 .58-.48 1.03-1.1 1.03-2.4 0-4.45.6-6.05 1.8z" />
+    </g>
+  );
+}
+
+// أول حرف دالّ على المادة: «الكهرباء» تعطي «ك» لا «ا» — أداة التعريف
+// ما تفرّق بين مادة وثانية، وكل المواد تقريباً تبدأ بها.
+function subjectInitial(subject) {
+  const s = (subject || "").trim();
+  if (!s) return "؟";
+  const bare = s.replace(/^ال(?=.)/, "");
+  return (bare || s)[0];
+}
+
 function SubjectIcon({ subject, size = 28 }) {
   const file = getSubjectIconFile(subject);
-  if (file) {
-    return <img src={`/icons/${file}.png`} alt={subject} style={{ width: size, height: size, objectFit: "contain", flexShrink: 0 }} />;
-  }
+  const icon = file && SUBJECT_ICONS[file];
+  // مادة ما نعرف لها أيقونة (مثل «الكهرباء») تاخذ نفس شكل البلاطة بلون
+  // محايد وأول حرف من اسمها — بدل دائرة رمادية بشكل مختلف عن جيرانها.
+  const color = icon ? icon.color : "#9AA3AF";
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: "#E5E7EB", color: "#6B7280", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.42, fontWeight: 800, flexShrink: 0 }}>
-      {subject?.trim()?.[0] || "؟"}
-    </div>
+    <svg viewBox="0 0 24 24" role="img" aria-label={subject || ""} style={{ width: size, height: size, display: "block", flexShrink: 0 }}>
+      <rect width="24" height="24" rx="6.2" fill={color} />
+      {icon ? icon.glyph(color) : (
+        <text x="12" y="12" textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="12.5" fontWeight="800">
+          {subjectInitial(subject)}
+        </text>
+      )}
+    </svg>
   );
 }
 
@@ -459,10 +578,20 @@ export default function Home() {
   const [feedbackDue, setFeedbackDue] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [view, setView] = useState("dashboard");
+  // التبديل داخل تبويب «الطلبات والجداول» بين قسم الجداول وقسم الطلبات
+  const [scheduleSubTab, setScheduleSubTab] = useState("schedule");
+  // يتغيّر بعد كل رفعة عشان تعيد بطاقة المرفقات جلب قائمتها — الروابط
+  // موقّعة وتنتهي، فالتحديث جلب جديد لا مجرد إعادة رسم.
+  const [attachmentsKey, setAttachmentsKey] = useState(0);
+  const [broadcast, setBroadcast] = useState(null);
   const [showAddChild, setShowAddChild] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showUploadSchedule, setShowUploadSchedule] = useState(false);
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [editingCell, setEditingCell] = useState(null); // { child, day, period, entry } — entry فاضي لو خانة جديدة
+  // نتيجة تحليل خطة تنتظر مراجعة الأم — ما تنحفظ إلا باعتمادها
+  const [reviewDraft, setReviewDraft] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showSubscriptionManage, setShowSubscriptionManage] = useState(false);
   const [openTask, setOpenTask] = useState(null);
@@ -474,7 +603,45 @@ export default function Home() {
   // وهذا أسوأ من انتظار: يخوّف الأم إن بياناتها راحت. ما نرجّعه false
   // أبداً بعد أول تحميل، عشان السحب للتحديث ما يومض شاشة انتظار.
   const [dataLoaded, setDataLoaded] = useState(false);
+  // مشتركة قديمة دخلت قبل ما يصير الرقم السري إلزامياً: جلستها سارية
+  // وتثبت هويتها، فنطلب منها الرقم السري **داخل التطبيق** بلا أي كود.
+  // بدون هذا تبقى بلا رقم سري وما تقدر تدخل من جهاز جديد بعد إلغاء الكود.
+  const [needsPassword, setNeedsPassword] = useState(false);
   const scrollRef = useRef(null);
+
+  // WebKit «يكبّر النص تلقائياً» بالفقرات الطويلة داخل كتل عريضة، والتكبير
+  // اللي يحسبه بالوضع الأفقي يعلق حتى بعد ما ترجع الشاشة للطول — فتبان
+  // الخطوط كبيرة (شوهد بالإنتاج بشاشتي المعلم الذكي والمتابعة والدرجات:
+  // فقرة حجمها ١٢ بكسل تنرسم بضعف الحجم). قفل الخاصية بـCSS ما كفى لأن
+  // القيمة المحسوبة ما تُعاد بعد الدوران، فنجبره يعيد حسابها: نبدّل قيمة
+  // الخاصية ونرجّعها بالإطار التالي بعد كل دوران.
+  useEffect(() => {
+    const root = document.documentElement;
+    const vp = document.querySelector('meta[name="viewport"]');
+    const base = vp?.getAttribute("content") || "";
+    let timer = 0;
+    const recompute = () => {
+      clearTimeout(timer);
+      root.style.webkitTextSizeAdjust = "100.001%";
+      // وبعد الدوران من العرض للطول يبقى WebKit على مقياس عرض الوضع
+      // الأفقي، فتطلع الشاشة مكبّرة وتحتاج تصغيراً يدوياً كل مرة. تثبيت
+      // maximum-scale=1 للحظة يرجّع العرض «fit» بالضبط، ثم نرجّع الوسم
+      // كما كان عشان التكبير اليدوي يبقى متاحاً لضعاف البصر — القرار
+      // القديم بـlayout.jsx كان تركه مفتوحاً عمداً، وما نبي نلغيه.
+      if (vp && base) vp.setAttribute("content", `${base}, maximum-scale=1`);
+      timer = setTimeout(() => {
+        root.style.webkitTextSizeAdjust = "100%";
+        if (vp && base) vp.setAttribute("content", base);
+      }, 400);
+    };
+    window.addEventListener("orientationchange", recompute);
+    window.addEventListener("resize", recompute);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("orientationchange", recompute);
+      window.removeEventListener("resize", recompute);
+    };
+  }, []);
 
   useEffect(() => {
     installAuthFetch();
@@ -524,6 +691,35 @@ export default function Home() {
     // نرفع العلم بكل الحالات (نجاح، حجب، فشل شبكة) — وإلا تبقى شاشة
     // «جاري التحميل» للأبد بدل ما يشوف المستخدم شي يتصرف معه.
     setDataLoaded(true);
+
+    // ————— قبل أي رجوع مبكر —————
+    // تسجيل الجهاز وبطاقة الإعلان لازم يشتغلان **لكل من عنده حساب**، مشتركة
+    // أو لا (طلبها ٢٦ سبتمبر). كانا تحت شرط `access.allowed` فكانت غير
+    // المشتركة ما تسجّل جهازها أبداً — فما يوصلها ولا إعلان، ومنهم إعلان
+    // الاشتراك نفسه اللي هي أكثر وحدة تحتاجه.
+    // والتذكيرات المحلية انلغت (قرار ٢٣ سبتمبر)؛ النداء باقٍ ليمسح المجدول
+    // سابقاً من الأجهزة، وهذا كذلك يخص الجميع.
+    syncTaskReminders();
+    registerPushDevice();
+    registerWebPush();
+    fetch("/api/broadcasts/latest")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.broadcast) return;
+        // الخادم هو المرجع، والحارس المحلي احتياط: لو انقفلت على هذا الجهاز
+        // وما وصل التسجيل للخادم، ما نطلعها له مرة ثانية.
+        let seen = false;
+        try { seen = localStorage.getItem(`daftary_bc_read_${d.broadcast.id}`) === "1"; } catch {}
+        if (!seen) { setBroadcast(d.broadcast); return; }
+
+        // الجهاز يقول «قرأتها» والخادم لا — يعني تسجيل الإقفال ضاع
+        // (انقطعت الشبكة لحظة الضغط). نعيده الحين عشان ما ترجع البطاقة
+        // على **جهازها الثاني**: الحارس المحلي ما يعبر الأجهزة، والخادم
+        // وحده هو اللي يعبرها. والمسار يتحمّل التكرار (23505 مو خطأ).
+        fetch(`/api/broadcasts/${d.broadcast.id}/read`, { method: "POST" }).catch(() => {});
+      })
+      .catch(() => {});
+
     if (!access.allowed || !data) return;
 
     setChildren(data.children || []);
@@ -535,11 +731,7 @@ export default function Home() {
     setRequirements(data.requirements || []);
     setClassSchedule(data.classSchedule || []);
     setFeedbackDue(!!data.feedbackDue);
-    // تذكيرات على الجهاز نفسه — تشتغل تلقائياً وحتى بدون إنترنت داخل تطبيق آبل
-    syncTaskReminders([...(data.tasks || []), ...(data.upcomingTasks || [])]);
-    // وتسجيل الجهاز لإشعارات السيرفر — تكمّل المحلية: توصل والتطبيق مقفل،
-    // وتخبر ولي الأمر بواجب أضافه شخص ثاني بلا ما يفتح التطبيق.
-    registerPushDevice();
+    setNeedsPassword(!!data.needsPassword);
   }
 
   function handleLogout() {
@@ -662,13 +854,15 @@ export default function Home() {
     setOpenTask(null);
   }
 
-  async function handleUpdateTaskDate(taskId, dueDate) {
-    const res = await fetch(`/api/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dueDate, motherId: mother.id }) });
+  // تحديث جزئي أو كامل لواجب موجود — تاريخ فقط (السطر القديم) أو مادة/نوع/
+  // تفاصيل/تاريخ معاً (التعديل الكامل من TaskModal). يرمي عند الفشل عشان
+  // الشاشة تعرض رسالة الخطأ وتبقى مفتوحة بدل ما تقفل بصمت.
+  async function handleUpdateTask(taskId, updates) {
+    const res = await fetch(`/api/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "تعذّر حفظ التاريخ");
+      throw new Error(data.error || "تعذّر حفظ التعديلات");
     }
-    setOpenTask(null);
     await loadAll(mother.id);
   }
 
@@ -684,6 +878,54 @@ export default function Home() {
     const res = await fetch(`/api/requirements/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
     if (!res.ok) { alert("تعذّر حذف الطلب، حاولي مرة ثانية."); return; }
     setRequirements((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  async function handleUpdateReq(id, updates) {
+    const res = await fetch(`/api/requirements/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "تعذّر حفظ التعديلات");
+    }
+    setRequirements((prev) => prev.map((r) => (r.id === id ? { ...r, item: updates.item ?? r.item, due_date: "dueDate" in updates ? updates.dueDate : r.due_date } : r)));
+  }
+
+  async function handleClearBought(childId) {
+    if (!confirm("مسح كل المستلزمات المُشتراة لهذا الطالب/ة؟")) return;
+    const res = await fetch("/api/requirements/clear-bought", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ childId, motherId: mother.id }) });
+    if (!res.ok) { alert("تعذّر المسح، حاولي مرة ثانية."); return; }
+    setRequirements((prev) => prev.filter((r) => !(r.child_id === childId && r.bought)));
+  }
+
+  // إضافة واجب/اختبار يدوياً — تأخذ نفس مسار الترتيب والتذكيرات اللي
+  // تمشي عليه المهام المستخرجة من الصور (نفس الجدول، نفس كرون التذكيرات).
+  async function handleAddTask(taskData) {
+    const res = await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(taskData) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { alert(data.error || "تعذّرت إضافة الواجب، حاولي مرة ثانية."); return; }
+    setShowAddTask(false);
+    await loadAll(mother.id);
+  }
+
+  // تعديل خانة بجدول الحصص — إضافة (POST) لو الخانة فاضية أو تحديث (PATCH)
+  // لو فيها حصة أصلاً. اليوم ورقم الحصة يحددان الخانة نفسها فما يتغيّران.
+  async function handleSaveScheduleCell(entryId, payload) {
+    const res = entryId
+      ? await fetch(`/api/class-schedule/${entryId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      : await fetch("/api/class-schedule", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "تعذّر حفظ الحصة");
+    }
+    setEditingCell(null);
+    await loadAll(mother.id);
+  }
+
+  async function handleDeleteScheduleCell(entryId) {
+    if (!confirm("حذف هذه الحصة من الجدول؟")) return;
+    const res = await fetch(`/api/class-schedule/${entryId}`, { method: "DELETE" });
+    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    setEditingCell(null);
+    await loadAll(mother.id);
   }
 
   if (loading || (mother && (!schools || !dataLoaded))) {
@@ -709,6 +951,18 @@ export default function Home() {
     );
   }
 
+  // مشتركة قديمة بلا رقم سري: نطلبه أول ما تفتح التطبيق، قبل أي شي ثاني.
+  // جلستها الحالية هي إثبات الهوية، فما نحتاج كوداً ولا تكلفة Twilio —
+  // وبعدها يصير دخولها من أي جهاز بالموبايل + الرقم السري.
+  if (mother && dataLoaded && needsPassword) {
+    return (
+      <>
+        <ExistingUserPasswordSetup name={mother.name} onDone={() => setNeedsPassword(false)} />
+        <InstallPrompt />
+      </>
+    );
+  }
+
   // اشتراك التطبيق الشامل — appAccess تكون null لحظياً وقت الفحص الأول،
   // ونعتبرها "مسموح" بهالحالة عشان ما نعطّل تجربة التحميل المعتادة طول ما
   // الميزة معطّلة (الوضع الافتراضي). القفل الفعلي بس لما يرجع allowed:false.
@@ -716,6 +970,11 @@ export default function Home() {
     return (
       <>
         <AppAccessPaywall studentsCount={appAccess.studentsCount || children.length} subscription={appAccess.subscription} onUnlocked={() => loadAll(mother.id)} motherId={mother.id} onLogout={handleLogout} />
+        {/* بطاقة الإعلان فوق شاشة الاشتراك كذلك (طلبها ٢٦ سبتمبر):
+            الإعلانات توصل الجميع، وأهمها — إعلان الاشتراك نفسه — هذي
+            بالضبط هي اللي لازم تشوفه. بدونها كانت الشاشة ترجع قبل ما
+            تُركَّب البطاقة فما تشوفها غير المشتركة أبداً. */}
+        {broadcast && <BroadcastCard broadcast={broadcast} onClose={() => setBroadcast(null)} />}
         <InstallPrompt />
       </>
     );
@@ -730,14 +989,17 @@ export default function Home() {
 
   return (
     <div dir="rtl" className="app-root" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {/* بالوضع الأفقي ما فيه إلا ~٣٩٠ بكسل ارتفاع: الترحيب والعنوان
+          والتاريخ مكدّسين كانوا ياكلون ثلث الشاشة. الأصناف هنا تخلي
+          globals.css يصفّهم بسطر واحد مضغوط لما تنقلب الشاشة. */}
       {native ? (
-        <div className="ios-navbar" style={{ padding: "calc(env(safe-area-inset-top) + 4px) 16px 10px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+        <div className="ios-navbar">
+          <div className="ios-navbar-row">
             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              <button onClick={() => setShowProfile(true)} aria-label="حسابي" style={{ background: "none", padding: 0, minHeight: 44, display: "flex", alignItems: "center", flexShrink: 0 }}>
-                <img src="/logo.png" alt="" style={{ width: 32, height: 32, borderRadius: 8 }} />
+              <button onClick={() => setShowProfile(true)} aria-label="حسابي" className="ios-navbar-logo" style={{ background: "none", padding: 0, display: "flex", alignItems: "center", flexShrink: 0 }}>
+                <img src="/logo.png" alt="" />
               </button>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً، {mother.name}</span>
+              <span className="ios-navbar-greeting">مرحباً، {mother.name}</span>
             </div>
             {view === "dashboard" && (
               <button onClick={() => setShowUpload(true)} className="ios-btn-plain" style={{ fontWeight: 600, flexShrink: 0 }}>
@@ -745,15 +1007,17 @@ export default function Home() {
               </button>
             )}
           </div>
-          <h1 className="ios-large-title">{TABS.find((t) => t.key === view)?.label}</h1>
-          <p style={{ margin: "2px 0 0", fontSize: 15, color: "#8E8E93", letterSpacing: "-0.01em" }}>
-            {new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}
-          </p>
+          <div className="ios-navbar-titles">
+            <h1 className="ios-large-title">{TABS.find((t) => t.key === view)?.label}</h1>
+            <p className="ios-navbar-date">
+              {new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}
+            </p>
+          </div>
         </div>
       ) : (
-        <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(6px)", padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0EEE8" }}>
+        <div className="web-header" style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0EEE8" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <img src="/logo.png" alt="دفتري" style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0 }} />
+            <img src="/logo.png" alt="دفتري" className="web-header-logo" style={{ borderRadius: 14, flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً، {mother.name}</p>
               <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
@@ -782,6 +1046,7 @@ export default function Home() {
           </div>
         )}
         <PermissionsBanner />
+        <FamilyInviteBanner onJoined={() => loadAll(mother.id)} />
         {feedbackDue && <FeedbackBanner onOpen={() => setShowFeedback(true)} />}
         {view === "dashboard" ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -807,18 +1072,10 @@ export default function Home() {
                   onToggle={handleMarkDone}
                   onOpenTask={setOpenTask}
                   onEdit={() => setEditingChild(planChild)}
+                  onAddTask={() => setShowAddTask(true)}
+                  onClearedDone={(childId) => setDoneTasks((prev) => prev.filter((t) => t.child_id !== childId))}
                 />
               </>
-            )}
-          </div>
-        ) : view === "requirements" ? (
-          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-            {children.length === 0 ? (
-              <EmptyState onAdd={() => setShowAddChild(true)} />
-            ) : (
-              children.map((c) => (
-                <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onDeleteReq={handleDeleteReq} />
-              ))
             )}
           </div>
         ) : view === "schedule" ? (
@@ -827,13 +1084,44 @@ export default function Home() {
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
               <>
+                {native ? (
+                  <div className="ios-segmented">
+                    <button onClick={() => setScheduleSubTab("schedule")} data-active={scheduleSubTab === "schedule"}>الجداول</button>
+                    <button onClick={() => setScheduleSubTab("requirements")} data-active={scheduleSubTab === "requirements"}>الطلبات</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setScheduleSubTab("schedule")} style={{ flex: 1, padding: 10, borderRadius: 12, background: scheduleSubTab === "schedule" ? "#B7A6E8" : "#F3F4F6", color: scheduleSubTab === "schedule" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <TileIcon name="schedule" size={17} />
+                        الجداول
+                      </span>
+                    </button>
+                    <button onClick={() => setScheduleSubTab("requirements")} style={{ flex: 1, padding: 10, borderRadius: 12, background: scheduleSubTab === "requirements" ? "#B7A6E8" : "#F3F4F6", color: scheduleSubTab === "requirements" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <TileIcon name="requirements" size={17} />
+                        الطلبات
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {scheduleSubTab === "requirements" ? (
+                  children.map((c) => (
+                    <RequirementsCard key={c.id} child={c} items={requirements.filter((r) => r.child_id === c.id)} onToggle={handleToggleReq} onDeleteReq={handleDeleteReq} onClearBought={handleClearBought} onUpdateReq={handleUpdateReq} />
+                  ))
+                ) : (
+                  <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "#9CA3AF" }}>جدول الحصص الأسبوعي</span>
                   <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ رفع/تحديث الجدول</button>
                 </div>
                 {children.map((c) => (
-                  <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} />
+                  <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} onCellClick={(day, period, entry) => setEditingCell({ child: c, day, period, entry })} />
                 ))}
+                <AttachmentsCard children={children} refreshKey={attachmentsKey} />
+                  </>
+                )}
               </>
             )}
           </div>
@@ -842,7 +1130,7 @@ export default function Home() {
             {children.length === 0 ? (
               <EmptyState onAdd={() => setShowAddChild(true)} />
             ) : (
-              <ProgressView children={children} motherId={mother.id} />
+              <ProgressView children={children} motherId={mother.id} classSchedule={classSchedule} />
             )}
           </div>
         ) : (
@@ -878,6 +1166,18 @@ export default function Home() {
       )}
 
       {showAddChild && <AddChildModal schools={schools} nextColorIdx={children.length} onClose={() => setShowAddChild(false)} onSave={handleAddChild} />}
+      {showAddTask && planChild && <AddTaskModal child={planChild} onClose={() => setShowAddTask(false)} onSave={handleAddTask} />}
+      {editingCell && (
+        <EditScheduleCellModal
+          child={editingCell.child}
+          day={editingCell.day}
+          period={editingCell.period}
+          entry={editingCell.entry}
+          onClose={() => setEditingCell(null)}
+          onSave={handleSaveScheduleCell}
+          onDelete={handleDeleteScheduleCell}
+        />
+      )}
       {editingChild && (
         <AddChildModal
           schools={schools}
@@ -894,7 +1194,16 @@ export default function Home() {
           motherId={mother.id}
           hint="ارفعي الخطط الأسبوعية، جدول الاختبارات ومتطلبات العام الدراسي هنا"
           onClose={() => setShowUpload(false)}
-          onDone={() => loadAll(mother.id)}
+          onDone={() => { loadAll(mother.id); setAttachmentsKey((k) => k + 1); }}
+          onReview={(draft) => { setShowUpload(false); setReviewDraft(draft); }}
+        />
+      )}
+      {reviewDraft && (
+        <ReviewDraftScreen
+          draft={reviewDraft}
+          child={children.find((c) => c.id === reviewDraft.childId)}
+          onClose={() => setReviewDraft(null)}
+          onApplied={() => { setReviewDraft(null); loadAll(mother.id); }}
         />
       )}
       {showUploadSchedule && (
@@ -911,10 +1220,11 @@ export default function Home() {
             </div>
           )}
           onClose={() => setShowUploadSchedule(false)}
-          onDone={() => loadAll(mother.id)}
+          onDone={() => { loadAll(mother.id); setAttachmentsKey((k) => k + 1); }}
         />
       )}
-      {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateDate={handleUpdateTaskDate} />}
+      {broadcast && <BroadcastCard broadcast={broadcast} onClose={() => setBroadcast(null)} />}
+      {openTask && <TaskModal task={openTask} motherId={mother.id} color={PALETTE[(children.find((c) => c.id === openTask.child_id)?.color_idx || 0) % PALETTE.length]} onClose={() => setOpenTask(null)} onMarkDone={handleMarkDone} onDelete={handleDeleteTask} onUpdateTask={handleUpdateTask} />}
       {showProfile && (
         <ProfileView
           mother={mother}
@@ -993,7 +1303,7 @@ function InstallPrompt() {
           {platform === "ios" ? "حمّلي تطبيق دفتري" : "أضيفي دفتري للشاشة الرئيسية"}
         </p>
         <p style={{ margin: 0, fontSize: 11, color: "#6B7280" }}>
-          {platform === "ios" ? "تجربة أسرع وإشعارات فورية" : "وصول أسرع من شاشة جوالك مباشرة"}
+          {platform === "ios" ? "تجربة أسرع وإشعارات فورية" : "وصول أسرع من شاشة موبايلك مباشرة"}
         </p>
       </div>
       {platform === "ios" ? (
@@ -1014,13 +1324,29 @@ function InstallPrompt() {
 function Onboarding({ onDone }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  // step: "phone" = إدخال الاسم والرقم، "code" = إدخال كود التحقق
-  const [step, setStep] = useState("phone");
+  // step: "login" (موبايل + رقم سري) | "signup" (اسم + موبايل + رقم سري)
+  // — الاثنان بلا أي كود. و"code"/"setPassword" ما تُستخدمان إلا بمسار
+  // «نسيت الرقم السري»، وهو المكان الوحيد اللي بقي فيه Twilio: بدون أي
+  // قناة تحقق يقدر أي شخص يعيد تعيين رقم سري لأي حساب ويدخل بيانات عياله.
+  const [step, setStep] = useState("login");
+  // دخلنا من «نسيت الرقم السري»؟ لازم نعرف: verify-otp يرجّع
+  // needsPassword=false لمن عندها رقم سري أصلاً، فبدون هالعلم كانت اللي
+  // نسيت رقمها تدخل بالكود وتطلع بلا ما تحدّد رقماً جديداً — ويبقى القديم
+  // المنسي هو الوحيد اللي يدخّلها.
+  const [forgot, setForgot] = useState(false);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resendIn, setResendIn] = useState(0);
-  const canSubmit = name.trim().length > 1 && /^[0-9]{8}$/.test(phone.trim());
+  // نتيجة الكود الناجح (ولي الأمر + الجلسة) نخزّنها هنا لين تنتهي خطوة
+  // الرقم السري (اختيارية) — عشان onDone يُنادى مرة وحدة بالنهاية.
+  const [verified, setVerified] = useState(null);
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+
+  const phoneOk = /^[0-9]{8}$/.test(phone.trim());
+  const canLogin = phoneOk && password.trim().length >= 4;
+  const canSignup = phoneOk && name.trim().length > 1 && password.trim().length >= 4 && password === password2;
 
   // عدّاد تنازلي قبل ما نسمح بإعادة الإرسال — Twilio يحدّها بـ٥ مرات كل ١٠ دقائق،
   // فنمنع المستخدمة من حرق محاولاتها بالضغط المتكرر.
@@ -1047,14 +1373,22 @@ function Onboarding({ onDone }) {
       : err.message;
   }
 
-  async function sendCode(isResend = false) {
+  // bypassPassword=true لما تضغط «نسيت الرقم السري» — تجبر إرسال الكود
+  // حتى لو عندها رقم سري محدّد أصلاً.
+  async function sendCode(isResend = false, bypassPassword = false) {
     setBusy(true);
     setError("");
+    if (bypassPassword) setForgot(true);
     try {
-      await post("/api/auth/request-otp", { phone: phone.trim(), resend: isResend === true });
-      setStep("code");
-      setCode("");
-      setResendIn(30);
+      const data = await post("/api/auth/request-otp", { phone: phone.trim(), resend: isResend === true, bypassPassword });
+      if (data.channel === "password") {
+        setStep("password");
+        setPassword("");
+      } else {
+        setStep("code");
+        setCode("");
+        setResendIn(30);
+      }
     } catch (err) {
       setError(friendly(err));
     } finally {
@@ -1071,11 +1405,90 @@ function Onboarding({ onDone }) {
         phone: phone.trim(),
         code: code.trim(),
       });
+      if (data.needsPassword || forgot) {
+        // خطوة اختيارية — الحساب مسجَّل دخول فعلياً، بس نعرض فرصة تحديد
+        // رقم سري قبل ما نكمّل، عشان الدخول القادم يصير بلا كود.
+        setVerified(data);
+        setStep("setPassword");
+        setBusy(false);
+      } else {
+        onDone(data.mother, data.token);
+      }
+    } catch (err) {
+      setError(friendly(err));
+      setBusy(false);
+    }
+  }
+
+  async function submitPassword() {
+    setBusy(true);
+    setError("");
+    try {
+      const data = await post("/api/auth/login-password", { phone: phone.trim(), password });
       onDone(data.mother, data.token);
     } catch (err) {
       setError(friendly(err));
       setBusy(false);
     }
+  }
+
+  // إنشاء حساب بلا كود: الاسم + الموبايل + رقم سري.
+  async function submitSignup() {
+    if (password.trim().length < 4) { setError("الرقم السري لازم يكون ٤ أحرف/أرقام على الأقل"); return; }
+    if (password !== password2) { setError("الرقمان غير متطابقين"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const data = await post("/api/auth/signup", { name: name.trim(), phone: phone.trim(), password });
+      onDone(data.mother, data.token);
+    } catch (err) {
+      setError(friendly(err));
+      setBusy(false);
+    }
+  }
+
+  function goto(next) {
+    setStep(next);
+    setError("");
+    setPassword("");
+    setPassword2("");
+    setForgot(false);
+  }
+
+  async function saveNewPassword() {
+    if (password.trim().length < 4) { setError("الرقم السري لازم يكون ٤ أحرف/أرقام على الأقل"); return; }
+    if (password !== password2) { setError("الرقمان غير متطابقين"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${verified.token}` },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "تعذّر الحفظ");
+      onDone(verified.mother, verified.token);
+    } catch (err) {
+      setError(friendly(err));
+      setBusy(false);
+    }
+  }
+
+
+  if (step === "setPassword") {
+    return (
+      <SetPasswordScreen
+        password={password}
+        setPassword={setPassword}
+        password2={password2}
+        setPassword2={setPassword2}
+        busy={busy}
+        error={error}
+        onSave={saveNewPassword}
+        title={forgot ? "اختاري رقماً سرياً جديداً" : undefined}
+        subtitle={forgot ? "تأكدنا من رقمك بالكود — حدّدي رقمك السري الجديد وبتدخلين فيه من أي جهاز" : undefined}
+      />
+    );
   }
 
   if (step === "code") {
@@ -1089,49 +1502,163 @@ function Onboarding({ onDone }) {
         resendIn={resendIn}
         onSubmit={submitCode}
         onResend={() => sendCode(true)}
-        onBack={() => { setStep("phone"); setError(""); }}
+        onBack={() => goto("login")}
       />
     );
   }
 
   return (
-    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 40 }}>
-        <div style={{ textAlign: "center", marginBottom: 20 }}>
-          <img src="/logo.png" alt="دفتري" style={{ width: 132, height: 132, borderRadius: 30, margin: "0 auto 14px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
-          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
-          <p style={{ color: "#6B7280", fontSize: 13, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
-        </div>
-        <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>ولي الأمر</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسمك الكامل" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 12 }} />
-          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>رقم الجوال</label>
-          <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-            <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
-            {/* لوحة أرقام بدل لوحة الحروف — والتنظيف يقبل اللصق بمسافات أو
-                شرطات (65 068 000) بدل ما يرفضه التحقق بلا ما تعرف السبب. */}
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="XXXXXXXX"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel"
-              maxLength={8}
-              style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, direction: "ltr" }}
-            />
+    <AuthShell>
+      {step === "signup" ? (
+        <>
+          <div style={{ textAlign: "center", marginBottom: 18 }}>
+            <img src="/logo.png" alt="دفتري" style={{ width: 96, height: 96, borderRadius: 24, margin: "0 auto 12px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
+            <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 22, fontWeight: 800 }}>إنشاء حساب</h1>
+            <p style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: "10px 0 0", background: "#FFF7E6", color: "#8C6027", fontWeight: 800, fontSize: 12.5, padding: "7px 14px", borderRadius: 999 }}>
+              🎁 جرّبي مجاناً: طالب واحد + جدول حصص + خطة أسبوعية، بلا اشتراك
+            </p>
           </div>
-          <button disabled={!canSubmit || busy} onClick={sendCode} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit && !busy ? 1 : 0.4 }}>
-            {busy ? "جاري الإرسال..." : "متابعة"}
+
+          <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <label style={AUTH_LABEL}>الاسم</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسمك الكامل" style={{ ...AUTH_FIELD, marginBottom: 12 }} />
+
+            <label style={AUTH_LABEL}>رقم الموبايل</label>
+            <PhoneField phone={phone} setPhone={setPhone} />
+
+            <label style={AUTH_LABEL}>الرقم السري</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="٤ أحرف/أرقام على الأقل"
+              autoComplete="new-password" style={{ ...AUTH_FIELD, marginBottom: 10, direction: "ltr", textAlign: "center" }} />
+            <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="أعيدي كتابته"
+              autoComplete="new-password" style={{ ...AUTH_FIELD, marginBottom: 14, direction: "ltr", textAlign: "center" }} />
+
+            <button disabled={!canSignup || busy} onClick={submitSignup}
+              style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSignup && !busy ? 1 : 0.4 }}>
+              {busy ? "جاري الإنشاء..." : "إنشاء الحساب"}
+            </button>
+            {error && <p style={AUTH_ERROR}>{error}</p>}
+          </div>
+
+          <button onClick={() => goto("login")} style={AUTH_SWITCH}>
+            عندك حساب؟ <span style={{ color: "#5C4B8C", fontWeight: 800 }}>سجّلي دخول</span>
           </button>
-          {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 }}>{error}</p>}
-          <p style={{ color: "#9CA3AF", fontSize: 11.5, margin: "10px 0 0", lineHeight: 1.7, textAlign: "center" }}>
-            بنرسل لك كود تحقق على واتساب للتأكد أن الرقم رقمك
-          </p>
-        </div>
+        </>
+      ) : (
+        <>
+          <div style={{ textAlign: "center", marginBottom: 18 }}>
+            <img src="/logo.png" alt="دفتري" style={{ width: 120, height: 120, borderRadius: 28, margin: "0 auto 12px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
+            <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
+            <p style={{ color: "#6B7280", fontSize: 13, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
+          </div>
+
+          <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <label style={AUTH_LABEL}>رقم الموبايل</label>
+            <PhoneField phone={phone} setPhone={setPhone} />
+
+            <label style={AUTH_LABEL}>الرقم السري</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رقمك السري"
+              autoComplete="current-password" style={{ ...AUTH_FIELD, marginBottom: 14, direction: "ltr", textAlign: "center" }} />
+
+            <button disabled={!canLogin || busy} onClick={submitPassword}
+              style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canLogin && !busy ? 1 : 0.4 }}>
+              {busy ? "جاري الدخول..." : "تسجيل الدخول"}
+            </button>
+            {error && <p style={AUTH_ERROR}>{error}</p>}
+
+            {/* المكان الوحيد اللي بقي فيه كود تحقق: بدونه يقدر أي شخص يعيد
+                تعيين رقم سري لأي رقم ويدخل حساب غيره. */}
+            <button disabled={busy || !/^[0-9]{8}$/.test(phone.trim())} onClick={() => sendCode(false, true)}
+              style={{ width: "100%", padding: 10, background: "none", color: "#6B7280", fontWeight: 700, fontSize: 12.5, minHeight: 40, marginTop: 4, opacity: /^[0-9]{8}$/.test(phone.trim()) ? 1 : 0.45 }}>
+              نسيت الرقم السري
+            </button>
+          </div>
+
+          <button onClick={() => goto("signup")} style={AUTH_SWITCH}>
+            ما عندك حساب؟ <span style={{ color: "#5C4B8C", fontWeight: 800 }}>أنشئي حساب</span>
+          </button>
+        </>
+      )}
+    </AuthShell>
+  );
+}
+
+const AUTH_LABEL = { fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 };
+const AUTH_FIELD = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16 };
+const AUTH_ERROR = { color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 };
+const AUTH_SWITCH = { width: "100%", padding: 12, marginTop: 12, background: "none", color: "#6B7280", fontWeight: 700, fontSize: 13.5, minHeight: 44 };
+
+// لوحة أرقام بدل لوحة الحروف — والتنظيف يقبل اللصق بمسافات أو شرطات
+// (65 068 000) بدل ما يرفضه التحقق بلا ما تعرف السبب.
+function PhoneField({ phone, setPhone }) {
+  return (
+    <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+      <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
+      <input
+        value={phone}
+        onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
+        placeholder="XXXXXXXX"
+        type="tel"
+        inputMode="numeric"
+        autoComplete="tel"
+        maxLength={8}
+        style={{ ...AUTH_FIELD, flex: 1, direction: "ltr" }}
+      />
+    </div>
+  );
+}
+
+// شاشة إلزامية للمشتركات القديمات بعد إلغاء الكود (قرار ١٩ سبتمبر):
+// حساباتهن انفتحت أيام كان الرقم السري اختيارياً، و٨٠٪ تخطّوه. الحين
+// الدخول صار بالموبايل + الرقم السري بس، فبدون رقم سري ما يقدرن يدخلن
+// من جهاز جديد. نطلبه منهن وهن داخلات أصلاً — الجلسة السارية تثبت
+// الهوية، فبلا كود ولا رسالة.
+function ExistingUserPasswordSetup({ name, onDone }) {
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    if (password.trim().length < 4) { setError("الرقم السري لازم يكون ٤ أحرف/أرقام على الأقل"); return; }
+    if (password !== password2) { setError("الرقمان غير متطابقين"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "تعذّر الحفظ");
+      onDone();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <AuthShell>
+      <SetPasswordScreenBody
+        title={`أهلاً ${name || ""}، أكملي حسابك`}
+        subtitle="صار الدخول بالموبايل + رقم سري بدل الكود. حدّدي رقمك السري مرة وحدة الحين — بياناتك وعيالك كلهم باقين كما هم."
+        password={password} setPassword={setPassword}
+        password2={password2} setPassword2={setPassword2}
+        busy={busy} error={error} onSave={save}
+      />
+    </AuthShell>
+  );
+}
+
+// الإطار المشترك لشاشات الدخول — نفس الخلفية والتذييل بكل الشاشات.
+function AuthShell({ children }) {
+  return (
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 24 }}>
+        {children}
       </div>
       <div style={{ textAlign: "center", flexShrink: 0, width: "100%", maxWidth: 380, margin: "0 auto" }}>
-        <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           تواصل معنا
         </a>
         <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
@@ -1184,6 +1711,99 @@ function VerifyCodeScreen({ phone, code, setCode, busy, error, resendIn, onSubmi
         </p>
       </div>
     </div>
+  );
+}
+
+// دخول برقم سري — يظهر بدل خطوة الكود لرقم سبق أن حدّد رقماً سرياً، فما
+// فيه انتظار رسالة ولا تكلفة Twilio.
+function PasswordLoginScreen({ password, setPassword, busy, error, onSubmit, onForgot, onBack }) {
+  const canSubmit = password.trim().length >= 4 && !busy;
+  return (
+    <div dir="rtl" className="app-scroll" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 14px)", background: "linear-gradient(180deg,#F7F5FC,#F1EFFA)" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", maxWidth: 380, margin: "0 auto", paddingBottom: 40 }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <img src="/logo.png" alt="دفتري" style={{ width: 100, height: 100, borderRadius: 24, margin: "0 auto 14px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
+          <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 21, fontWeight: 800 }}>أدخلي رقمك السري</h1>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0" }}>مرحباً بعودتك 🤍</p>
+        </div>
+
+        <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="الرقم السري"
+            autoComplete="current-password"
+            style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "12px", fontSize: 18, textAlign: "center", direction: "ltr", marginBottom: 14 }}
+            onKeyDown={(e) => { if (e.key === "Enter" && canSubmit) onSubmit(); }}
+          />
+          <button disabled={!canSubmit} onClick={onSubmit} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
+            {busy ? "جاري الدخول..." : "دخول"}
+          </button>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 }}>{error}</p>}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, gap: 8 }}>
+            <button onClick={onBack} disabled={busy} style={{ background: "none", color: "#6B7280", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
+              تغيير الرقم
+            </button>
+            <button onClick={onForgot} disabled={busy} style={{ background: "none", color: "#7B68C4", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
+              نسيت الرقم السري؟
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// تحديد الرقم السري — **إلزامي** (قرار صاحبة التطبيق ١٩ سبتمبر). كان
+// اختيارياً بزر «تخطي الآن»، والنتيجة إن ٨٠٪ من الحسابات (١٢٦ من ١٥٨)
+// تخطّوه فصار يوصلهم كود بكل دخول، وهذا هو مصدر فاتورة Twilio كلها.
+// بالإلزام يصير الكود مرة واحدة لكل رقم مدى الحياة بدل مرة كل دخول.
+function SetPasswordScreen(props) {
+  return (
+    <AuthShell>
+      <SetPasswordScreenBody {...props} />
+    </AuthShell>
+  );
+}
+
+// جسم شاشة الرقم السري بلا إطار — تستخدمه شاشتان: بعد «نسيت الرقم السري»
+// وشاشة المشتركات القديمات.
+function SetPasswordScreenBody({ password, setPassword, password2, setPassword2, busy, error, onSave, title, subtitle }) {
+  return (
+    <>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <span style={{ fontSize: 40 }}>🔒</span>
+          <h1 style={{ color: "#5C4B8C", margin: "8px 0 0", fontSize: 20, fontWeight: 800 }}>{title || "حدّدي رقماً سرياً"}</h1>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>
+            {subtitle || "عشان دخولك القادم — حتى من جهاز جديد — يصير بلا كود"}
+          </p>
+        </div>
+
+        <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="رقم سري جديد (٤ أحرف/أرقام على الأقل)"
+            autoComplete="new-password"
+            style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 10, direction: "ltr", textAlign: "center" }}
+          />
+          <input
+            type="password"
+            value={password2}
+            onChange={(e) => setPassword2(e.target.value)}
+            placeholder="أعيدي كتابته"
+            autoComplete="new-password"
+            style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 14, direction: "ltr", textAlign: "center" }}
+          />
+          <button disabled={busy} onClick={onSave} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: busy ? 0.6 : 1 }}>
+            {busy ? "جاري الحفظ..." : "حفظ"}
+          </button>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "6px 0 0", lineHeight: 1.7, textAlign: "center" }}>{error}</p>}
+        </div>
+    </>
   );
 }
 
@@ -1277,10 +1897,210 @@ function ChildSwitcher({ children, selectedId, onSelect }) {
 // الخطة الأسبوعية للطالب/ة كقائمة إنجاز — وهي الواجهة الرئيسية للتطبيق
 // (قرار صاحبة التطبيق ١٥ سبتمبر): كل واجب بسطر مع تفاصيله كما كُتبت بالخطة
 // وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر.
-function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit }) {
+// بطاقة الإعلان: إشعار آبل يعرض سطرين بشاشة القفل، فالإعلان الطويل ينقص
+// ويضيع نصفه. البطاقة تعرضه كاملاً أول ما تفتح الأم التطبيق، وتقفلها بزر
+// واحد فما يرجع يطلع لها (قرار صاحبة التطبيق ٢٦ سبتمبر).
+function BroadcastCard({ broadcast, onClose }) {
+  const [closing, setClosing] = useState(false);
+
+  async function close() {
+    setClosing(true);
+
+    // حارس محلي قبل الشبكة: لو فشل الحفظ بالخادم لأي سبب، البطاقة ما ترجع
+    // تطلع على هذا الجهاز على الأقل. شوهد بالإنتاج ٣٠ سبتمبر — قيد بالقاعدة
+    // كان يرفض نوع `read`، فكل إقفال يفشل والبطاقة ترجع بكل فتحة.
+    try { localStorage.setItem(`daftary_bc_read_${broadcast.id}`, "1"); } catch {}
+
+    // والفشل ما ينبلع بصمت بعد اليوم: يُبلَّغ فنشوفه بسجل الأخطاء بدل ما
+    // تكتشفه الأم بنفسها بعد أسبوع.
+    try {
+      const res = await fetch(`/api/broadcasts/${broadcast.id}/read`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        reportError("broadcast_read", { reason: `http_${res.status}`, detail: data.error || "" });
+      }
+    } catch (e) {
+      reportError("broadcast_read", { reason: "network", detail: e?.message || "" });
+    }
+
+    hapticLight();
+    onClose();
+  }
+
+  return (
+    <div
+      dir="rtl"
+      style={{ position: "fixed", inset: 0, zIndex: 140, background: "rgba(24,20,35,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 24px) 14px calc(env(safe-area-inset-bottom) + 18px)" }}
+    >
+      <div style={{ background: "white", borderRadius: 20, width: "100%", maxWidth: 460, maxHeight: "100%", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 12px 40px rgba(0,0,0,.25)" }}>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 10, padding: "16px 16px 10px", background: "#F6F4FB" }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: "#B7A6E8", color: "white", display: "grid", placeItems: "center", flexShrink: 0, fontSize: 17 }}>🔔</div>
+          <p style={{ margin: 0, fontWeight: 900, fontSize: 15.5, color: "#1F2937", lineHeight: 1.6, flex: 1, minWidth: 0 }}>{broadcast.title}</p>
+        </div>
+
+        {/* النص كاملاً وقابل للتمرير — الإعلان الطويل هو سبب البطاقة أصلاً */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 16px" }}>
+          <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.95, color: "#374151", whiteSpace: "pre-wrap" }}>{broadcast.body}</p>
+        </div>
+
+        <div style={{ flexShrink: 0, padding: "10px 16px 16px", borderTop: "1px solid #F0EEE8" }}>
+          <button
+            onClick={close}
+            disabled={closing}
+            style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, opacity: closing ? 0.6 : 1 }}
+          >
+            {closing ? "..." : "إغلاق"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// عارض صورة بملء الشاشة مع تكبير: قرصة بإصبعين، وضغطتان سريعتان للتبديل
+// بين ملء الشاشة و٢٫٥×، وأزرار − / + لمن ما تنفعه القرصة. التمرير
+// والسحب من الحاوية نفسها (overflow: auto) بدل حساب إزاحة يدوي — أقل
+// كوداً وأثبت سلوكاً على iOS.
+function ImageZoomViewer({ urls, startIndex = 0, onClose }) {
+  const [i, setI] = useState(startIndex);
+  const [zoom, setZoom] = useState(1);
+  const boxRef = useRef(null);
+  const pinch = useRef(null);
+  const lastTap = useRef(0);
+
+  useEffect(() => { setZoom(1); }, [i]);
+
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  function onTouchStart(e) {
+    if (e.touches.length === 2) pinch.current = { d: dist(e.touches), z: zoom };
+  }
+  function onTouchMove(e) {
+    if (e.touches.length === 2 && pinch.current) {
+      e.preventDefault();
+      const next = pinch.current.z * (dist(e.touches) / pinch.current.d);
+      setZoom(Math.min(5, Math.max(1, next)));
+    }
+  }
+  function onTouchEnd(e) {
+    if (e.touches.length < 2) pinch.current = null;
+  }
+  function onImgClick() {
+    const now = Date.now();
+    if (now - lastTap.current < 320) setZoom((z) => (z > 1 ? 1 : 2.5));
+    lastTap.current = now;
+  }
+
+  return (
+    <div dir="rtl" style={{ position: "fixed", inset: 0, zIndex: 130, background: "#0B0B10", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "calc(env(safe-area-inset-top) + 10px) 14px 10px" }}>
+        <button onClick={onClose} aria-label="إغلاق الصورة" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 999, width: 34, height: 34, fontSize: 18, lineHeight: 1 }}>×</button>
+        {urls.length > 1 && (
+          <span style={{ color: "rgba(255,255,255,.75)", fontSize: 12.5, fontWeight: 700 }}>صورة {i + 1} من {urls.length}</span>
+        )}
+        <div style={{ marginInlineStart: "auto", display: "flex", gap: 6 }}>
+          <button onClick={() => setZoom((z) => Math.max(1, z - 0.5))} aria-label="تصغير" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, width: 36, height: 34, fontSize: 18, lineHeight: 1 }}>−</button>
+          <button onClick={() => setZoom((z) => Math.min(5, z + 0.5))} aria-label="تكبير" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, width: 36, height: 34, fontSize: 18, lineHeight: 1 }}>+</button>
+        </div>
+      </div>
+
+      <div
+        ref={boxRef}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{ flex: 1, minHeight: 0, overflow: "auto", display: "grid", placeItems: zoom > 1 ? "start" : "center", touchAction: zoom > 1 ? "pan-x pan-y" : "none" }}
+      >
+        <img
+          src={urls[i]}
+          alt="الجدول المرفق"
+          onClick={onImgClick}
+          style={{ width: `${zoom * 100}%`, maxWidth: "none", display: "block", cursor: zoom > 1 ? "grab" : "zoom-in" }}
+        />
+      </div>
+
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "10px 14px calc(env(safe-area-inset-bottom) + 12px)" }}>
+        {urls.length > 1 && (
+          <>
+            <button onClick={() => setI((n) => (n - 1 + urls.length) % urls.length)} style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>السابقة</button>
+            <button onClick={() => setI((n) => (n + 1) % urls.length)} style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>التالية</button>
+          </>
+        )}
+        {zoom > 1 && (
+          <button onClick={() => setZoom(1)} style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700 }}>ملء الشاشة</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// «الصور المرفقة»: الجداول اللي رفعتها الأم بوضع «إرفاق فقط» — تُعرض
+// للرجوع إليها لا أكثر، فما فيها علامة إنجاز ولا تذكير.
+function AttachmentsCard({ children, refreshKey }) {
+  const [items, setItems] = useState(null);
+  const [view, setView] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/attachments")
+      .then((r) => r.json())
+      .then((d) => { if (alive) setItems(d.attachments || []); })
+      .catch(() => { if (alive) setItems([]); });
+    return () => { alive = false; };
+  }, [refreshKey]);
+
+  async function remove(id) {
+    if (!confirm("حذف هذه الصورة المرفقة نهائياً؟")) return;
+    const res = await fetch(`/api/attachments/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    setItems((prev) => (prev || []).filter((a) => a.id !== id));
+  }
+
+  if (!items || items.length === 0) return null;
+  const nameOf = (id) => children.find((c) => c.id === id)?.name || "";
+
+  return (
+    <div style={{ background: "white", borderRadius: 18, border: "1px solid #EEEDE8", overflow: "hidden" }}>
+      <div style={{ padding: "11px 14px", background: "#F6F4FB", display: "flex", alignItems: "center", gap: 8 }}>
+        <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: "#5C4B8C" }}>الصور المرفقة</p>
+        <span style={{ marginInlineStart: "auto", fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>للعرض فقط — بلا تذكير</span>
+      </div>
+      <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        {items.map((a) => (
+          <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              onClick={() => a.urls.length && setView(a.urls)}
+              style={{ width: 54, height: 54, borderRadius: 10, overflow: "hidden", flexShrink: 0, border: "1px solid #E5E7EB", padding: 0, background: "#F3F4F6" }}
+            >
+              {a.urls[0] && <img src={a.urls[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "#374151" }}>
+                {a.kind === "class_schedule" ? "جدول حصص" : "خطة أسبوعية"}
+                {nameOf(a.child_id) ? ` — ${nameOf(a.child_id)}` : ""}
+              </p>
+              <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#9CA3AF" }}>
+                {shortDate(String(a.created_at).slice(0, 10))}
+                {a.count > 1 ? ` · ${a.count} صور` : ""}
+              </p>
+            </div>
+            <button onClick={() => a.urls.length && setView(a.urls)} style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 10, padding: "7px 12px", fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>فتح</button>
+            <button onClick={() => remove(a.id)} aria-label="حذف" style={{ background: "none", padding: 6, flexShrink: 0 }}>
+              <TileIcon name="trash" size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+      {view && <ImageZoomViewer urls={view} onClose={() => setView(null)} />}
+    </div>
+  );
+}
+
+function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit, onAddTask, onClearedDone }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const [filter, setFilter] = useState("all");
   const [memo, setMemo] = useState([]);
+  const [editingMemo, setEditingMemo] = useState(null);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     fetch(`/api/memorization?childId=${child.id}&motherId=${motherId}`)
@@ -1293,6 +2113,24 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
     hapticLight();
     const res = await fetch(`/api/memorization/${id}/toggle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
     if (!res.ok) setMemo(flip);
+  }
+
+  async function saveMemo(id, updates) {
+    const res = await fetch(`/api/memorization/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "تعذّر حفظ التعديلات");
+    }
+    setMemo((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
+    setEditingMemo(null);
+  }
+
+  async function deleteMemo(id) {
+    if (!confirm("حذف هذا العنصر من الحفظ نهائياً؟")) return;
+    const res = await fetch(`/api/memorization/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    setMemo((prev) => prev.filter((m) => m.id !== id));
+    setEditingMemo(null);
   }
 
   // ترتيب السطور داخل اليوم = ترتيب استخراجها من الخطة (created_at)، فلا
@@ -1323,12 +2161,40 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   const lessons = all.filter((t) => t.type === "درس" && show(t));
   if (lessons.length) groups.push({ key: "lessons", label: "دروس الأسبوع (المنهج)", items: lessons, tone: "lesson" });
   const upcoming = all.filter((t) => t.type !== "درس" && t.due_date && saturday && t.due_date > saturday && show(t));
-  if (upcoming.length) groups.push({ key: "upcoming", label: "بعد هذا الأسبوع", items: upcoming, tone: "upcoming" });
+  if (upcoming.length) groups.push({ key: "upcoming", label: "واجبات الأسبوع", items: upcoming, tone: "upcoming" });
   const undated = all.filter((t) => t.type !== "درس" && !t.due_date && show(t));
   if (undated.length) groups.push({ key: "undated", label: "بدون تاريخ محدد", items: undated, tone: "undated" });
 
   const chips = [["all", "الكل"], ["open", "غير مكتمل"], ["done", "مكتمل"], ["exam", "اختبارات"]];
   const groupDone = (items) => items.filter(isDone).length;
+
+  // مسح المنجز: حذف نهائي، فنقول لها بالضبط وش بينمسح قبل ما تضغط —
+  // بالتفصيل حسب النوع، لأن «المكتمل» يشمل الدروس المراجَعة والحفظ كذلك
+  // لا الواجبات وحدها.
+  const doneNow = all.filter(isDone);
+  const doneMemoNow = memo.filter((m) => m.done);
+  async function clearDone() {
+    const parts = [];
+    const homework = doneNow.filter((t) => t.type !== "درس").length;
+    const lessons = doneNow.filter((t) => t.type === "درس").length;
+    if (homework) parts.push(`${homework} واجب/اختبار`);
+    if (lessons) parts.push(`${lessons} درس`);
+    if (doneMemoNow.length) parts.push(`${doneMemoNow.length} حفظ`);
+    if (!parts.length) return;
+    if (!confirm(`مسح المنجز لـ ${child.name} نهائياً؟\n\n${parts.join(" · ")}\n\nغير المنجز يبقى كما هو.`)) return;
+
+    setClearing(true);
+    const res = await fetch("/api/tasks/clear-done", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ childId: child.id }),
+    }).catch(() => null);
+    setClearing(false);
+    if (!res?.ok) { alert("تعذّر المسح، حاولي مرة ثانية."); return; }
+    hapticSuccess();
+    setMemo((prev) => prev.filter((m) => !m.done));
+    onClearedDone?.(child.id);
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1346,6 +2212,9 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
                 </span>
               )}
             </div>
+            <button onClick={onAddTask} style={{ background: "white", color: color.text, fontSize: 12, fontWeight: 800, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>
+              + واجب
+            </button>
             <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
                 <TileIcon name="pencil" size={15} />
@@ -1375,6 +2244,19 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
             </button>
           ))}
         </div>
+
+        {doneCount > 0 && (
+          <button
+            onClick={clearDone}
+            disabled={clearing}
+            style={{ alignSelf: "flex-start", background: "none", color: "#9CA3AF", fontSize: 12.5, fontWeight: 700, padding: "2px 2px 6px", minHeight: 32, opacity: clearing ? 0.5 : 1 }}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <TileIcon name="trash" size={14} />
+              {clearing ? "...جاري المسح" : `امسحي المنجز (${doneCount})`}
+            </span>
+          </button>
+        )}
 
         {groups.length === 0 && memoShown.length === 0 && (
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>
@@ -1408,25 +2290,99 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
             <div style={{ padding: "0 12px" }}>
               {memoShown.map((m) => (
                 <div key={m.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "8px 0", borderTop: "1px solid #F3F2EE" }}>
-                  <div style={{ flex: 1, minWidth: 0, padding: "4px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <button onClick={() => setEditingMemo(m)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: "4px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
                     <SubjectIcon subject={m.kind === "حديث" ? "التربية الإسلامية" : "القرآن الكريم"} size={34} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: m.done ? "#9CA3AF" : "#1F2937", textDecoration: m.done ? "line-through" : "none" }}>{m.kind === "حديث" ? "حديث" : "القرآن الكريم"} · {m.reference}</p>
+                      {m.recite_on && !m.done && <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: 800, color: "#5B21B6" }}>موعد التسميع: {fmtDate(m.recite_on)}</p>}
                       {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: m.done ? "#B0B3BA" : "#6B7280", lineHeight: 1.65 }}>{m.details}</p>}
                     </div>
-                  </div>
+                  </button>
                   <CheckBox checked={m.done} label={m.done ? "إرجاعه لغير مكتمل" : "تم"} onClick={() => toggleMemo(m.id)} />
                 </div>
               ))}
             </div>
           </div>
         )}
+        {editingMemo && <EditMemoModal item={editingMemo} onClose={() => setEditingMemo(null)} onSave={saveMemo} onDelete={deleteMemo} />}
     </div>
   );
 }
 
-function RequirementsCard({ child, items, onToggle, onDeleteReq }) {
+// تعديل عنصر حفظ/تسميع — النوع (آية/حديث) والمرجع والتفاصيل، مستخدَمة من
+// الخطة الأسبوعية — العارض الوحيد للحفظ بعد ما انشال تبويبه.
+function EditMemoModal({ item, onClose, onSave, onDelete }) {
+  const [kind, setKind] = useState(item.kind);
+  const [reference, setReference] = useState(item.reference || "");
+  const [details, setDetails] = useState(item.details || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const canSave = reference.trim().length > 0 && !saving;
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(item.id, { kind, reference: reference.trim(), details: details.trim() || null });
+    } catch (e) {
+      setError(e.message || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
+        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 17 }}>تعديل الحفظ</h2>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+        </div>
+        <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>النوع</label>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              {["آية", "حديث"].map((v) => (
+                <button key={v} onClick={() => setKind(v)} style={{ flex: 1, padding: 9, borderRadius: 12, border: `1px solid ${kind === v ? "#B7A6E8" : "#E5E7EB"}`, background: kind === v ? "#F1EFFA" : "white", color: kind === v ? "#5C4B8C" : "#6B7280", fontWeight: 700 }}>{v === "آية" ? "قرآن" : "حديث"}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>المرجع</label>
+            <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="مثال: سورة البقرة ١-٥" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>التفاصيل (اختياري)</label>
+            <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={3} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+            {saving ? "جارِ الحفظ..." : "حفظ التعديلات"}
+          </button>
+          <button onClick={() => onDelete(item.id)} style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+            حذف
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// دائرة ✓ للمستلزمات — دائرة كاملة (بخلاف مربّع الخطة الأسبوعية)، بمساحة
+// لمس ٤٤ بكسل.
+function CircleCheck({ checked, onClick, label }) {
+  return (
+    <button onClick={onClick} aria-label={label} aria-pressed={checked} style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", flexShrink: 0, padding: 0 }}>
+      <span style={{ width: 26, height: 26, borderRadius: "50%", border: checked ? "none" : "2px solid #C9C6D6", background: checked ? "#22C55E" : "white", display: "flex", alignItems: "center", justifyContent: "center", transition: "background .15s" }}>
+        {checked && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>}
+      </span>
+    </button>
+  );
+}
+
+function RequirementsCard({ child, items, onToggle, onDeleteReq, onClearBought, onUpdateReq }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
+  const boughtCount = items.filter((r) => r.bought).length;
+  const [editingItem, setEditingItem] = useState(null);
   return (
     <div style={{ borderRadius: 18, overflow: "hidden", border: `1px solid ${color.soft}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, background: color.bg }}>
@@ -1435,27 +2391,86 @@ function RequirementsCard({ child, items, onToggle, onDeleteReq }) {
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{items.length} طلب</p>
         </div>
+        {boughtCount > 0 && (
+          <button onClick={() => onClearBought(child.id)} style={{ fontSize: 12, padding: "7px 12px", borderRadius: 10, fontWeight: 700, background: "white", color: color.text, flexShrink: 0 }}>
+            مسح الكل ({boughtCount})
+          </button>
+        )}
       </div>
       <div style={{ background: "white", padding: 12 }}>
         {items.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا توجد طلبات حالياً</p>}
         {items.map((r) => (
-          <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F3F4F6", gap: 8 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+          <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid #F3F4F6", gap: 4 }}>
+            <button onClick={() => setEditingItem(r)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: r.bought ? "#9CA3AF" : "#374151", textDecoration: r.bought ? "line-through" : "none" }}>{r.item}</p>
               <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{fmtDate(r.due_date)}</p>
-            </div>
-            <button onClick={() => onToggle(r.id)} style={{ fontSize: 12, padding: "6px 10px", borderRadius: 10, fontWeight: 700, background: r.bought ? "#F0FDF4" : color.soft, color: r.bought ? "#166534" : color.text, flexShrink: 0 }}>
-              {r.bought ? "تم الشراء" : "تحديد كمُشترى"}
             </button>
+            <CircleCheck checked={r.bought} onClick={() => onToggle(r.id)} label={r.bought ? "إرجاعه لغير مُشترى" : "تحديد كمُشترى"} />
             <button onClick={() => onDeleteReq(r.id)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 16, width: 24, height: 24, flexShrink: 0, padding: 0 }}>×</button>
           </div>
         ))}
+      </div>
+      {editingItem && (
+        <EditRequirementModal
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSave={async (id, updates) => { await onUpdateReq(id, updates); setEditingItem(null); }}
+          onDelete={(id) => { onDeleteReq(id); setEditingItem(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// تعديل اسم المستلزم أو تاريخه — يفتح بالضغط على نص الطلب بالقائمة.
+function EditRequirementModal({ item, onClose, onSave, onDelete }) {
+  const [name, setName] = useState(item.item || "");
+  const [dueDate, setDueDate] = useState(item.due_date || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const canSave = name.trim().length > 0 && !saving;
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(item.id, { item: name.trim(), dueDate: dueDate || null });
+    } catch (e) {
+      setError(e.message || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
+        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 17 }}>تعديل الطلب</h2>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+        </div>
+        <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>اسم المستلزم</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>التاريخ المطلوب (اختياري)</label>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+            {saving ? "جارِ الحفظ..." : "حفظ التعديلات"}
+          </button>
+          <button onClick={() => onDelete(item.id)} style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+            حذف
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function ScheduleCard({ child, schedule, onUpload }) {
+function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   const maxPeriod = schedule.reduce((max, s) => Math.max(max, s.period_number), 0);
   const grid = {};
@@ -1535,7 +2550,8 @@ function ScheduleCard({ child, schedule, onUpload }) {
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا يوجد جدول حصص مضاف بعد</p>
         ) : (
           <>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, color: "#9CA3AF" }}>اضغطي أي خانة للتعديل</span>
             <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
               {exporting ? (
                 "جاري التصدير..."
@@ -1549,55 +2565,59 @@ function ScheduleCard({ child, schedule, onUpload }) {
               )}
             </button>
           </div>
-          <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 4, fontSize: 11 }}>
+          {/* نفس ترتيب الجدول الورقي اللي تعرفه الأم: الأيام صفوف والحصص
+              أعمدة. والمقاسات مضغوطة عشان الجدول كله يبان بشاشة الآيفون
+              بلا سحب أفقي — الخانة ٧ حصص × ٥ أيام تدخل بعرض ٣٩٠ بكسل. */}
+          <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 2, fontSize: 10 }}>
             <colgroup>
-              <col style={{ width: "16%" }} />
-              {DAYS.map((d) => <col key={d} style={{ width: `${84 / DAYS.length}%` }} />)}
+              <col style={{ width: 40 }} />
+              {periods.map((p) => <col key={p} />)}
             </colgroup>
             <thead>
               <tr>
-                <th style={{ padding: 4 }}></th>
-                {DAYS.map((d, di) => {
-                  const dayPal = PALETTE[di % PALETTE.length];
-                  return (
-                    <th key={d} style={{ padding: "8px 3px", background: dayPal.soft, color: dayPal.text, borderRadius: 8, fontWeight: 800 }}>{d}</th>
-                  );
-                })}
+                <th style={{ padding: "5px 2px", background: "#F3F4F6", color: "#6B7280", borderRadius: 6, fontWeight: 800, fontSize: 9 }}>اليوم</th>
+                {periods.map((p) => (
+                  <th key={p} style={{ padding: "5px 1px", background: "#F3F4F6", color: "#6B7280", borderRadius: 6, fontWeight: 800, fontSize: 8.5, lineHeight: 1.2 }}>
+                    {PERIOD_LABELS[p - 1] || p}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {periods.map((p) => (
-                <tr key={p}>
-                  <td style={{ padding: 4, textAlign: "center", color: "#9CA3AF", fontWeight: 800, fontSize: 10 }}>الحصة {p}</td>
-                  {DAYS.map((d, di) => {
-                    const dayPal = PALETTE[di % PALETTE.length];
-                    const entry = grid[`${d}-${p}`];
-                    return (
-                      <td key={d} style={{ padding: "6px 3px", textAlign: "center", background: dayPal.bg, borderRadius: 8, verticalAlign: entry ? "top" : "middle" }}>
-                        {entry ? (
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                            <div style={{ position: "relative" }}>
-                              <SubjectIcon subject={entry.subject} size={22} />
-                              {getSubjectIconFile(entry.subject) === "pe" && child.pe_uniform_color && (
-                                <span style={{ position: "absolute", bottom: -2, left: -2, width: 9, height: 9, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
+              {DAYS.map((d, di) => {
+                const dayPal = PALETTE[di % PALETTE.length];
+                return (
+                  <tr key={d}>
+                    <td style={{ padding: "4px 2px", textAlign: "center", background: dayPal.soft, color: dayPal.text, borderRadius: 6, fontWeight: 800, fontSize: 9, lineHeight: 1.2 }}>{d}</td>
+                    {periods.map((p) => {
+                      const entry = grid[`${d}-${p}`];
+                      return (
+                        <td key={p} onClick={() => onCellClick(d, p, entry || null)} style={{ padding: "4px 1px", textAlign: "center", background: dayPal.bg, borderRadius: 6, verticalAlign: "middle", cursor: "pointer" }}>
+                          {entry ? (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                              <div style={{ position: "relative", lineHeight: 0 }}>
+                                <SubjectIcon subject={entry.subject} size={17} />
+                                {getSubjectIconFile(entry.subject) === "pe" && child.pe_uniform_color && (
+                                  <span style={{ position: "absolute", bottom: -2, left: -2, width: 7, height: 7, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
+                                )}
+                              </div>
+                              <span style={{ fontSize: 7.5, fontWeight: 800, color: dayPal.text, lineHeight: 1.2, wordBreak: "break-word" }}>{entry.subject}</span>
+                              {entry.teacher && <span style={{ fontSize: 6.5, color: dayPal.text, opacity: 0.75, lineHeight: 1.15, wordBreak: "break-word" }}>{entry.teacher}</span>}
+                              {/* dir="ltr" إجباري — بدونه يعكس RTL ترتيب الوقتين فتبان
+                                  الحصة كأنها تنتهي قبل ما تبدأ (08:15 - 07:30). */}
+                              {(entry.start_time || entry.end_time) && (
+                                <span dir="ltr" style={{ fontSize: 6, color: dayPal.text, opacity: 0.55, direction: "ltr" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
                               )}
                             </div>
-                            <span style={{ fontSize: 9, fontWeight: 800, color: dayPal.text, lineHeight: 1.25 }}>{entry.subject}</span>
-                            {entry.teacher && <span style={{ fontSize: 8, color: dayPal.text, opacity: 0.75, lineHeight: 1.2 }}>{entry.teacher}</span>}
-                            {/* dir="ltr" إجباري — بدونه يعكس RTL ترتيب الوقتين فتبان
-                                الحصة كأنها تنتهي قبل ما تبدأ (08:15 - 07:30). */}
-                            {(entry.start_time || entry.end_time) && (
-                              <span dir="ltr" style={{ fontSize: 7, color: dayPal.text, opacity: 0.55, direction: "ltr" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <span style={{ color: dayPal.text, opacity: 0.4 }}>—</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                          ) : (
+                            <span style={{ color: dayPal.text, opacity: 0.35, fontWeight: 800 }}>+</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           </>
@@ -1659,24 +2679,97 @@ function ScheduleCard({ child, schedule, onUpload }) {
   );
 }
 
-function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpdateDate }) {
+// تعديل أو إضافة حصة بخانة معيّنة من جدول الحصص — اليوم ورقم الحصة ثابتان
+// (يحددان مكان الخانة)، والمادة/المعلّم/الوقت هي المُعدَّلة يدوياً.
+function EditScheduleCellModal({ child, day, period, entry, onClose, onSave, onDelete }) {
+  const color = PALETTE[child.color_idx % PALETTE.length];
+  const [subject, setSubject] = useState(entry?.subject || "");
+  const [teacher, setTeacher] = useState(entry?.teacher || "");
+  const [startTime, setStartTime] = useState(entry?.start_time || "");
+  const [endTime, setEndTime] = useState(entry?.end_time || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const canSave = subject.trim().length > 0 && !saving;
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(entry?.id || null, { childId: child.id, day, periodNumber: period, subject: subject.trim(), teacher: teacher.trim() || null, startTime: startTime.trim() || null, endTime: endTime.trim() || null });
+    } catch (e) {
+      setError(e.message || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
+        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 17 }}>{entry ? "تعديل الحصة" : "إضافة حصة"} — {day} · الحصة {period}</h2>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+        </div>
+        <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>المادة</label>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="مثال: رياضيات" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>المعلّم/ـة (اختياري)</label>
+            <input value={teacher} onChange={(e) => setTeacher(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>وقت البداية</label>
+              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>وقت النهاية</label>
+              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+            </div>
+          </div>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+            {saving ? "جارِ الحفظ..." : "حفظ"}
+          </button>
+          {entry && (
+            <button onClick={() => onDelete(entry.id)} style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+              حذف هذه الحصة
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpdateTask }) {
   const meta = TYPE_META[task.type] || TYPE_META["واجب"];
+  const TYPES = ["واجب", "اختبار", "مشروع", "حفظ", "درس"];
+  const [editing, setEditing] = useState(false);
+  const [showSource, setShowSource] = useState(false);
+  const [subject, setSubject] = useState(task.subject || "");
+  const [type, setType] = useState(task.type);
+  const [details, setDetails] = useState(task.details || "");
   const [dateValue, setDateValue] = useState(task.due_date || "");
   const [saving, setSaving] = useState(false);
-  const [dateError, setDateError] = useState("");
-  const dateChanged = dateValue !== (task.due_date || "");
-  // داخل التطبيق التذكيرات تُجدول تلقائياً على الجهاز (syncTaskReminders)، وملف
-  // الـ .ics ما ينفتح أصلاً داخل WebView — فنخفي الزر ونخليه بنسخة الويب بس.
+  const [error, setError] = useState("");
+  const changed = subject.trim() !== (task.subject || "") || type !== task.type || (details.trim() || "") !== (task.details || "") || dateValue !== (task.due_date || "");
+  // داخل التطبيق التذكيرات تجي من الخادم تلقائياً، وملف الـ .ics ما ينفتح
+  // أصلاً داخل WebView — فنخفي الزر ونخليه بنسخة الويب بس.
   const [native, setNative] = useState(false);
   useEffect(() => setNative(isNativeApp()), []);
 
-  async function saveDate() {
+  async function save() {
+    if (!subject.trim()) { setError("المادة مطلوبة"); return; }
     setSaving(true);
-    setDateError("");
+    setError("");
     try {
-      await onUpdateDate(task.id, dateValue || null);
+      await onUpdateTask(task.id, { subject: subject.trim(), type, details: details.trim() || null, dueDate: dateValue || null });
+      onClose();
     } catch (e) {
-      setDateError(e.message || "تعذّر حفظ التاريخ، حاولي مرة ثانية.");
+      setError(e.message || "تعذّر حفظ التعديلات، حاولي مرة ثانية.");
+    } finally {
       setSaving(false);
     }
   }
@@ -1685,45 +2778,87 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
     <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, borderRadius: "24px 24px 0 0", padding: "22px 22px calc(env(safe-area-inset-bottom) + 22px)", maxHeight: "85vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 22, color: color.text }}><TypeGlyph type={task.type} native={typeof window !== "undefined" && isNativeApp()} size={22} /></span>
             <h3 style={{ margin: "4px 0 2px", color: color.text, fontSize: 18 }}>{task.subject}</h3>
             <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>{task.type} · {task.due_date ? fmtDate(task.due_date) : "بدون تاريخ محدد"}</p>
           </div>
+          {!editing && (
+            <button onClick={() => setEditing(true)} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <TileIcon name="pencil" size={15} />
+                تعديل
+              </span>
+            </button>
+          )}
           <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36, flexShrink: 0 }}>×</button>
         </div>
-        {task.details && <div style={{ background: color.bg, borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 13 }}>{task.details}</div>}
 
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 }}>تاريخ الاستحقاق</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 16 }} />
-            <button onClick={saveDate} disabled={saving || !dateChanged} style={{ padding: "9px 16px", borderRadius: 12, background: color.solid, color: "white", fontWeight: 700, fontSize: 13, opacity: (saving || !dateChanged) ? 0.5 : 1, flexShrink: 0 }}>
-              {saving ? "..." : "حفظ التاريخ"}
-            </button>
+        {editing ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>النوع</label>
+              <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                {TYPES.map((v) => (
+                  <button key={v} onClick={() => setType(v)} style={{ flex: 1, minWidth: 60, padding: 8, borderRadius: 10, border: `1px solid ${type === v ? "#B7A6E8" : "#E5E7EB"}`, background: type === v ? "#F1EFFA" : "white", color: type === v ? "#5C4B8C" : "#6B7280", fontWeight: 700, fontSize: 12.5 }}>{v}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>المادة</label>
+              <input value={subject} onChange={(e) => setSubject(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>التفاصيل</label>
+              <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={3} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, resize: "vertical", fontFamily: "inherit" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>تاريخ الاستحقاق</label>
+              <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+            </div>
+            {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setEditing(false); setSubject(task.subject || ""); setType(task.type); setDetails(task.details || ""); setDateValue(task.due_date || ""); setError(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#F3F4F6", color: "#6B7280", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+                إلغاء
+              </button>
+              <button onClick={save} disabled={saving || !changed} style={{ flex: 2, padding: 12, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: (saving || !changed) ? 0.5 : 1 }}>
+                {saving ? "جارِ الحفظ..." : "حفظ التعديلات"}
+              </button>
+            </div>
           </div>
-          {dateError && <p style={{ color: "#B91C1C", fontSize: 12, margin: "6px 0 0" }}>{dateError}</p>}
-        </div>
-
-        {task.due_date && !dateChanged && !native && (
-          <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
-            <TileIcon name="bell" size={20} />
-            إضافة تذكير (قبل يوم)
-          </a>
-        )}
-        {task.status === "done" ? (
-          <button onClick={() => onMarkDone(task.id, false)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
-            إرجاعه لغير مكتمل
-          </button>
         ) : (
-          <button onClick={() => onMarkDone(task.id, true)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
-            {meta.done}
-          </button>
+          <>
+            {task.details && <div style={{ background: color.bg, borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 13 }}>{task.details}</div>}
+            {task.source_text && <div style={{ marginBottom: 14 }}><SourceText text={task.source_text} /></div>}
+            {task.source_id && (
+              <button onClick={() => setShowSource(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10 }}>
+                <TileIcon name="camera" size={18} />
+                عرض المصدر (الصورة الأصلية)
+              </button>
+            )}
+
+            {task.due_date && !native && (
+              <a href={`/api/tasks/${task.id}/ics?motherId=${motherId}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: 12, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 700, fontSize: 13, minHeight: 44, marginBottom: 10, textDecoration: "none" }}>
+                <TileIcon name="bell" size={20} />
+                إضافة تذكير (قبل يوم)
+              </a>
+            )}
+            {task.status === "done" ? (
+              <button onClick={() => onMarkDone(task.id, false)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.bg, color: color.text, fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
+                إرجاعه لغير مكتمل
+              </button>
+            ) : (
+              <button onClick={() => onMarkDone(task.id, true)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
+                {meta.done}
+              </button>
+            )}
+            <button onClick={() => onDelete(task.id)} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+              حذف الواجب (دخل غلط)
+            </button>
+          </>
         )}
-        <button onClick={() => onDelete(task.id)} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
-          حذف الواجب (دخل غلط)
-        </button>
       </div>
+      {showSource && <SourceImageModal sourceId={task.source_id} onClose={() => setShowSource(false)} />}
     </div>
   );
 }
@@ -1869,7 +3004,74 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
   );
 }
 
-function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, selectChild = true, hint, onClose, onDone }) {
+// إضافة واجب أو اختبار يدوياً بلا رفع صورة — مادة + تفاصيل + تاريخ، يدخل
+// بنفس جدول tasks فيرتّب بالخطة الأسبوعية وياخذ تذكيره العادي (قبل
+// الموعد بيوم ويوم الموعد) بلا أي فرق عن الواجب المستخرج من صورة.
+function AddTaskModal({ child, onClose, onSave }) {
+  const [subject, setSubject] = useState("");
+  const [type, setType] = useState("واجب");
+  const [details, setDetails] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [saving, setSaving] = useState(false);
+  const TYPES = ["واجب", "اختبار", "مشروع", "حفظ"];
+  const canSave = subject.trim().length > 0 && dueDate && !saving;
+
+  async function save() {
+    setSaving(true);
+    await onSave({ childId: child.id, subject: subject.trim(), type, dueDate, details: details.trim() || null });
+    setSaving(false);
+  }
+
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
+        <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 17 }}>إضافة واجب/اختبار لـ {child.name}</h2>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+        </div>
+        <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>النوع</label>
+            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+              {TYPES.map((v) => (
+                <button key={v} onClick={() => setType(v)} style={{ flex: 1, minWidth: 70, padding: 9, borderRadius: 12, border: `1px solid ${type === v ? "#B7A6E8" : "#E5E7EB"}`, background: type === v ? "#F1EFFA" : "white", color: type === v ? "#5C4B8C" : "#6B7280", fontWeight: 700, fontSize: 13 }}>{v}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>المادة</label>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="مثال: رياضيات" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>التفاصيل (اختياري)</label>
+            <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={3} placeholder="محتوى الواجب أو الاختبار" style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700 }}>التاريخ</label>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
+          </div>
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+            {saving ? "جارِ الإضافة..." : "إضافة"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UploadView({ children, motherId, endpoint = "/api/upload-schedule", title = "رفع الجدول", buttonLabel = "تحليل وتوزيع الواجبات", renderSummary, selectChild = true, hint, onClose, onDone, onReview }) {
+  // وضع الرفع (قرار صاحبة التطبيق ٢٦ سبتمبر): إما تحليل الصورة كالمعتاد،
+  // أو حفظها كصورة تفتحها وتكبّرها بس — بلا استخراج وبلا تذكير عن بنودها.
+  // (تذكير المتابعة اليومي ٣ العصر عام لكل ولي أمر عنده طالب/ة، ما يخص
+  // جدولاً بعينه، فيبقى يوصلها — والتحذير يقولها صراحةً.) الثاني
+  // ما يمر بأي نموذج ولا يكتب صفاً بجداول المهام، فما فيه شي يتذكّر عنه
+  // كرون التذكيرات. ولهذا التحذير إلزامي قبل اختياره.
+  const [mode, setMode] = useState("analyze");
+  // الخيار للخطة الأسبوعية (الواجبات) وحدها — قرار صاحبة التطبيق
+  // ٢٦ سبتمبر. جدول الحصص يبقى تحليلاً دائماً: شبكته هي اللي تبني عرض
+  // «الجداول» ومواد ملاحظات المعلم والدرجات، فصورة بلا تحليل تعطّلها.
+  const canAttach = endpoint === "/api/upload-schedule";
+  const ATTACH_KIND = "plan";
   const [school, setSchool] = useState("");
   const [childId, setChildId] = useState("");
   const [images, setImages] = useState([]);
@@ -1940,7 +3142,46 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
     return postUpload(endpoint, body);
   }
 
+  // «إرفاق فقط»: الصورة تنحفظ كما هي وتنعرض بتبويب «الطلبات والجداول».
+  // ما تمر بأي تحليل، فما فيه بنود ولا مواعيد ولا تذكير.
+  async function runAttach() {
+    setStatus("loading");
+    setErrorMsg("");
+    setErrorTips([]);
+    try {
+      let payload = images;
+      if (images.reduce((n, s) => n + s.length, 0) > 3_500_000) {
+        payload = await Promise.all(images.map((img) => resizeDataUrl(img, 1800)));
+      }
+      const res = await fetch("/api/attachments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childId: effectiveChildId, kind: ATTACH_KIND, images: payload }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "تعذّر حفظ الصورة، حاولي مرة ثانية.");
+      setImages([]);
+      setSummary({ attached: payload.length, replaced: data.attachment?.replaced || 0 });
+      setStatus("done");
+      onDone();
+    } catch (err) {
+      setErrorMsg(err.message || "تعذّر حفظ الصورة، حاولي مرة ثانية.");
+      setStatus("error");
+      reportError("attachments", { reason: "attach_failed", detail: err.message || "" });
+    }
+  }
+
+  // التحذير إلزامي وبقرار صريح: الأم تفقد التذكيرات كلها بهذا الاختيار،
+  // وهذا شي ما تكتشفه إلا بعد ما يفوت الموعد.
+  function chooseAttach() {
+    const ok = confirm(
+      "عند اختيارك «رفع صورة فقط»:\n\n• ما يوصلك تذكير عن أي واجب أو اختبار أو مستلزم بهالجدول.\n• الصورة تنحفظ بس عشان ترجعين لها وتكبّرينها.\n• تذكير المتابعة اليومي (٣ العصر) يبقى يوصلك كالعادة — هو عام ما يخص جدولاً بعينه.\n\nللحصول على تذكيرات هذه الخطة لازم تختارين «تحليل وتذكير».\n\nتكملين؟"
+    );
+    if (ok) { setMode("attach"); hapticLight(); }
+  }
+
   async function run() {
+    if (mode === "attach") return runAttach();
     setStatus("loading");
     setErrorMsg("");
     setErrorTips([]);
@@ -1957,9 +3198,16 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         data = await post(current);
       }
       if (data.needsRotation) throw new Error("ما قدرنا نضبط اتجاه الصورة. صوّري الجدول وهو معتدل وجربي مرة ثانية.");
+      setImages([]);
+      // رفعة الخطة ما تحفظ شي بنفسها — ترجّع مسودة تراجعها الأم وتعتمدها.
+      // بقية المسارات (جدول الحصص) تحفظ مباشرة كما كانت.
+      if (data.draftId && onReview) {
+        setStatus("idle");
+        onReview(data);
+        return;
+      }
       setSummary(data);
       setStatus("done");
-      setImages([]);
       onDone();
     } catch (err) {
       console.error(err);
@@ -1979,11 +3227,44 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>{title}</p>
       </div>
       <div className="app-scroll" style={{ padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 14 }}>
-        {hint && (
-          <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12.5, fontWeight: 700, lineHeight: 1.6 }}>
-            {hint}
+        {hint && <HintBanner id={`upload:${endpoint}`} style={{ fontSize: 12.5, lineHeight: 1.6 }}>{hint}</HintBanner>}
+
+        {canAttach && (
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 700 }}>الخطة الأسبوعية — وش تبين نسوي فيها؟</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {[
+              { key: "analyze", title: "تحليل وتذكير", desc: "نستخرج الواجبات والاختبارات والمستلزمات، وتوصلك التذكيرات." },
+              { key: "attach", title: "رفع صورة فقط", desc: "نحفظ الصورة عشان ترجعين لها وتكبّرينها — بلا تحليل، وبلا تذكير عن بنودها. الصورة الجديدة تحل محل السابقة." },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => (opt.key === "attach" ? chooseAttach() : setMode("analyze"))}
+                style={{
+                  textAlign: "start", padding: "11px 13px", borderRadius: 14,
+                  border: `1px solid ${mode === opt.key ? "#B7A6E8" : "#E5E7EB"}`,
+                  background: mode === opt.key ? "#F1EFFA" : "white",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0, border: `2px solid ${mode === opt.key ? "#7B68C4" : "#D1D5DB"}`, background: mode === opt.key ? "#7B68C4" : "white", boxShadow: mode === opt.key ? "inset 0 0 0 2.5px white" : "none" }} />
+                  <span style={{ fontSize: 13.5, fontWeight: 800, color: "#1F2937" }}>{opt.title}</span>
+                </span>
+                <span style={{ display: "block", fontSize: 12, color: "#6B7280", marginTop: 4, lineHeight: 1.6 }}>{opt.desc}</span>
+              </button>
+            ))}
           </div>
+        </div>
         )}
+
+        {/* رسالة حالة لا شرح — تبقى بلا ✕ لأنها تخفي أثراً قائماً على
+            التذكيرات لازم تعرفه الأم كل مرة ترفع بهالوضع. */}
+        {mode === "attach" && (
+          <p style={{ margin: 0, fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 12, padding: "10px 12px", lineHeight: 1.7 }}>
+            ⚠️ باختيارك «رفع صورة فقط» ما يوصلك تذكير عن واجبات هالخطة ولا اختباراتها. للتذكيرات اختاري «تحليل وتذكير». (تذكير المتابعة اليومي ٣ العصر يبقى كالعادة.)
+          </p>
+        )}
+
         <div>
           <label style={{ fontSize: 13, fontWeight: 700 }}>هذي الصور من مدرسة:</label>
           <select value={school} onChange={(e) => { setSchool(e.target.value); setChildId(""); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
@@ -2049,14 +3330,23 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
           </div>
         )}
         <button disabled={!canRun || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, opacity: canRun ? 1 : 0.4 }}>
-          {status === "loading" ? "جاري التحليل..." : buttonLabel}
+          {status === "loading"
+            ? (mode === "attach" ? "...جاري الحفظ" : onReview ? "🤖 جاري فهم الخطة..." : "جاري التحليل...")
+            : mode === "attach" ? "احفظي الصورة للرجوع إليها" : buttonLabel}
         </button>
         {blockedReason && status !== "loading" && (
           <p style={{ margin: "-4px 0 0", fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 10, padding: "9px 12px", textAlign: "center" }}>
             {blockedReason}
           </p>
         )}
-        {status === "done" && summary && (renderSummary ? renderSummary(summary) : (
+        {status === "done" && summary?.attached ? (
+          <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13, lineHeight: 1.7 }}>
+            انحفظت {summary.attached} صورة ✓ — تلقينها بتبويب «الطلبات والجداول» تحت «الصور المرفقة»، وتقدرين تفتحينها وتكبّرينها.
+            {summary.replaced > 0 && <div style={{ marginTop: 6 }}>وحلّت محل الصورة السابقة لنفس الطالب/ة.</div>}
+            <div style={{ marginTop: 6, opacity: 0.85 }}>ما فيه تذكير عن بنود هالصورة — لو تبينها ترفعيها مرة ثانية باختيار «تحليل وتذكير». وتذكير المتابعة اليومي ٣ العصر ما يتأثر.</div>
+          </div>
+        ) : null}
+        {status === "done" && summary && !summary.attached && (renderSummary ? renderSummary(summary) : (
           <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
             تم تحليل {summary.imagesProcessed} صورة ✓ — أُضيف {summary.matchedTasks} واجب/اختبار و {summary.matchedReqs} طلب مستلزمات.
             {(summary.updatedTasks > 0 || summary.updatedReqs > 0) && (
@@ -2080,6 +3370,368 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// النص كما جاء بالصورة حرفياً — يبقى محفوظاً جنب البيانات المنظّمة عشان
+// تقدر الأم تقارن بما فهمه البرنامج وتتأكد بنفسها.
+function SourceText({ text, compact }) {
+  if (!text) return null;
+  return (
+    <div style={{ background: "#F7F7F5", border: "1px dashed #D9D6CE", borderRadius: 10, padding: "8px 10px" }}>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: "#9CA3AF" }}>النص كما جاء بالصورة</p>
+      <p style={{ margin: "3px 0 0", fontSize: compact ? 12 : 12.5, color: "#4B5563", lineHeight: 1.7, whiteSpace: "pre-line" }}>{text}</p>
+    </div>
+  );
+}
+
+// «عرض المصدر»: الصورة اللي جاء منها البند. الصور تُحفظ أسبوعاً ثم تُحذف،
+// فبعدها يطلع سبب واضح بدل شاشة فاضية.
+function SourceImageModal({ sourceId, onClose }) {
+  const [urls, setUrls] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/sources/${sourceId}`)
+      .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
+      .then(({ ok, data }) => {
+        if (!alive) return;
+        if (ok) setUrls(data.urls || []);
+        else setError(data.error || "تعذّر فتح الصورة.");
+      })
+      .catch(() => alive && setError("تعذّر فتح الصورة."));
+    return () => { alive = false; };
+  }, [sourceId]);
+
+  return (
+    // stopPropagation إجباري: هذي الشاشة تُعرض داخل شاشة الواجب، وبدونه
+    // الضغط على × أو الخلفية يوصل لغطاء شاشة الواجب فيقفلها هي كمان.
+    <div dir="rtl" onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,.85)", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top) + 12px) 16px 12px" }}>
+        <p style={{ margin: 0, color: "white", fontWeight: 800, fontSize: 15 }}>الصورة الأصلية</p>
+        <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", color: "white", fontSize: 20, width: 36, height: 36, borderRadius: "50%" }}>×</button>
+      </div>
+      <div className="app-scroll" onClick={(e) => e.stopPropagation()} style={{ flex: 1, padding: "0 12px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 10 }}>
+        {!urls && !error && <p style={{ color: "white", textAlign: "center", fontSize: 13, opacity: 0.8, paddingTop: 30 }}>...جاري الفتح</p>}
+        {error && <p style={{ color: "white", textAlign: "center", fontSize: 13.5, lineHeight: 1.9, background: "rgba(255,255,255,.12)", borderRadius: 12, padding: 14, marginTop: 20 }}>{error}</p>}
+        {urls?.map((u, i) => (
+          <img key={i} src={u} alt={`الصورة ${i + 1}`} style={{ width: "100%", borderRadius: 12, background: "#222" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// «عنصر / عنصران / ٥ عناصر» — عربية سليمة بدل «5 عنصر».
+// الشريط الأصفر اللي يشرح فكرة الشاشة: مفيد أول مرة، ويصير حشواً بعد ما
+// تحفظه الأم عن ظهر قلب (طلب صاحبة التطبيق ١٨ سبتمبر). ✕ تقفله ويبقى
+// مقفولاً — القرار محفوظ بالجهاز لكل شريط على حدة بمفتاحه.
+// ملاحظة: هذا للشرح فقط. رسائل الحالة (خلص الرصيد، الباقة ما تغطي عدد
+// الأبناء) تبقى بلا ✕ لأن إخفاءها يخفي مشكلة قائمة لازم تعرفها.
+function HintBanner({ id, children, style }) {
+  const key = `daftary_hint_${id}`;
+  const [closed, setClosed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem(key) === "1"; } catch { return false; }
+  });
+  if (closed) return null;
+  function close() {
+    setClosed(true);
+    try { localStorage.setItem(key, "1"); } catch {}
+  }
+  return (
+    <div style={{ position: "relative", background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, paddingInlineEnd: 36, fontSize: 12, fontWeight: 700, lineHeight: 1.7, ...style }}>
+      {children}
+      <button onClick={close} aria-label="إغلاق الشرح"
+        style={{ position: "absolute", top: 2, insetInlineEnd: 2, background: "none", color: "#B08A4F", fontSize: 18, lineHeight: 1, width: 32, height: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        ×
+      </button>
+    </div>
+  );
+}
+
+function countLabel(n, one, two, plural) {
+  if (n === 1) return one;
+  if (n === 2) return two;
+  if (n <= 10) return `${n} ${plural}`;
+  return `${n} ${one}`;
+}
+
+// شاشة مراجعة نتيجة التحليل قبل الحفظ. قبلها كانت الرفعة تحفظ مباشرة
+// بجداول الطالب/ة، فأي قراءة غلط تدخل بلا ما تشوفها الأم. الحين تشوف كل
+// عنصر، تعدّله أو تحذفه، وما ينحفظ إلا باعتمادها (قرار ١٨ سبتمبر).
+function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
+  const [items, setItems] = useState(draft.items || { tasks: [], requirements: [], memorization: [] });
+  const [openRow, setOpenRow] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [showSource, setShowSource] = useState(false);
+  const TYPES = ["واجب", "اختبار", "مشروع", "حفظ", "درس"];
+
+  const tasks = items.tasks || [];
+  const reqs = items.requirements || [];
+  const memo = items.memorization || [];
+  const total = tasks.length + reqs.length + memo.length;
+  const byType = (t) => tasks.filter((e) => e.type === t).length;
+  const lines = [
+    [byType("واجب"), "واجب", "واجبان", "واجبات"],
+    [byType("اختبار"), "اختبار", "اختباران", "اختبارات"],
+    [byType("مشروع"), "مشروع", "مشروعان", "مشاريع"],
+    [byType("حفظ"), "مطلوب حفظ", "مطلوبا حفظ", "مطلوبات حفظ"],
+    [byType("درس"), "درس", "درسان", "دروس"],
+    [reqs.length, "مستلزم", "مستلزمان", "مستلزمات"],
+    [memo.length, "تسميع", "تسميعان", "تسميعات"],
+  ].filter(([n]) => n > 0);
+
+  // أي تعديل تسويه الأم يعلّم الصف — فإعادة رفع نفس الخطة ما تكتب فوقه
+  // (lib/planApply.js). وتعديل حقل غير واضح يرفع عنه علامة التنبيه.
+  const setRow = (group, i, patch) =>
+    setItems((prev) => ({
+      ...prev,
+      [group]: prev[group].map((r, idx) => (idx === i ? { ...r, ...patch, editedByUser: true } : r)),
+    }));
+  const removeRow = (group, i) => {
+    setItems((prev) => ({ ...prev, [group]: prev[group].filter((_, idx) => idx !== i) }));
+    setOpenRow(null);
+  };
+
+  async function apply() {
+    setSaving(true);
+    setError("");
+    const res = await fetch(`/api/upload-drafts/${draft.draftId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({}));
+    if (!res?.ok) {
+      setError(data?.error || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setSaving(false);
+      return;
+    }
+    hapticSuccess();
+    onApplied();
+  }
+
+  async function discard() {
+    if (!confirm("إلغاء هذي القراءة بلا حفظ؟")) return;
+    await fetch(`/api/upload-drafts/${draft.draftId}`, { method: "DELETE" }).catch(() => {});
+    onClose();
+  }
+
+  const rowBox = { borderTop: "1px solid #F3F2EE", padding: "10px 0" };
+  const field = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 10, padding: "8px 10px", marginTop: 5, fontSize: 14 };
+  const label = { fontSize: 12, fontWeight: 700, color: "#6B7280" };
+
+  // المعلومة اللي ما قدر النموذج يحددها بثقة تطلع بعلامة تنبيه بدل ما
+  // يخمّنها — والأم تحددها بنفسها. تختفي العلامة أول ما تعدّل الصف.
+  const unclearFields = (t) => {
+    if (t.editedByUser || !t.confidence) return [];
+    const names = { subject: "المادة", type: "النوع", due: "الموعد" };
+    return Object.entries(t.confidence).filter(([, v]) => v === "unclear").map(([k]) => names[k]).filter(Boolean);
+  };
+  const needsReviewCount = tasks.filter((t) => unclearFields(t).length > 0).length;
+
+  return (
+    <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#FAF7F2", display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 14px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={onClose} style={{ background: "none", fontSize: 20, width: 36, height: 36 }}>←</button>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 16, flex: 1, minWidth: 0 }}>راجعي المعلومات قبل إضافتها</p>
+        {draft.sourceId && (
+          <button onClick={() => setShowSource(true)} style={{ background: "#F1EFFA", color: "#5C4B8C", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>
+            عرض الصورة
+          </button>
+        )}
+      </div>
+
+      <div className="app-scroll" style={{ flex: 1, padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {draft.mismatch && (
+          <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 16, padding: 14 }}>
+            <p style={{ margin: 0, fontWeight: 900, fontSize: 14.5, color: "#B91C1C", lineHeight: 1.8 }}>
+              ⚠️ الخطة مكتوب عليها الصف {draft.mismatch.planGrade}، و{draft.mismatch.childName} بالصف {draft.mismatch.childGrade}
+            </p>
+            <p style={{ margin: "6px 0 0", fontSize: 12.5, color: "#7F1D1D", lineHeight: 1.8 }}>
+              تأكدي إنك اخترتِ الطالب/ة الصحيح قبل الاعتماد. لو الخطة فعلاً له، كملي عادي.
+            </p>
+          </div>
+        )}
+        <div style={{ background: "white", borderRadius: 16, padding: 14, border: "1px solid #EEEDE8" }}>
+          <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: "#1F2937" }}>
+            تم العثور على {countLabel(total, "عنصر", "عنصران", "عناصر")} لـ {child?.name || "الطالب/ة"}
+          </p>
+          {lines.length > 0 && (
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6B7280", lineHeight: 1.9 }}>
+              {lines.map(([n, one, two, plural]) => countLabel(n, one, two, plural)).join(" · ")}
+            </p>
+          )}
+          <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 10, padding: "8px 10px", lineHeight: 1.7 }}>
+            ما ينحفظ شي إلا بعد ما تعتمدينه. عدّلي أي معلومة أو احذفيها قبل الاعتماد.
+          </p>
+          {needsReviewCount > 0 && (
+            <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "#B45309", background: "#FEF3C7", borderRadius: 10, padding: "8px 10px", lineHeight: 1.7, fontWeight: 700 }}>
+              ⚠️ {countLabel(needsReviewCount, "بند", "بندان", "بنود")} فيها معلومة ما كانت واضحة بالصورة — حدّديها بنفسك.
+            </p>
+          )}
+        </div>
+
+        {total === 0 && (
+          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>ما بقى أي عنصر — ارجعي وارفعي الخطة مرة ثانية.</p>
+        )}
+
+        {tasks.length > 0 && (
+          <div style={{ background: "white", borderRadius: 16, padding: "4px 14px 12px", border: "1px solid #EEEDE8" }}>
+            <p style={{ margin: "12px 0 0", fontWeight: 900, fontSize: 14, color: "#5C4B8C" }}>الواجبات والاختبارات</p>
+            {tasks.map((t, i) => (
+              <div key={`t${i}`} style={rowBox}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <button onClick={() => setOpenRow(openRow === `t${i}` ? null : `t${i}`)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>
+                      {t.subject} <span style={{ fontSize: 11, fontWeight: 800, background: "#F1EFFA", color: "#5C4B8C", borderRadius: 999, padding: "2px 8px" }}>{t.type}</span>
+                    </p>
+                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280", lineHeight: 1.6 }}>
+                      {t.dueDate ? fmtDate(t.dueDate) : t.dueText || "بدون موعد"}{t.details ? ` — ${t.details}` : ""}
+                    </p>
+                    {unclearFields(t).length > 0 && (
+                      <p style={{ margin: "4px 0 0", fontSize: 11.5, fontWeight: 800, color: "#B45309", background: "#FEF3C7", borderRadius: 8, padding: "3px 8px", display: "inline-block" }}>
+                        ⚠️ {unclearFields(t).join(" و")} غير واضح بالصورة
+                      </p>
+                    )}
+                  </button>
+                  <button onClick={() => removeRow("tasks", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
+                </div>
+                {openRow === `t${i}` && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <SourceText text={t.sourceText} />
+                    <div>
+                      <span style={label}>المادة</span>
+                      <input value={t.subject || ""} onChange={(e) => setRow("tasks", i, { subject: e.target.value })} style={field} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <span style={label}>النوع</span>
+                        <select value={t.type} onChange={(e) => setRow("tasks", i, { type: e.target.value })} style={{ ...field, background: "white" }}>
+                          {TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <span style={label}>الموعد</span>
+                        <input type="date" value={t.dueDate || ""} onChange={(e) => setRow("tasks", i, { dueDate: e.target.value || null })} style={field} />
+                      </div>
+                    </div>
+                    <div>
+                      <span style={label}>التفاصيل</span>
+                      <textarea value={t.details || ""} onChange={(e) => setRow("tasks", i, { details: e.target.value })} rows={2} style={{ ...field, resize: "vertical", fontFamily: "inherit" }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {reqs.length > 0 && (
+          <div style={{ background: "white", borderRadius: 16, padding: "4px 14px 12px", border: "1px solid #EEEDE8" }}>
+            <p style={{ margin: "12px 0 0", fontWeight: 900, fontSize: 14, color: "#8C6027" }}>المستلزمات</p>
+            {reqs.map((r, i) => (
+              <div key={`r${i}`} style={rowBox}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <button onClick={() => setOpenRow(openRow === `r${i}` ? null : `r${i}`)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>{r.item}</p>
+                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280" }}>
+                      {r.dueDate ? fmtDate(r.dueDate) : r.dueText || "بدون موعد"}
+                      {r.relatedSubject && <span style={{ color: "#8C6027", fontWeight: 700 }}> · لـ {r.relatedSubject}</span>}
+                    </p>
+                  </button>
+                  <button onClick={() => removeRow("requirements", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
+                </div>
+                {openRow === `r${i}` && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <SourceText text={r.sourceText} />
+                    <div>
+                      <span style={label}>الغرض</span>
+                      <input value={r.item || ""} onChange={(e) => setRow("requirements", i, { item: e.target.value })} style={field} />
+                    </div>
+                    <div>
+                      <span style={label}>الموعد</span>
+                      <input type="date" value={r.dueDate || ""} onChange={(e) => setRow("requirements", i, { dueDate: e.target.value || null })} style={field} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {memo.length > 0 && (
+          <div style={{ background: "white", borderRadius: 16, padding: "4px 14px 12px", border: "1px solid #EEEDE8" }}>
+            <p style={{ margin: "12px 0 0", fontWeight: 900, fontSize: 14, color: "#5B21B6" }}>الحفظ والتسميع</p>
+            {memo.map((m, i) => (
+              <div key={`m${i}`} style={rowBox}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <button onClick={() => setOpenRow(openRow === `m${i}` ? null : `m${i}`)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>{m.kind === "حديث" ? "حديث" : "قرآن"} · {m.reference}</p>
+                    {(m.surah || m.fromAyah || m.reciteOn) && (
+                      <p style={{ margin: "3px 0 0", fontSize: 12, color: "#5B21B6", fontWeight: 700 }}>
+                        {[m.surah && `سورة ${m.surah}`, m.fromAyah && `آية ${m.fromAyah}${m.toAyah && m.toAyah !== m.fromAyah ? ` إلى ${m.toAyah}` : ""}`, m.reciteOn && `تسميع ${fmtDate(m.reciteOn)}`].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
+                    {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280" }}>{m.details}</p>}
+                  </button>
+                  <button onClick={() => removeRow("memorization", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
+                </div>
+                {openRow === `m${i}` && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <SourceText text={m.sourceText} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {["آية", "حديث"].map((v) => (
+                        <button key={v} onClick={() => setRow("memorization", i, { kind: v })} style={{ flex: 1, padding: 9, borderRadius: 10, border: `1px solid ${m.kind === v ? "#B7A6E8" : "#E5E7EB"}`, background: m.kind === v ? "#F1EFFA" : "white", color: m.kind === v ? "#5C4B8C" : "#6B7280", fontWeight: 700, fontSize: 13 }}>{v === "آية" ? "قرآن" : "حديث"}</button>
+                      ))}
+                    </div>
+                    <div>
+                      <span style={label}>المرجع</span>
+                      <input value={m.reference || ""} onChange={(e) => setRow("memorization", i, { reference: e.target.value })} style={field} />
+                    </div>
+                    {m.kind !== "حديث" && (
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ flex: 2 }}>
+                          <span style={label}>السورة</span>
+                          <input value={m.surah || ""} onChange={(e) => setRow("memorization", i, { surah: e.target.value || null })} style={field} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <span style={label}>من آية</span>
+                          <input type="number" inputMode="numeric" value={m.fromAyah ?? ""} onChange={(e) => setRow("memorization", i, { fromAyah: e.target.value ? Number(e.target.value) : null })} style={field} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <span style={label}>إلى آية</span>
+                          <input type="number" inputMode="numeric" value={m.toAyah ?? ""} onChange={(e) => setRow("memorization", i, { toAyah: e.target.value ? Number(e.target.value) : null })} style={field} />
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <span style={label}>موعد التسميع (اختياري)</span>
+                      <input type="date" value={m.reciteOn || ""} onChange={(e) => setRow("memorization", i, { reciteOn: e.target.value || null })} style={field} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && <p style={{ color: "#B91C1C", fontSize: 13, fontWeight: 700, margin: 0 }}>{error}</p>}
+      </div>
+
+      <div style={{ flexShrink: 0, background: "white", borderTop: "1px solid #F0EEE8", padding: "12px 16px calc(env(safe-area-inset-bottom) + 12px)", display: "flex", flexDirection: "column", gap: 8 }}>
+        <button disabled={saving || total === 0} onClick={apply} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 50, opacity: saving || total === 0 ? 0.5 : 1 }}>
+          {saving ? "جارِ الإضافة..." : `اعتماد وإضافة ${countLabel(total, "عنصر", "عنصران", "عناصر")}`}
+        </button>
+        <button onClick={discard} disabled={saving} style={{ padding: 10, borderRadius: 12, background: "none", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 40 }}>
+          إلغاء بلا حفظ
+        </button>
+      </div>
+      {showSource && <SourceImageModal sourceId={draft.sourceId} onClose={() => setShowSource(false)} />}
     </div>
   );
 }
@@ -2143,7 +3795,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
           <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
         ) : !canBuy ? (
           <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
-            الاشتراك يتم من تطبيق دفتري على جوالك. نزّله وسجّل دخولك بنفس رقمك،
+            الاشتراك يتم من تطبيق دفتري على موبايلك. نزّله وسجّل دخولك بنفس رقمك،
             وبيوصلك رصيدك على نفس الحساب.
           </div>
         ) : subscribed ? (
@@ -2252,6 +3904,13 @@ function PermissionsBanner() {
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [needsSettings, setNeedsSettings] = useState(false);
+  // ✕ تقفل الشريط — بس نحفظ معها «وش كان ناقصاً» وقت الإقفال: لو تغيّر
+  // الناقص بعدين (مثلاً الصور انمنعت وهي مسموحة قبل) يرجع يظهر، فما
+  // نخفي عنها سبباً جديداً لتعطّل الرفع أو التذكيرات.
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try { return localStorage.getItem("daftary_hint_perm") || ""; } catch { return ""; }
+  });
 
   const check = useCallbackRef(async () => {
     setState(await permissionStatus());
@@ -2271,6 +3930,8 @@ function PermissionsBanner() {
   if (state.notifications !== "granted") missing.push("notifications");
   if (state.photos !== "granted") missing.push("photos");
   if (!missing.length) return null;
+  const signature = missing.join(",");
+  if (dismissed === signature) return null;
 
   const label =
     missing.length === 2 ? "الإشعارات والصور"
@@ -2284,6 +3945,10 @@ function PermissionsBanner() {
     setBusy(true);
     const results = {};
     for (const kind of missing) results[kind] = await requestPermission(kind);
+
+    // بالمتصفح، الموافقة وحدها ما تسجّل شي — لازم اشتراك PushManager بعدها،
+    // وهذي أفضل لحظة له: الإذن انعطى توّه بتفاعل صريح.
+    if (results.notifications === "granted") registerWebPush({ force: true });
 
     // نثق بنتيجة الطلب المباشرة فوق إعادة الفحص: بعض المنصات تتأخر بتحديث
     // checkPermissions بعد الموافقة مباشرة، فيبقى الشريط ظاهراً بعد ما
@@ -2306,7 +3971,7 @@ function PermissionsBanner() {
         <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#8C6027" }}>فعّلي {label}</p>
         <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#A07C43", lineHeight: 1.6 }}>
           {blocked || needsSettings
-            ? `من إعدادات جوالك ← دفتري ← فعّلي ${label}`
+            ? `من إعدادات موبايلك ← دفتري ← فعّلي ${label}`
             : "عشان يوصلك تذكير الواجبات، ويشتغل رفع صور الجداول"}
         </p>
       </div>
@@ -2319,6 +3984,13 @@ function PermissionsBanner() {
           {busy ? "..." : "تفعيل"}
         </button>
       )}
+      <button
+        onClick={() => { setDismissed(signature); try { localStorage.setItem("daftary_hint_perm", signature); } catch {} }}
+        aria-label="إغلاق"
+        style={{ background: "none", color: "#B08A4F", fontSize: 18, lineHeight: 1, width: 28, height: 28, padding: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        ×
+      </button>
     </div>
   );
 }
@@ -2329,7 +4001,7 @@ function PickErrorNotice({ error }) {
   const isCamera = error.source === "camera";
   const text =
     error.reason === "denied"
-      ? `دفتري ما عنده إذن يوصل ${isCamera ? "للكاميرا" : "لصورك"}. افتحي إعدادات جوالك ← دفتري ← ${isCamera ? "الكاميرا" : "الصور"} وفعّلي الإذن، ثم ارجعي وجربي.`
+      ? `دفتري ما عنده إذن يوصل ${isCamera ? "للكاميرا" : "لصورك"}. افتحي إعدادات موبايلك ← دفتري ← ${isCamera ? "الكاميرا" : "الصور"} وفعّلي الإذن، ثم ارجعي وجربي.`
       : error.reason === "unavailable"
       ? "هذي الميزة تحتاج آخر إصدار من التطبيق. حدّثيه من آب ستور وجربي مرة ثانية."
       : "صار خلل فني وما انفتحت الصور. جربي تقفلين التطبيق وتفتحينه من جديد.";
@@ -2573,7 +4245,7 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
         <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
       ) : platform !== "store" && !canPayByCard ? (
         <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
-          الاشتراك يتم من تطبيق دفتري على جوالك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
+          الاشتراك يتم من تطبيق دفتري على موبايلك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
         </div>
       ) : (
         APP_TIERS.map((t) => (
@@ -2784,13 +4456,20 @@ function TeacherView({ children, motherId }) {
   // بعد التصوير أو الاختيار تمر الصورة بشاشة قص: الأم تحدد السؤال فقط
   // بدل الصفحة كلها. الماسح يقص الصفحة أصلاً فما يحتاجها.
   const [cropSrc, setCropSrc] = useState(null);
+  // الصورة المعروضة بالحجم الكامل — تنفتح بالضغط على المصغّرة، بالمرفق
+  // قبل الإرسال وبالرسالة بعده، عشان تشوف الأم بالضبط وش راح للمعلم.
+  const [viewImage, setViewImage] = useState(null);
 
   async function handlePickImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    // صفحة الكتاب فيها خط صغير — نفس دقة رفع الجداول عشان تنقرأ.
-    const url = await resizeToDataUrl(file, 1568, false, 0.9);
+    // نمرّر الصورة بدقتها الأصلية لشاشة القص، والتصغير لـ١٥٦٨ يصير على
+    // **المقصوص** لا على الصفحة كاملة. عكسه كان يرمي الدقة قبل القص:
+    // صفحة ٤٠٣٢ تصغّر لـ١٥٦٨، ويقص منها السؤال (٣٠٪) فيطلع ٤٧٠ بكسل —
+    // وخط عربي بهالمقاس ما ينقرأ، فتضطر الأم تكتب السؤال بيدها.
+    // السقف ٤٠٩٦ يمرّر صور الجوالات كما هي ويحمي من صورة ضخمة شاذة.
+    const url = await resizeToDataUrl(file, 4096, false, 0.92);
     setCropSrc(url);
   }
 
@@ -2803,11 +4482,13 @@ function TeacherView({ children, motherId }) {
 
   async function pickImageNative(mode = "camera") {
     setPickMenu(false);
-    const { url } = mode === "scan" ? await nativeScanDocument() : await nativePickImage(mode);
+    // القص يحتاج الدقة الأصلية (راجع handlePickImage) — وهذا يشمل الماسح
+    // كذلك: هو يعدّل ميلان **الصفحة** ويقصها من الخلفية، لكن السؤال يبقى
+    // جزءاً صغيراً منها، فتحديده بالإطار هو اللي يعطيه الدقة الكاملة.
+    const { url } = mode === "scan" ? await nativeScanDocument(4096) : await nativePickImage(mode, 4096);
     if (!url) return;
     hapticLight();
-    if (mode === "scan") setImage(url);
-    else setCropSrc(url);
+    setCropSrc(url);
   }
 
   async function send() {
@@ -2816,7 +4497,9 @@ function TeacherView({ children, motherId }) {
     const attachedImage = image;
     setSending(true);
     setErrorMsg("");
-    setMessages((prev) => [...prev, { role: "user", content: questionText || "📷 صورة مرفقة", had_image: !!attachedImage, id: `local-${Date.now()}` }]);
+    // نحتفظ بالصورة نفسها بالرسالة (مو بس had_image) عشان تبقى معروضة
+    // بالمحادثة — الخادم ما يخزّن الصورة، فهي تبقى لين ما تقفل الشاشة.
+    setMessages((prev) => [...prev, { role: "user", content: questionText || "📷 صورة مرفقة", had_image: !!attachedImage, image: attachedImage || null, id: `local-${Date.now()}` }]);
     setInput("");
     setImage(null);
     try {
@@ -2979,9 +4662,9 @@ function TeacherView({ children, motherId }) {
           </div>
         )}
 
-        <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 700, lineHeight: 1.6 }}>
+        <HintBanner id="teacher" style={{ lineHeight: 1.6 }}>
           اسألي عن أي واجب أو درس بمنهج {child ? `الصف ${child.grade}` : "ابنك/ابنتك"} — تقدرين ترفقين صورة الواجب مباشرة، والمعلم الذكي يستعين بمواد وزارة التربية الرسمية لما تكون متوفرة.
-        </div>
+        </HintBanner>
 
         {quota && (quota.remainingTotal || 0) > 0 && (
           <button
@@ -3020,11 +4703,23 @@ function TeacherView({ children, motherId }) {
                 background: m.role === "user" ? "#B7A6E8" : "#F3F2FA",
                 color: m.role === "user" ? "white" : "#374151",
               }}>
+                {/* الصورة فوق النص: أول شي تشوفه الأم هو وش أرسلت.
+                    `image` للّي انرسلت توّها بهالجلسة، و`image_url` رابط
+                    موقّع يجي مع المحادثة من الخادم (تُحفظ ٢٤ ساعة). */}
+                {(m.image || m.image_url) ? (
+                  <img
+                    src={m.image || m.image_url}
+                    alt="الصورة المرسلة"
+                    onClick={() => setViewImage(m.image || m.image_url)}
+                    style={{ display: "block", width: "100%", maxHeight: 190, objectFit: "cover", borderRadius: 10, marginBottom: m.content ? 8 : 0, cursor: "zoom-in" }}
+                  />
+                ) : null}
                 {renderWithNumbers(m.content)}
-                {m.had_image && (
+                {m.had_image && !m.image && !m.image_url && (
+                  // أقدم من ٢٤ ساعة: الصورة انحذفت فنكتفي بالإشارة
                   <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
                     <TileIcon name="camera" size={14} />
-                    مع صورة
+                    مع صورة (انحذفت بعد ٢٤ ساعة)
                   </div>
                 )}
                 {native && m.role === "assistant" && (
@@ -3053,10 +4748,26 @@ function TeacherView({ children, motherId }) {
 
       {cropSrc && <CropModal src={cropSrc} onDone={(u) => { setImage(u); setCropSrc(null); }} onCancel={() => setCropSrc(null)} />}
 
+      {viewImage && (
+        <div
+          onClick={() => setViewImage(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(0,0,0,.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 44px) 12px calc(env(safe-area-inset-bottom) + 12px)" }}
+        >
+          <img src={viewImage} alt="الصورة بالحجم الكامل" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8 }} />
+          <button
+            aria-label="إغلاق الصورة"
+            onClick={() => setViewImage(null)}
+            style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 10px)", left: 14, background: "rgba(255,255,255,.18)", color: "white", borderRadius: 999, width: 34, height: 34, fontSize: 18, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <div style={{ flexShrink: 0, borderTop: "1px solid #F0EEE8", background: "white", padding: "8px 16px calc(env(safe-area-inset-bottom) + 10px)", display: "flex", flexDirection: "column", gap: 8 }}>
         {/* أكثر سبب لرد «أرسلي صورة أوضح»: ظل اليد على الصفحة. نقولها قبل التصوير. */}
         <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.6 }}>
-          📸 صوّري الصفحة بلا ظل، أو اختاري صورة عالية الجودة من الألبوم — وبعدها حدّدي السؤال بالقص.
+          📸 صوّري الصفحة بلا ظل — وبعدها حدّدي السؤال بالإطار عشان يطلع بأوضح صورة، أو أرسلي الصفحة كاملة.
         </p>
         {/* الصورة من ألبوم الجوال أعلى جودة من كاميرا داخل التطبيق، فنعرض
             الخيارين (والماسح لو متوفر) بقائمة صغيرة بدل الكاميرا مباشرة. */}
@@ -3072,9 +4783,24 @@ function TeacherView({ children, motherId }) {
           </div>
         )}
         {image && (
-          <div style={{ position: "relative", width: 64, height: 64, borderRadius: 10, overflow: "hidden" }}>
-            <img src={image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            <button onClick={() => setImage(null)} style={{ position: "absolute", top: 2, left: 2, background: "rgba(0,0,0,.6)", color: "white", borderRadius: "50%", width: 18, height: 18, fontSize: 12 }}>×</button>
+          // المرفق قبل الإرسال: مصغّرة أكبر + «اضغطي للتكبير» — الأم لازم
+          // تتأكد إن السؤال بيّن بالصورة قبل ما ينخصم سؤال من رصيدها.
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ position: "relative", width: 88, height: 88, borderRadius: 12, overflow: "hidden", flexShrink: 0, border: "1px solid #E5E7EB" }}>
+              <img
+                src={image}
+                alt="الصورة المرفقة"
+                onClick={() => setViewImage(image)}
+                style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
+              />
+              <button aria-label="حذف الصورة" onClick={() => setImage(null)} style={{ position: "absolute", top: 3, left: 3, background: "rgba(0,0,0,.6)", color: "white", borderRadius: "50%", width: 20, height: 20, fontSize: 13, lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 12.5, color: "#374151", fontWeight: 700 }}>الصورة اللي بتنرسل</p>
+              <button onClick={() => setViewImage(image)} style={{ marginTop: 4, background: "#F1EFFA", color: "#5C4B8C", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 700 }}>
+                اضغطي للتكبير
+              </button>
+            </div>
           </div>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
@@ -3097,13 +4823,19 @@ function TeacherView({ children, motherId }) {
   );
 }
 
-function ProgressView({ children, motherId }) {
-  const [section, setSection] = useState("memorization");
+function ProgressView({ children, motherId, classSchedule = [] }) {
+  const [section, setSection] = useState("notes");
   const [childId, setChildId] = useState(children[0]?.id || "");
   const [native, setNative] = useState(false);
   const child = children.find((c) => c.id === childId) || children[0];
 
   useEffect(() => setNative(isNativeApp()), []);
+
+  // مواد الطالب/ة من جدول حصصه هي الأصدق لقائمة اختيار المادة — بلا قائمة
+  // ثابتة من عندنا تجبر الأم تلقى مادتها بين مواد مدرسة ثانية.
+  const subjects = [...new Set(
+    classSchedule.filter((s) => s.child_id === child?.id).map((s) => s.subject?.trim()).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, "ar"));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -3120,15 +4852,15 @@ function ProgressView({ children, motherId }) {
 
       {native ? (
         <div className="ios-segmented">
-          <button onClick={() => setSection("memorization")} data-active={section === "memorization"}>الحفظ</button>
+          <button onClick={() => setSection("notes")} data-active={section === "notes"}>ملاحظات المعلم</button>
           <button onClick={() => setSection("grades")} data-active={section === "grades"}>الدرجات</button>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setSection("memorization")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "memorization" ? "#B7A6E8" : "#F3F4F6", color: section === "memorization" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
+          <button onClick={() => setSection("notes")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "notes" ? "#B7A6E8" : "#F3F4F6", color: section === "notes" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
             <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              <TileIcon name="memorize" size={17} />
-              الحفظ
+              <TileIcon name="teacher" size={17} />
+              ملاحظات المعلم
             </span>
           </button>
           <button onClick={() => setSection("grades")} style={{ flex: 1, padding: 10, borderRadius: 12, background: section === "grades" ? "#B7A6E8" : "#F3F4F6", color: section === "grades" ? "white" : "#6B7280", fontWeight: 700, fontSize: 13 }}>
@@ -3140,64 +4872,256 @@ function ProgressView({ children, motherId }) {
         </div>
       )}
 
-      {child && (section === "memorization" ? (
-        <MemorizationSection child={child} motherId={motherId} />
+      {child && (section === "notes" ? (
+        <TeacherNotesSection child={child} motherId={motherId} subjects={subjects} />
       ) : (
-        <GradesSection child={child} motherId={motherId} />
+        <GradesSection child={child} motherId={motherId} subjects={subjects} />
       ))}
     </div>
   );
 }
 
-function MemorizationSection({ child, motherId }) {
+// قسم الحفظ المستقل انشال من تبويب «المتابعة والدرجات» (قرار صاحبة التطبيق
+// ١٨ سبتمبر) وحلّت محله «ملاحظات المعلم». الحفظ نفسه ما تأثر: يبقى ظاهراً
+// بالخطة الأسبوعية بالرئيسية مع علامة الإنجاز وزر التعديل، ويُستخرج من
+// الصور كما هو، وتذكيراته شغالة — التبويب كان يكرّر ما هو موجود أصلاً.
+
+// الفترات الدراسية الجاهزة — والأم تقدر تكتب تسمية مدرستها بدلها.
+const TERMS = ["الفترة الأولى", "الفترة الثانية", "الفترة الثالثة", "الفترة الرابعة"];
+
+// ملاحظات المعلم من اجتماع أولياء الأمور: الأم تسمع الملاحظة بالاجتماع
+// وتكتبها هنا بمادتها وفترتها، فتتجمّع بالفترات وتبيّن تطوّر الطالب على
+// مدار السنة بدل ما تضيع بالذاكرة. كلها كتابة يدوية — ما فيه استخراج
+// من صورة، فقاعدة «المرفوع يبقى كما هو» ما تخصّها.
+function TeacherNotesSection({ child, motherId, subjects }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [note, setNote] = useState("");
+  const [subject, setSubject] = useState("");
+  const [customSubject, setCustomSubject] = useState("");
+  const [term, setTerm] = useState(TERMS[0]);
+  const [customTerm, setCustomTerm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [editing, setEditing] = useState(null);
 
   function load() {
     setLoading(true);
-    fetch(`/api/memorization?childId=${child.id}&motherId=${motherId}`)
+    fetch(`/api/teacher-notes?childId=${child.id}&motherId=${motherId}`)
       .then((r) => r.json())
       .then((data) => setItems(data.items || []))
       .finally(() => setLoading(false));
   }
-
   useEffect(load, [child.id, motherId]);
 
-  async function handleToggle(id) {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)));
-    const res = await fetch(`/api/memorization/${id}/toggle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
-    if (!res.ok) load();
+  const finalSubject = subject === "__other" ? customSubject.trim() : subject;
+  const finalTerm = term === "__other" ? customTerm.trim() : term;
+  const canSave = !!note.trim() && !!finalSubject && !busy;
+
+  async function save() {
+    setBusy(true); setError("");
+    const res = await fetch("/api/teacher-notes", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ childId: child.id, motherId, subject: finalSubject, note: note.trim(), term: finalTerm }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) setError(data.error || "تعذّر الحفظ");
+    else {
+      setItems((prev) => [data.item, ...prev]);
+      setNote(""); setCustomSubject("");
+    }
+    setBusy(false);
   }
 
-  if (loading) return <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>...جاري التحميل</p>;
-  if (items.length === 0) return <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>ما فيه مطلوبات حفظ حالياً لـ{child.name} — تُستخرج تلقائياً من صور الخطة الأسبوعية.</p>;
+  async function remove(id) {
+    if (!confirm("حذف هذه الملاحظة نهائياً؟")) return;
+    const res = await fetch(`/api/teacher-notes/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    setItems((prev) => prev.filter((it) => it.id !== id));
+    setEditing(null);
+  }
+
+  async function saveEdit(id, updates) {
+    const res = await fetch(`/api/teacher-notes/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "تعذّر حفظ التعديلات");
+    }
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...updates } : it)));
+    setEditing(null);
+  }
+
+  // التجميع بالفترة عشان تقارن الأم فترة بفترة — وهو الهدف من الميزة.
+  // الترتيب بتسلسل الفترات (الأولى ← الرابعة) لا بالأحدث، لأن القراءة
+  // من فوق لتحت هي نفسها متابعة التطوّر على مدار السنة. الفترات اللي
+  // كتبتها الأم بنفسها تجي بعدها بترتيب ظهورها، و«بلا فترة» بالآخر.
+  const groups = [];
+  for (const it of items) {
+    const key = it.term || "بلا فترة";
+    let g = groups.find((x) => x.key === key);
+    if (!g) { g = { key, notes: [] }; groups.push(g); }
+    g.notes.push(it);
+  }
+  const rank = (key) => {
+    const i = TERMS.indexOf(key);
+    if (i !== -1) return i;                 // الفترات الجاهزة بتسلسلها
+    if (key === "بلا فترة") return 999;
+    return 100;                             // فترة كتبتها الأم
+  };
+  groups.sort((a, b) => rank(a.key) - rank(b.key));
+
+  const field = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, background: "white" };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {items.map((it) => (
-        <label key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: it.done ? "#F7F7F5" : "white", border: "1px solid #EEEDE8", cursor: "pointer" }}>
-          <input type="checkbox" checked={it.done} onChange={() => handleToggle(it.id)} style={{ marginTop: 3, width: 18, height: 18, accentColor: "#B7A6E8", flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: it.done ? "#9CA3AF" : "#374151", textDecoration: it.done ? "line-through" : "none", display: "flex", alignItems: "center", gap: 5 }}>
-              {typeof window !== "undefined" && isNativeApp() ? <Icon name="memorize" size={14} style={{ color: "#7B68C4" }} /> : <TileIcon name="memorize" size={17} />} {it.reference}
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <HintBanner id="teacher-notes">
+        ملاحظات المعلم للطالب من اجتماع أولياء الأمور — اكتبي كل ملاحظة بمادتها
+        وفترتها، وبنهاية السنة تشوفين تطوّر {child.name} فترة بفترة بمكان واحد.
+      </HintBanner>
+
+      <div style={{ background: "white", borderRadius: 14, border: "1px solid #EEEDE8", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          placeholder="الملاحظة… مثال: الطالب كثير الكلام"
+          style={{ ...field, resize: "vertical", lineHeight: 1.7 }}
+        />
+        <select value={subject} onChange={(e) => setSubject(e.target.value)} style={field}>
+          <option value="">اختاري المادة…</option>
+          {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="__other">مادة ثانية (اكتبيها)</option>
+        </select>
+        {subject === "__other" && (
+          <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={field} />
+        )}
+        <select value={term} onChange={(e) => setTerm(e.target.value)} style={field}>
+          {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+          <option value="__other">فترة ثانية (اكتبيها)</option>
+        </select>
+        {term === "__other" && (
+          <input value={customTerm} onChange={(e) => setCustomTerm(e.target.value)} placeholder="اسم الفترة" style={field} />
+        )}
+        {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0, lineHeight: 1.7 }}>{error}</p>}
+        <button onClick={save} disabled={!canSave} style={{ width: "100%", padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: canSave ? 1 : 0.45 }}>
+          {busy ? "..." : "حفظ الملاحظة"}
+        </button>
+      </div>
+
+      {loading ? (
+        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>...جاري التحميل</p>
+      ) : items.length === 0 ? (
+        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0", lineHeight: 1.8 }}>
+          ما فيه ملاحظات مسجّلة لـ{child.name} بعد — أول ملاحظة من اجتماع أولياء الأمور تنكتب من فوق.
+        </p>
+      ) : (
+        groups.map((g) => (
+          <div key={g.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <p style={{ margin: "4px 0 0", fontSize: 12.5, fontWeight: 800, color: "#5C4B8C" }}>
+              {g.key} <span style={{ color: "#9CA3AF", fontWeight: 400 }}>({countLabel(g.notes.length, "ملاحظة", "ملاحظتان", "ملاحظات")})</span>
             </p>
-            {it.details && <p style={{ margin: "3px 0 0", fontSize: 12, color: "#9CA3AF" }}>{it.details}</p>}
+            {g.notes.map((it) => (
+              <button key={it.id} onClick={() => setEditing(it)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: "white", border: "1px solid #EEEDE8", textAlign: "right", width: "100%" }}>
+                <SubjectIcon subject={it.subject} size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: "#374151", lineHeight: 1.7 }}>{it.note}</p>
+                  <p style={{ margin: "3px 0 0", fontSize: 11.5, color: "#9CA3AF" }}>
+                    {it.subject} · {new Date(it.created_at).toLocaleDateString("ar-KW", { day: "numeric", month: "long" })}
+                  </p>
+                </div>
+              </button>
+            ))}
           </div>
-        </label>
-      ))}
+        ))
+      )}
+
+      {editing && (
+        <EditTeacherNoteModal
+          item={editing}
+          subjects={subjects}
+          onClose={() => setEditing(null)}
+          onSave={saveEdit}
+          onDelete={remove}
+        />
+      )}
     </div>
   );
 }
 
-function GradesSection({ child, motherId }) {
+function EditTeacherNoteModal({ item, subjects, onClose, onSave, onDelete }) {
+  const known = subjects.includes(item.subject);
+  const [note, setNote] = useState(item.note);
+  const [subject, setSubject] = useState(known ? item.subject : "__other");
+  const [customSubject, setCustomSubject] = useState(known ? "" : item.subject);
+  const knownTerm = !item.term || TERMS.includes(item.term);
+  const [term, setTerm] = useState(knownTerm ? item.term || TERMS[0] : "__other");
+  const [customTerm, setCustomTerm] = useState(knownTerm ? "" : item.term);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const finalSubject = subject === "__other" ? customSubject.trim() : subject;
+  const finalTerm = term === "__other" ? customTerm.trim() : term;
+  const field = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, background: "white" };
+
+  async function submit() {
+    setBusy(true); setError("");
+    try {
+      await onSave(item.id, { note: note.trim(), subject: finalSubject, term: finalTerm });
+    } catch (e) {
+      setError(e.message); setBusy(false);
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 60, display: "flex", alignItems: "flex-end" }}>
+      <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "100%", background: "#FAF7F2", borderRadius: "20px 20px 0 0", padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 9, maxHeight: "88%", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>تعديل الملاحظة</p>
+          <button onClick={onClose} style={{ background: "none", fontSize: 20, color: "#9CA3AF", padding: "0 4px" }}>×</button>
+        </div>
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} style={{ ...field, resize: "vertical", lineHeight: 1.7 }} />
+        <select value={subject} onChange={(e) => setSubject(e.target.value)} style={field}>
+          {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="__other">مادة ثانية (اكتبيها)</option>
+        </select>
+        {subject === "__other" && <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={field} />}
+        <select value={term} onChange={(e) => setTerm(e.target.value)} style={field}>
+          {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+          <option value="__other">فترة ثانية (اكتبيها)</option>
+        </select>
+        {term === "__other" && <input value={customTerm} onChange={(e) => setCustomTerm(e.target.value)} placeholder="اسم الفترة" style={field} />}
+        {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0, lineHeight: 1.7 }}>{error}</p>}
+        <button onClick={submit} disabled={busy || !note.trim() || !finalSubject} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14.5, minHeight: 46, opacity: busy || !note.trim() || !finalSubject ? 0.5 : 1 }}>
+          {busy ? "..." : "حفظ التعديلات"}
+        </button>
+        <button onClick={() => onDelete(item.id)} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+          حذف الملاحظة
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GradesSection({ child, motherId, subjects = [] }) {
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  // المادة قائمة من جدول حصص الطالب/ة + خيار كتابة مادة ثانية، والفترة
+  // بنفس تفاصيل ملاحظات المعلم (قرار صاحبة التطبيق ١٨ سبتمبر).
   const [subject, setSubject] = useState("");
+  const [customSubject, setCustomSubject] = useState("");
+  const [period, setPeriod] = useState(TERMS[0]);
+  const [customPeriod, setCustomPeriod] = useState("");
   const [score, setScore] = useState("");
   const [maxScore, setMaxScore] = useState("");
   const [examName, setExamName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const finalSubject = subject === "__other" ? customSubject.trim() : subject;
+  const finalPeriod = period === "__other" ? customPeriod.trim() : period;
+  const canAdd = !!finalSubject && !!score && !!maxScore && !saving;
 
   function load() {
     setLoading(true);
@@ -3210,15 +5134,15 @@ function GradesSection({ child, motherId }) {
   useEffect(load, [child.id, motherId]);
 
   async function handleAdd() {
-    if (!subject.trim() || !score || !maxScore) return;
+    if (!canAdd) return;
     setSaving(true);
     const res = await fetch("/api/grades", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ motherId, childId: child.id, subject, score, maxScore, examName }),
+      body: JSON.stringify({ motherId, childId: child.id, subject: finalSubject, score, maxScore, examName, period: finalPeriod }),
     });
     if (res.ok) {
-      setSubject(""); setScore(""); setMaxScore(""); setExamName("");
+      setSubject(""); setCustomSubject(""); setScore(""); setMaxScore(""); setExamName("");
       setShowAdd(false);
       load();
     }
@@ -3245,14 +5169,28 @@ function GradesSection({ child, motherId }) {
 
       {showAdd && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 12, background: "#FAFAF8", border: "1px solid #EEEDE8" }}>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="المادة (مثال: الرياضيات)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+          <select value={subject} onChange={(e) => setSubject(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, background: "white" }}>
+            <option value="">اختاري المادة…</option>
+            {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+            <option value="__other">مادة ثانية (اكتبيها)</option>
+          </select>
+          {subject === "__other" && (
+            <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+          )}
+          <select value={period} onChange={(e) => setPeriod(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, background: "white" }}>
+            {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+            <option value="__other">فترة ثانية (اكتبيها)</option>
+          </select>
+          {period === "__other" && (
+            <input value={customPeriod} onChange={(e) => setCustomPeriod(e.target.value)} placeholder="اسم الفترة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <input value={score} onChange={(e) => setScore(e.target.value)} placeholder="الدرجة" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
             <span style={{ alignSelf: "center", color: "#9CA3AF" }}>من</span>
             <input value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="الدرجة الكلية" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
           </div>
           <input value={examName} onChange={(e) => setExamName(e.target.value)} placeholder="اسم الاختبار (اختياري)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
-          <button disabled={saving || !subject.trim() || !score || !maxScore} onClick={handleAdd} style={{ padding: 10, borderRadius: 10, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13, opacity: saving || !subject.trim() || !score || !maxScore ? 0.5 : 1 }}>
+          <button disabled={!canAdd} onClick={handleAdd} style={{ padding: 10, borderRadius: 10, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13, opacity: canAdd ? 1 : 0.5 }}>
             {saving ? "جاري الحفظ..." : "حفظ الدرجة"}
           </button>
         </div>
@@ -3275,7 +5213,10 @@ function GradesSection({ child, motherId }) {
               </div>
               {entries.map((e) => (
                 <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 12.5, color: "#6B7280" }}>
-                  <span>{e.exam_name || "اختبار"} — {e.score}/{e.max_score}</span>
+                  <span>
+                    {e.exam_name || "اختبار"} — {e.score}/{e.max_score}
+                    {e.period && <span style={{ color: "#9CA3AF" }}> · {e.period}</span>}
+                  </span>
                   <button onClick={() => handleDelete(e.id)} style={{ background: "none", color: "#D1785A", fontSize: 12 }}>حذف</button>
                 </div>
               ))}
@@ -3291,7 +5232,7 @@ function ResetYearButton({ motherId, onDone, ios }) {
   const [busy, setBusy] = useState(false);
 
   async function handleReset() {
-    if (!confirm("مسح كل بيانات هذا العام الدراسي (الواجبات، المتطلبات، جدول الحصص، الحفظ، الدرجات، ومحادثات المعلم الذكي) لكل الأطفال؟ هذا الإجراء نهائي ولا يمكن التراجع عنه. ملفات الأطفال نفسها تبقى، بس لازم تحدّثين الصف يدوياً بعدها.")) return;
+    if (!confirm("مسح كل بيانات هذا العام الدراسي (الواجبات، المتطلبات، جدول الحصص، الحفظ، الدرجات، ملاحظات المعلم، ومحادثات المعلم الذكي) لكل الأطفال؟ هذا الإجراء نهائي ولا يمكن التراجع عنه. ملفات الأطفال نفسها تبقى، بس لازم تحدّثين الصف يدوياً بعدها.")) return;
     if (!confirm("تأكيد أخير: راح تنمسح البيانات نهائياً. متأكدة؟")) return;
     setBusy(true);
     const res = await fetch("/api/reset-year", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
@@ -3461,6 +5402,218 @@ function appAccessSummary(access) {
   return { status: "", color: "#5C4B8C", bg: "#F1EFFA", detail: "", action: "عرض الباقات" };
 }
 
+// تحديد أو تغيير الرقم السري من صفحة الحساب — لمن تخطّاها بالتسجيل، أو
+// حابة تغيّره. fetch العادي (مو fetch(...) اليدوي) لأن installAuthFetch
+// يرفق التوكن تلقائياً هنا (بخلاف شاشة التسجيل قبل تسجيل الدخول).
+function PasswordSetting({ ios }) {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    if (password.trim().length < 4) { setError("الرقم السري لازم يكون ٤ أحرف/أرقام على الأقل"); return; }
+    if (password !== password2) { setError("الرقمان غير متطابقين"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "تعذّر الحفظ");
+      setSaved(true);
+      setPassword("");
+      setPassword2("");
+      setTimeout(() => { setOpen(false); setSaved(false); }, 1200);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const rowStyle = ios
+    ? { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "12px 16px", background: "none", color: "#000" }
+    : { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", width: "100%", background: "none", color: "#374151" };
+  const inputStyle = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, marginBottom: 8, direction: "ltr", textAlign: "center" };
+
+  return (
+    <div style={ios ? undefined : { borderBottom: "1px solid #F5F3EF" }}>
+      <button onClick={() => setOpen((v) => !v)} className={ios ? "ios-row" : undefined} style={rowStyle}>
+        <span style={{ fontSize: ios ? 17 : 14.5, fontWeight: ios ? 400 : 700, display: "flex", alignItems: "center", gap: 9 }}>
+          {!ios && <TileIcon name="lock" size={25} />}
+          الرقم السري للدخول
+        </span>
+        <span style={{ color: ios ? "#C7C2D4" : "#C7C2D4", fontSize: 16 }}>{open ? "︿" : "‹"}</span>
+      </button>
+      {open && (
+        <div style={{ padding: ios ? "0 16px 14px" : "0 18px 16px" }}>
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: "#9CA3AF", lineHeight: 1.7 }}>
+            دخول قادم بموبايلك ورقمك السري بلا كود، حتى من جهاز جديد.
+          </p>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رقم سري جديد" autoComplete="new-password" style={inputStyle} />
+          <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="أعيدي كتابته" autoComplete="new-password" style={inputStyle} />
+          <button onClick={save} disabled={busy} style={{ width: "100%", padding: 11, borderRadius: 12, background: saved ? "#22C55E" : "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13.5, minHeight: 42, opacity: busy ? 0.6 : 1 }}>
+            {saved ? "تم الحفظ ✓" : busy ? "جاري الحفظ..." : "حفظ"}
+          </button>
+          {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: "8px 0 0", lineHeight: 1.7 }}>{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// إدارة العائلة: اشتراك واحد يغطي ولي أمر أساسي + ولي أمر ثانٍ. الأساسي
+// يدعو برقم جوال، والثاني يقبل من حسابه هو — بلا اشتراك جديد ولا دخول
+// بحساب غيره. الحد وليّان فقط، مفروض بقاعدة البيانات كذلك.
+function FamilySetting({ ios }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState(null);
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = () => fetch("/api/family").then((r) => r.json()).then(setData).catch(() => setData({ parents: [] }));
+  useEffect(() => { if (open && !data) load(); }, [open]);
+
+  async function invite() {
+    setBusy(true); setError("");
+    const res = await fetch("/api/family", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) setError(d.error || "تعذّر إرسال الدعوة");
+    else { setPhone(""); await load(); }
+    setBusy(false);
+  }
+
+  async function remove(parentId) {
+    const msg = parentId ? "إخراج ولي الأمر الثاني؟ راح ينقطع وصوله لبيانات العائلة فوراً." : "إلغاء الدعوة؟";
+    if (!confirm(msg)) return;
+    setBusy(true); setError("");
+    const res = await fetch("/api/family", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ parentId }) });
+    if (!res.ok) setError((await res.json().catch(() => ({}))).error || "تعذّرت العملية");
+    else await load();
+    setBusy(false);
+  }
+
+  const rowStyle = ios
+    ? { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "12px 16px", background: "none", color: "#000" }
+    : { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", width: "100%", background: "none", color: "#374151" };
+
+  return (
+    <div style={ios ? undefined : { borderBottom: "1px solid #F5F3EF" }}>
+      <button onClick={() => setOpen((v) => !v)} className={ios ? "ios-row" : undefined} style={rowStyle}>
+        <span style={{ fontSize: ios ? 17 : 14.5, fontWeight: ios ? 400 : 700, display: "flex", alignItems: "center", gap: 9 }}>
+          {!ios && <TileIcon name="gift" size={25} />}
+          العائلة (مشاركة الاشتراك)
+        </span>
+        <span style={{ color: "#C7C2D4", fontSize: 16 }}>{open ? "︿" : "‹"}</span>
+      </button>
+      {open && (
+        <div style={{ padding: ios ? "0 16px 14px" : "0 18px 16px" }}>
+          {!data && <p style={{ fontSize: 12.5, color: "#9CA3AF" }}>...جاري التحميل</p>}
+          {data && (
+            <>
+              <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9CA3AF", lineHeight: 1.8 }}>
+                اشتراكك يغطي ولي أمر ثاني (الأب) — يدخل بحسابه ورقمه هو، ويشوف نفس الأبناء والواجبات ويوصله نفس التذكيرات.
+              </p>
+
+              {(data.parents || []).map((p) => (
+                <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0", borderTop: "1px solid #F3F2EE" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700 }}>{p.name} {p.isMe && <span style={{ color: "#9CA3AF", fontWeight: 400 }}>(أنت)</span>}</p>
+                    <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF" }}>{p.role === "primary" ? "صاحب الاشتراك" : "ولي أمر ثاني"}</p>
+                  </div>
+                  {data.role === "primary" && p.role === "secondary" && (
+                    <button onClick={() => remove(p.id)} disabled={busy} style={{ background: "#FEF2F2", color: "#B91C1C", fontSize: 11.5, fontWeight: 700, padding: "6px 10px", borderRadius: 9 }}>إخراج</button>
+                  )}
+                </div>
+              ))}
+
+              {data.invite && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0", borderTop: "1px solid #F3F2EE" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#8C6027" }}>دعوة معلّقة — {data.invite.phone}</p>
+                    <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF" }}>تظهر له بحسابه أول ما يدخل برقمه</p>
+                  </div>
+                  <button onClick={() => remove(null)} disabled={busy} style={{ background: "#F3F4F6", color: "#6B7280", fontSize: 11.5, fontWeight: 700, padding: "6px 10px", borderRadius: 9 }}>إلغاء</button>
+                </div>
+              )}
+
+              {data.canInvite && (
+                <div style={{ marginTop: 10 }}>
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم موبايل ولي الأمر الثاني" inputMode="numeric"
+                    style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, marginBottom: 8, direction: "ltr", textAlign: "center" }} />
+                  <button onClick={invite} disabled={busy || phone.trim().length < 8} style={{ width: "100%", padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13.5, minHeight: 42, opacity: busy || phone.trim().length < 8 ? 0.5 : 1 }}>
+                    {busy ? "..." : "إرسال الدعوة"}
+                  </button>
+                </div>
+              )}
+
+              {data.role === "secondary" && (
+                <p style={{ margin: "10px 0 0", fontSize: 12, color: "#6B7280", lineHeight: 1.8 }}>أنت ولي أمر ثاني بهذي العائلة — الاشتراك وإدارة العائلة عند صاحب الاشتراك.</p>
+              )}
+
+              {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: "8px 0 0", lineHeight: 1.7 }}>{error}</p>}
+
+              {(data.activity || []).length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 800, color: "#6B7280" }}>آخر النشاط</p>
+                  {data.activity.slice(0, 8).map((a, i) => (
+                    <p key={i} style={{ margin: "0 0 4px", fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.8 }}>
+                      {a.actor_name || "ولي أمر"} {a.action}{a.entity ? `: ${a.entity}` : ""}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// دعوة وصلت لرقمك: تظهر أول ما تدخل، وما تنضم إلا بقبولك أنت.
+function FamilyInviteBanner({ onJoined }) {
+  const [invite, setInvite] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/family/invite").then((r) => r.json()).then((d) => setInvite(d.invite || null)).catch(() => {});
+  }, []);
+
+  async function answer(accept) {
+    setBusy(true); setError("");
+    const res = await fetch("/api/family/invite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accept }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setError(d.error || "تعذّرت العملية"); setBusy(false); return; }
+    setInvite(null);
+    if (d.joined) onJoined();
+  }
+
+  if (!invite) return null;
+  return (
+    <div style={{ margin: "12px 16px 0", background: "#F1EFFA", border: "1px solid #D9D2F2", borderRadius: 16, padding: 14 }}>
+      <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#5C4B8C", lineHeight: 1.8 }}>
+        {invite.fromName} يدعوك تنضم لعائلته بدفتري
+      </p>
+      <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "#6B7280", lineHeight: 1.8 }}>
+        راح تشوف نفس الأبناء والواجبات والاختبارات، ويوصلك نفس التذكيرات — بحسابك هذا وبلا اشتراك جديد.
+      </p>
+      {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: "0 0 8px", lineHeight: 1.7 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => answer(true)} disabled={busy} style={{ flex: 2, padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: busy ? 0.6 : 1 }}>
+          {busy ? "..." : "انضمام"}
+        </button>
+        <button onClick={() => answer(false)} disabled={busy} style={{ flex: 1, padding: 11, borderRadius: 12, background: "white", color: "#6B7280", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+          رفض
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared, onManageSubscription }) {
   const phone = (mother.phone || "").replace(/^\+965/, "");
   const [native, setNative] = useState(false);
@@ -3482,12 +5635,16 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
   if (native) {
     return (
       <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#F2F2F7", display: "flex", flexDirection: "column" }}>
-        <div className="ios-navbar" style={{ padding: "calc(env(safe-area-inset-top) + 4px) 16px 8px" }}>
-          <button onClick={onClose} className="ios-navbar-back">
-            <span style={{ fontSize: 22, lineHeight: 1 }}>›</span>
-            <span>رجوع</span>
-          </button>
-          <h1 className="ios-large-title">حسابي</h1>
+        <div className="ios-navbar">
+          <div className="ios-navbar-row" style={{ justifyContent: "flex-start" }}>
+            <button onClick={onClose} className="ios-navbar-back">
+              <span style={{ fontSize: 22, lineHeight: 1 }}>›</span>
+              <span>رجوع</span>
+            </button>
+          </div>
+          <div className="ios-navbar-titles">
+            <h1 className="ios-large-title">حسابي</h1>
+          </div>
         </div>
 
         <div className="app-scroll" style={{ flex: 1, padding: "18px 16px calc(env(safe-area-inset-bottom) + 24px)", display: "flex", flexDirection: "column", gap: 22 }}>
@@ -3531,12 +5688,19 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span>سياسة الخصوصية</span>
               <span className="ios-chevron">›</span>
             </a>
-            <a href="mailto:reemprimeco@gmail.com" className="ios-row">
-              <span>تواصلي معنا</span>
+            {/* شعار القناة بدل اسمها بين قوسين — الأيقونة تعرّف بنفسها */}
+            <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" className="ios-row">
+              <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <TileIcon name="instagram" size={25} />
+                تواصل معانا
+              </span>
               <span className="ios-chevron">›</span>
             </a>
             <a href={WHATSAPP_URL} target="_blank" rel="noreferrer" className="ios-row">
-              <span>واتساب — أسرع رد</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <TileIcon name="whatsapp" size={25} />
+                تواصل معانا
+              </span>
               <span className="ios-chevron">›</span>
             </a>
             <PushTestRow />
@@ -3544,6 +5708,11 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span>الإصدار</span>
               <span className="ios-row-value" style={{ direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>
             </div>
+          </div>
+
+          <div className="ios-group">
+            <PasswordSetting ios />
+            <FamilySetting ios />
           </div>
 
           <div className="ios-group">
@@ -3609,17 +5778,17 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
-          <a href="mailto:reemprimeco@gmail.com" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
+          <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
-              <TileIcon name="mail" size={25} />
-              تواصلي معنا
+              <TileIcon name="instagram" size={25} />
+              تواصل معانا
             </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
           <a href={WHATSAPP_URL} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
               <TileIcon name="whatsapp" size={25} />
-              واتساب — أسرع رد
+              تواصل معانا
             </span>
             <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
           </a>
@@ -3627,6 +5796,11 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             <span style={{ fontSize: 14.5, fontWeight: 700, color: "#374151" }}>الإصدار</span>
             <span style={{ fontSize: 13.5, color: "#9CA3AF", direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>
           </div>
+        </div>
+
+        <div style={{ background: "white", borderRadius: 18, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
+          <PasswordSetting />
+          <FamilySetting />
         </div>
 
         <button onClick={onLogout} style={{ background: "white", borderRadius: 18, padding: "15px 18px", textAlign: "right", fontSize: 14.5, fontWeight: 700, color: "#374151", boxShadow: "0 1px 3px rgba(0,0,0,.05)", width: "100%" }}>
@@ -3692,8 +5866,8 @@ function DeleteAccountButton({ mother, onDeleted, ios }) {
     <div style={{ marginTop: 4, padding: 14, borderRadius: 12, border: "1px solid #FECACA", background: "#FEF2F2" }}>
       <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "#B91C1C" }}>حذف الحساب نهائياً</p>
       <p style={{ margin: "6px 0 10px", fontSize: 12.5, lineHeight: 1.75, color: "#7F1D1D" }}>
-        سيُحذف حسابك وكل بيانات أبنائك (الواجبات، المتطلبات، الجدول، الحفظ، الدرجات، ومحادثات المعلم الذكي) نهائياً
-        وبدون إمكانية استرجاع. لتأكيد الحذف، اكتبي رقم جوالك ({lastEight}):
+        سيُحذف حسابك وكل بيانات أبنائك (الواجبات، المتطلبات، الجدول، الحفظ، الدرجات، ملاحظات المعلم، ومحادثات المعلم الذكي) نهائياً
+        وبدون إمكانية استرجاع. لتأكيد الحذف، اكتبي رقم موبايلك ({lastEight}):
       </p>
       <input
         value={confirmPhone}

@@ -35,7 +35,7 @@ export default function PrivacyPage() {
         <Section title="البيانات التي نجمعها">
           <p style={p}>نجمع فقط البيانات اللازمة لتشغيل التطبيق:</p>
           <ul style={ul}>
-            <li style={li}><strong>بيانات ولي الأمر:</strong> الاسم ورقم الجوال.</li>
+            <li style={li}><strong>بيانات ولي الأمر:</strong> الاسم ورقم الموبايل.</li>
             <li style={li}><strong>بيانات الطالب/ة:</strong> الاسم، المدرسة، المحافظة، الصف والشعبة، الجنس، وصورة اختيارية تضيفينها بنفسك.</li>
             <li style={li}><strong>البيانات الدراسية:</strong> الواجبات والاختبارات والمشاريع، المتطلبات المدرسية، جدول الحصص، مطلوبات الحفظ، ودرجات الاختبارات التي تدخلينها.</li>
             <li style={li}><strong>الصور:</strong> صور جداول الواجبات أو صفحات الواجب التي تصوّرينها أو ترفعينها للتحليل.</li>
@@ -81,7 +81,7 @@ export default function PrivacyPage() {
             <li style={li}><strong>Supabase</strong> — تخزين قاعدة البيانات.</li>
             <li style={li}><strong>Vercel</strong> — استضافة التطبيق والموقع.</li>
             <li style={li}><strong>Anthropic</strong> — خدمة الذكاء الاصطناعي.</li>
-            <li style={li}><strong>Twilio</strong> — إرسال رمز التحقق برسالة نصية عند تسجيل الدخول (يصلها رقم جوالك فقط).</li>
+            <li style={li}><strong>Twilio</strong> — إرسال رمز التحقق برسالة نصية عند تسجيل الدخول (يصلها رقم موبايلك فقط).</li>
             <li style={li}><strong>آبل</strong> — توصيل الإشعارات لجهازك، والتحقق من عمليات الشراء داخل التطبيق.</li>
             <WebPaymentProvider />
             <li style={li}><strong>وزارة التربية الكويتية</strong> — مكتبتها الإلكترونية العامة (elibrary.moe.edu.kw) للاستعانة بنماذج الاختبارات والمراجعات الرسمية عند الإجابة على أسئلة المعلم الذكي.</li>
@@ -105,7 +105,7 @@ export default function PrivacyPage() {
           </p>
           <ul style={ul}>
             <li style={li}>حذف أي واجب أو متطلب أو درجة بشكل فردي.</li>
-            <li style={li}>مسح كل بيانات العام الدراسي دفعة واحدة من تبويب «الحفظ والدرجات».</li>
+            <li style={li}>مسح كل بيانات العام الدراسي دفعة واحدة من تبويب «المتابعة والدرجات».</li>
             <li style={li}><strong>حذف حسابك نهائياً</strong> مع كل البيانات المرتبطة به، من نفس التبويب.</li>
           </ul>
           <p style={p}>
@@ -158,12 +158,16 @@ export default function PrivacyPage() {
 
         <Section title="تواصلي معنا">
           <p style={p}>
-            لأي استفسار أو طلب يخص خصوصيتك وبياناتك:
+            لأي استفسار أو طلب يخص خصوصيتك وبياناتك راسلينا بالمسجات الدايركت:
           </p>
           <p style={{ ...p, textAlign: "center", marginTop: 16 }}>
-            <a href="mailto:reemprimeco@gmail.com" style={{ display: "inline-block", padding: "11px 26px", borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, textDecoration: "none", fontSize: 14 }}>
-              reemprimeco@gmail.com
+            <a href="https://ig.me/m/reemora.app" target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "11px 26px", borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, textDecoration: "none", fontSize: 14 }}>
+              @reemora.app
             </a>
+          </p>
+          {/* الايميل يبقى مكتوباً كقناة رسمية لطلبات حذف/تصدير البيانات */}
+          <p style={{ ...p, textAlign: "center", marginTop: 10, fontSize: 13, color: "#8B8397" }}>
+            أو بالبريد: <a href="mailto:reemprimeco@gmail.com" style={{ color: "#8B8397" }}>reemprimeco@gmail.com</a>
           </p>
         </Section>
 

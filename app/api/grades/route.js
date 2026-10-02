@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { childInFamily } from "@/lib/family";
 import { kuwaitTerm } from "@/lib/moeCurriculum";
 
 export async function GET(req) {
@@ -8,7 +9,7 @@ export async function GET(req) {
   if (!childId || !motherId) return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
 
   const sb = supabaseAdmin();
-  const { data: child } = await sb.from("children").select("id").eq("id", childId).eq("mother_id", motherId).single();
+  const child = await childInFamily(sb, childId, motherId, "id");
   if (!child) return NextResponse.json({ error: "الطالب/ة غير موجود" }, { status: 400 });
 
   const { data, error } = await sb
@@ -22,7 +23,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   const body = await req.json();
-  const { childId, subject, score, maxScore, examName } = body;
+  const { childId, subject, score, maxScore, examName, period } = body;
   const motherId = req.headers.get("x-mother-id");
   if (!motherId || !childId || !subject?.trim() || score == null || !maxScore) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
@@ -34,7 +35,7 @@ export async function POST(req) {
   }
 
   const sb = supabaseAdmin();
-  const { data: child } = await sb.from("children").select("id").eq("id", childId).eq("mother_id", motherId).single();
+  const child = await childInFamily(sb, childId, motherId, "id");
   if (!child) return NextResponse.json({ error: "الطالب/ة غير موجود" }, { status: 400 });
 
   const { data, error } = await sb
@@ -44,7 +45,10 @@ export async function POST(req) {
       subject: subject.trim(),
       score: scoreNum,
       max_score: maxNum,
+      // العمود القديم: عدد صحيح يُحسب من الشهر، ما يُقرأ بأي مكان
       term: kuwaitTerm(),
+      // الفترة اللي اختارتها الأم أو كتبتها بنفسها — هذي اللي تُعرض
+      period: period?.trim() || null,
       exam_name: examName?.trim() || null,
     })
     .select()

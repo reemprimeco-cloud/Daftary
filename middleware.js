@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSessionToken } from "@/lib/session";
-import { hasAppAccess } from "@/lib/appEntitlements";
+import { hasAppAccess, isTrialExempt } from "@/lib/appEntitlements";
 
 // حارس مركزي لمسارات الـ API. قبله كانت كل المسارات مفتوحة: أي أحد يعرف معرّف
 // ولي أمر يقدر يقرأ ويعدّل بياناته. نتحقق هنا مرة وحدة بدل ما نكرر الفحص في
@@ -33,6 +33,21 @@ const APP_PAYWALL_EXEMPT_PREFIXES = [
   // البلاغ عن خلل لازم يشتغل حتى لو الحساب محجوب — بل هذي أهم حالة نبي
   // نعرف عنها: أم محجوبة تواجه مشكلة ولا تقدر توصلنا بشي.
   "/api/error-report",
+  // استعلام حالة رفعة سابقة — محصور بصاحبته أصلاً (مصفّى بـmother_id
+  // الموثوق)، فحجبه عن غير المشتركة لا يمنع شيئاً ويكسر تجربة رفع الجدول
+  // المجانية (lib/uploadRequest.js يستعلم عنه لو انقطع الاتصال).
+  "/api/upload-jobs/",
+  // تحديد الرقم السري (دخول بلا كود لاحقاً) حق لكل حساب بصرف النظر عن
+  // الاشتراك — حجبه عن حساب محجوب يقفلها على الكود للأبد.
+  "/api/set-password",
+  // إدارة العائلة وقبول الدعوة: ولي الأمر الثاني ما عنده وصول قبل ما
+  // ينضم أصلاً، فحجب هالمسارات يمنعه من قبول الدعوة اللي بتعطيه الوصول.
+  // المسارات ما تكشف بيانات أبناء — عضوية فقط.
+  "/api/family",
+  // بطاقة الإعلان داخل التطبيق: أهم إعلان نرسله هو اللي يخص الاشتراك
+  // نفسه، فحجبه عن المحجوبة يخفيه عن أكثر وحدة تحتاجه. والمسار ما يرجّع
+  // إلا نص إعلان أرسلناه نحن.
+  "/api/broadcasts/",
 ];
 
 // عرض الأبناء وحذف طالب/ة يبقيان مسموحين دائماً حتى لو الحساب محجوب —
@@ -53,6 +68,8 @@ async function checkAppPaywall(req, motherId) {
 
   const access = await hasAppAccess(motherId);
   if (access.allowed) return null;
+  // التجربة المجانية لمرة واحدة (قرار ١٦ سبتمبر) — راجع lib/appEntitlements.js
+  if (isTrialExempt(access, req.method, req.nextUrl.pathname)) return null;
 
   return NextResponse.json(
     { error: "الاشتراك بالتطبيق منتهي أو غير مفعّل", paywall: true, phase: access.phase },

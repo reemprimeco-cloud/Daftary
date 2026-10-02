@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { familyIdOf } from "@/lib/family";
 
 export async function DELETE(req, { params }) {
   const body = await req.json().catch(() => ({}));
   const sb = supabaseAdmin();
 
-  const { data: existing } = await sb.from("exam_grades").select("id, children(mother_id)").eq("id", params.id).single();
-  if (!existing || existing.children?.mother_id !== req.headers.get("x-mother-id")) {
+  const { data: existing } = await sb.from("exam_grades").select("id, children(family_id)").eq("id", params.id).single();
+  if (!existing || existing.children?.family_id !== (await familyIdOf(sb, req.headers.get("x-mother-id")))) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 

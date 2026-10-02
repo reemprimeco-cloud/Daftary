@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { familyIdOf } from "@/lib/family";
 import { createTapCharge } from "@/lib/tap";
 import { PRODUCTS } from "@/lib/entitlements";
 import { APP_PRODUCTS } from "@/lib/appPlans";
@@ -42,7 +43,7 @@ export async function POST(req) {
   // الرصيد الإضافي يُضاف لطالب/ة محدد، فنتأكد إنه يخص ولي الأمر نفسه.
   if (childId) {
     const { data: child } = await sb
-      .from("children").select("id").eq("id", childId).eq("mother_id", motherId).maybeSingle();
+      .from("children").select("id").eq("id", childId).eq("family_id", await familyIdOf(sb, motherId)).maybeSingle();
     if (!child) return NextResponse.json({ error: "الطالب/ة المحدد غير موجود" }, { status: 400 });
   }
 

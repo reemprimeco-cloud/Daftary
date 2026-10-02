@@ -16,7 +16,7 @@ export default function AlertTest() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "فشل الإرسال");
       setState("ok");
-      setDetail("انطلق التنبيه ✅ — لازم يوصل جوالك خلال ثوانٍ. إذا ما وصل، تأكدي إن إشعارات دفتري مسموحة بإعدادات جوالك.");
+      setDetail("انطلق التنبيه ✅ — لازم يوصل موبايلك خلال ثوانٍ. إذا ما وصل، تأكدي إن إشعارات دفتري مسموحة بإعدادات موبايلك.");
     } catch (e) {
       setState("failed");
       setDetail(e.message);
@@ -27,7 +27,7 @@ export default function AlertTest() {
     <div style={{ background: "white", borderRadius: 16, padding: 18, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
       <h2 style={{ margin: "0 0 4px", fontSize: 16, color: "#5C4B8C" }}>تنبيه الأعطال</h2>
       <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#9CA3AF", lineHeight: 1.8 }}>
-        لو تعطّل إرسال رمز التحقق (رصيد Twilio خلص، أو الحساب موقوف)، يوصلك إشعار على جوالك فوراً بدل ما
+        لو تعطّل إرسال رمز التحقق (رصيد Twilio خلص، أو الحساب موقوف)، يوصلك إشعار على موبايلك فوراً بدل ما
         تكتشفينها من شكوى مستخدمة. تنبيه واحد كل ساعة مهما تكرر الفشل.
       </p>
 

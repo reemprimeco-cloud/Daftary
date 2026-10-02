@@ -8,6 +8,7 @@ import AdminLogoutButton from "./AdminLogoutButton";
 import RefreshPage from "./RefreshPage";
 import AppleNotificationTest from "./AppleNotificationTest";
 import Broadcast from "./Broadcast";
+import WhatsappList from "./WhatsappList";
 import Signups from "./Signups";
 import Errors from "./Errors";
 import Feedback from "./Feedback";
@@ -289,7 +290,7 @@ function SubscriptionsSection({ subscriptions }) {
             <tr style={{ textAlign: "right", color: "#9CA3AF", fontSize: 12 }}>
               <th style={{ padding: "8px 10px" }}>النوع</th>
               <th style={{ padding: "8px 10px" }}>ولي الأمر</th>
-              <th style={{ padding: "8px 10px" }}>الجوال</th>
+              <th style={{ padding: "8px 10px" }}>الموبايل</th>
               <th style={{ padding: "8px 10px" }}>الباقة</th>
               <th style={{ padding: "8px 10px" }}>المتجر</th>
               <th style={{ padding: "8px 10px" }}>المبلغ</th>
@@ -350,7 +351,7 @@ function AdminDashboard({ stats }) {
   const subs = stats.subscriptions;
   const tabs = [
     { key: "today", label: "اليوم", badge: stats.signupsToday },
-    { key: "list", label: "المسجّلات", badge: stats.mothersCount },
+    { key: "list", label: "المشتركين", badge: stats.mothersCount },
     { key: "subs", label: "الاشتراكات", badge: subs.appAccess.activeCount },
     { key: "cost", label: "التكلفة" },
     { key: "comms", label: "التواصل" },
@@ -382,7 +383,7 @@ function AdminDashboard({ stats }) {
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "8px 0 16px" }}>
           <StatCard label="تسجيلات اليوم" value={stats.signupsToday} color={{ bg: "#FDF3E7", text: "#8C6027" }} />
-          <StatCard label="المسجّلات" value={stats.mothersCount} color={{ bg: "#F1EFFA", text: "#5C4B8C" }} />
+          <StatCard label="المشتركين" value={stats.mothersCount} color={{ bg: "#F1EFFA", text: "#5C4B8C" }} />
           <StatCard label="الطلاب" value={stats.childrenCount} color={{ bg: "#EBF7F1", text: "#2F6E56" }} />
           <StatCard label="اشتراكات فعّالة" value={subs.appAccess.activeCount} color={{ bg: "#EBF4FA", text: "#31607C" }} />
         </div>
@@ -402,6 +403,7 @@ function AdminDashboard({ stats }) {
             comms: (
               <>
                 <Broadcast />
+                <WhatsappList />
                 <Feedback />
               </>
             ),
@@ -429,7 +431,7 @@ function MothersTable({ stats }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 0 8px", gap: 8, flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>المسجّلات</h2>
+        <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>المشتركين</h2>
         <span style={{ fontSize: 12, color: "#9CA3AF" }}>
           {stats.recentMothers.length < stats.mothersCount
             ? `${stats.recentMothers.length} من ${stats.mothersCount} حساب`
@@ -442,7 +444,7 @@ function MothersTable({ stats }) {
           <thead style={{ position: "sticky", top: 0, background: "white", zIndex: 1 }}>
             <tr>
               <th style={th}>الاسم</th>
-              <th style={th}>الجوال</th>
+              <th style={th}>الموبايل</th>
               <th style={th}>الطلاب</th>
               <th style={th}>الاشتراك</th>
               <th style={th}>التسجيل</th>

@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { redistributePool } from "@/lib/entitlements";
-import { hasAppAccess } from "@/lib/appEntitlements";
+import { hasAppAccess, childAddAllowedByTrial } from "@/lib/appEntitlements";
+import { familyIdOf } from "@/lib/family";
 
 export async function GET(req) {
   const motherId = req.nextUrl.searchParams.get("motherId");
   if (!motherId) return NextResponse.json({ error: "motherId مطلوب" }, { status: 400 });
   const sb = supabaseAdmin();
-  const { data, error } = await sb.from("children").select("*").eq("mother_id", motherId).order("created_at");
+  // أبناء العائلة — الأب والأم يشوفون نفس القائمة.
+  const familyId = await familyIdOf(sb, motherId);
+  if (!familyId) return NextResponse.json({ children: [] });
+  const { data, error } = await sb.from("children").select("*").eq("family_id", familyId).order("created_at");
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ children: data });
 }
@@ -23,7 +27,10 @@ export async function POST(req) {
   const access = await hasAppAccess(motherId);
   const max = access.subscription?.max_students;
   if (access.phase === "enforced" || max != null) {
-    if ((access.studentsCount || 0) + 1 > (max ?? 0)) {
+    // التجربة المجانية (قرار ١٦ سبتمبر): طالب أول بلا اشتراك — middleware.js
+    // يمرّر هالطلب فعلاً عبر isTrialExempt، وهذا فحص دفاعي ثانٍ بنفس القاعدة.
+    const freeTrial = childAddAllowedByTrial(access);
+    if (!freeTrial && (access.studentsCount || 0) + 1 > (max ?? 0)) {
       return NextResponse.json(
         { error: "باقتك الحالية ما تغطي طالباً/ة إضافياً. رقّي الباقة أولاً.", paywall: true },
         { status: 402 }
@@ -32,13 +39,15 @@ export async function POST(req) {
   }
 
   const sb = supabaseAdmin();
+  const familyId = await familyIdOf(sb, motherId);
+  if (!familyId) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   let colorIdx = body.colorIdx;
   if (colorIdx === undefined || colorIdx === null) {
     const { count } = await sb
       .from("children")
       .select("*", { count: "exact", head: true })
-      .eq("mother_id", motherId);
+      .eq("family_id", familyId);
     colorIdx = count ?? 0;
   }
 
@@ -46,6 +55,7 @@ export async function POST(req) {
     .from("children")
     .insert({
       mother_id: motherId,
+      family_id: familyId,
       name: body.name,
       photo_url: body.photo || null,
       governorate: body.governorate,
