@@ -8,6 +8,7 @@ import AdminLogoutButton from "./AdminLogoutButton";
 import RefreshPage from "./RefreshPage";
 import AppleNotificationTest from "./AppleNotificationTest";
 import Broadcast from "./Broadcast";
+import WhatsappList from "./WhatsappList";
 import Signups from "./Signups";
 import Errors from "./Errors";
 import Feedback from "./Feedback";
@@ -402,6 +403,7 @@ function AdminDashboard({ stats }) {
             comms: (
               <>
                 <Broadcast />
+                <WhatsappList />
                 <Feedback />
               </>
             ),
