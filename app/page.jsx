@@ -2106,7 +2106,25 @@ function AttachmentsCard({ children, refreshKey }) {
 
 function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit, onAddTask, onClearedDone }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
-  const [filter, setFilter] = useState("all");
+  // **الافتراضي «غير مكتمل»** (قرارها ٢١ أكتوبر): اللي تفتح الرئيسية
+  // تبي تشوف اللي **باقي** عليها لا كل شي. والمنجز ينتقل لتبويبه،
+  // و«الكل» صار آخر تبويب لأنه مرجع لا نقطة بداية.
+  const [filter, setFilter] = useState("open");
+
+  // الواجب اللي انحدّد «تم» يبقى ظاهراً لحظة بعلامته قبل ما يغادر
+  // تبويب «غير مكتمل» — اختفاء فوري يخلي الأم تشك: انسجّل ولا لا؟
+  const [justDone, setJustDone] = useState(() => new Set());
+  const graceTimers = useRef(new Map());
+  useEffect(() => () => { graceTimers.current.forEach(clearTimeout); graceTimers.current.clear(); }, []);
+  const grace = (id) => {
+    setJustDone((p) => new Set(p).add(id));
+    clearTimeout(graceTimers.current.get(id));
+    graceTimers.current.set(id, setTimeout(() => {
+      setJustDone((p) => { const n = new Set(p); n.delete(id); return n; });
+      graceTimers.current.delete(id);
+    }, 700));
+  };
+  const toggleTask = (id, done) => { if (done && filter === "open") grace(id); onToggle(id, done); };
   const [memo, setMemo] = useState([]);
   const [editingMemo, setEditingMemo] = useState(null);
   const [clearing, setClearing] = useState(false);
@@ -2117,6 +2135,8 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   }, [child.id, motherId]);
 
   async function toggleMemo(id) {
+    const wasDone = memo.find((it) => it.id === id)?.done;
+    if (!wasDone && filter === "open") grace(id);
     const flip = (prev) => prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it));
     setMemo(flip);
     hapticLight();
@@ -2146,8 +2166,8 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   // يتغير مكان الواجب لما تعلّمه الأم ✓ أو تتراجع.
   const all = [...tasks, ...doneTasks].sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
   const isDone = (t) => t.status === "done";
-  const show = (t) => filter === "all" || (filter === "open" && !isDone(t)) || (filter === "done" && isDone(t)) || (filter === "exam" && t.type === "اختبار");
-  const memoShown = memo.filter((m) => filter === "all" || (filter === "open" && !m.done) || (filter === "done" && m.done));
+  const show = (t) => filter === "all" || (filter === "open" && (!isDone(t) || justDone.has(t.id))) || (filter === "done" && isDone(t)) || (filter === "exam" && t.type === "اختبار");
+  const memoShown = memo.filter((m) => filter === "all" || (filter === "open" && (!m.done || justDone.has(m.id))) || (filter === "done" && m.done));
 
   const total = all.length + memo.length;
   const doneCount = all.filter(isDone).length + memo.filter((m) => m.done).length;
@@ -2174,7 +2194,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   const undated = all.filter((t) => t.type !== "درس" && !t.due_date && show(t));
   if (undated.length) groups.push({ key: "undated", label: "بدون تاريخ محدد", items: undated, tone: "undated" });
 
-  const chips = [["all", "الكل"], ["open", "غير مكتمل"], ["done", "مكتمل"], ["exam", "اختبارات"]];
+  const chips = [["open", "غير مكتمل"], ["done", "مكتمل"], ["exam", "اختبارات"], ["all", "الكل"]];
   const groupDone = (items) => items.filter(isDone).length;
 
   // مسح المنجز: حذف نهائي، فنقول لها بالضبط وش بينمسح قبل ما تضغط —
@@ -2283,7 +2303,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
               </span>
             </div>
             <div style={{ padding: "0 12px" }}>
-              {g.items.map((t) => <PlanRow key={t.id} task={t} onToggle={onToggle} onOpen={onOpenTask} />)}
+              {g.items.map((t) => <PlanRow key={t.id} task={t} onToggle={toggleTask} onOpen={onOpenTask} />)}
             </div>
           </div>
         ))}
