@@ -26,7 +26,7 @@ export default function AlertTest() {
   return (
     <div style={{ background: "white", borderRadius: 16, padding: 18, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
       <h2 style={{ margin: "0 0 4px", fontSize: 16, color: "#5C4B8C" }}>تنبيه الأعطال</h2>
-      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#9CA3AF", lineHeight: 1.8 }}>
+      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#616876", lineHeight: 1.8 }}>
         لو تعطّل إرسال رمز التحقق (رصيد Twilio خلص، أو الحساب موقوف)، يوصلك إشعار على موبايلك فوراً بدل ما
         تكتشفينها من شكوى مستخدمة. تنبيه واحد كل ساعة مهما تكرر الفشل.
       </p>

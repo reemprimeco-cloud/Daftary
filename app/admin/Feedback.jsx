@@ -24,7 +24,7 @@ export default function Feedback() {
     <Card>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>تقييمات البرنامج</h2>
-        <button onClick={load} style={{ background: "none", color: "#B7A6E8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>تحديث</button>
+        <button onClick={load} style={{ background: "none", color: "#6B5BA8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>تحديث</button>
       </div>
 
       {data.count === 0 ? (
@@ -41,11 +41,11 @@ export default function Feedback() {
           <div style={{ marginBottom: 16 }}>
             {[5, 4, 3, 2, 1].map((n) => (
               <div key={n} style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
-                <span style={{ fontSize: 11.5, color: "#9CA3AF", width: 28 }}>{n} ★</span>
+                <span style={{ fontSize: 11.5, color: "#616876", width: 28 }}>{n} ★</span>
                 <div style={{ flex: 1, height: 7, background: "#F0EEE8", borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${(data.dist[n - 1] / peak) * 100}%`, background: "#B7A6E8" }} />
+                  <div style={{ height: "100%", width: `${(data.dist[n - 1] / peak) * 100}%`, background: "#6B5BA8" }} />
                 </div>
-                <span style={{ fontSize: 11.5, color: "#9CA3AF", width: 22, textAlign: "end" }}>{data.dist[n - 1]}</span>
+                <span style={{ fontSize: 11.5, color: "#616876", width: 22, textAlign: "end" }}>{data.dist[n - 1]}</span>
               </div>
             ))}
           </div>
@@ -53,7 +53,7 @@ export default function Feedback() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
               <thead>
-                <tr style={{ color: "#9CA3AF" }}>
+                <tr style={{ color: "#616876" }}>
                   <th style={th}>التقييم</th>
                   <th style={th}>الملاحظة</th>
                 </tr>
@@ -63,7 +63,7 @@ export default function Feedback() {
                   <tr key={i} style={{ borderTop: "1px solid #F5F3EF" }}>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       <div style={{ color: "#EFA518", letterSpacing: 1 }}>{"★".repeat(r.rating)}<span style={{ color: "#E0DCD4" }}>{"★".repeat(5 - r.rating)}</span></div>
-                      <div style={{ color: "#9CA3AF", fontSize: 11 }}>
+                      <div style={{ color: "#616876", fontSize: 11 }}>
                         {r.name} · {new Date(r.created_at).toLocaleDateString("ar-KW", { day: "numeric", month: "long" })}
                       </div>
                     </td>
@@ -83,7 +83,7 @@ function Stat({ value, label }) {
   return (
     <div style={{ flex: 1, background: "#FAF7F2", borderRadius: 12, padding: "10px 12px" }}>
       <div style={{ fontSize: 22, fontWeight: 800, color: "#5C4B8C", lineHeight: 1.2 }}>{value}</div>
-      <div style={{ fontSize: 11, color: "#9CA3AF" }}>{label}</div>
+      <div style={{ fontSize: 11, color: "#616876" }}>{label}</div>
     </div>
   );
 }
@@ -98,4 +98,4 @@ function Card({ children }) {
 
 const th = { textAlign: "start", padding: "6px 8px", fontWeight: 700, fontSize: 11.5 };
 const td = { padding: "9px 8px", verticalAlign: "top" };
-const muted = { margin: 0, fontSize: 12.5, color: "#9CA3AF", lineHeight: 1.8 };
+const muted = { margin: 0, fontSize: 12.5, color: "#616876", lineHeight: 1.8 };

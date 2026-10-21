@@ -32,7 +32,7 @@ export default function Signups() {
   // توقف التدفق هو المؤشر المهم: أخضر إذا فيه تسجيل قريب، وأحمر إذا مرّت
   // ساعة كاملة بلا ولا تسجيل واحد.
   const m = data.minutesSinceLast;
-  const silence = m == null ? { text: "ما فيه تسجيل بآخر ٢٤ ساعة", color: "#9CA3AF", bg: "#F3F4F6" }
+  const silence = m == null ? { text: "ما فيه تسجيل بآخر ٢٤ ساعة", color: "#616876", bg: "#F3F4F6" }
     : m < 60 ? { text: `آخر تسجيل قبل ${m} دقيقة`, color: "#166534", bg: "#F0FDF4" }
     : { text: `آخر تسجيل قبل ${Math.round(m / 60)} ساعة`, color: "#B91C1C", bg: "#FEF2F2" };
 
@@ -41,11 +41,11 @@ export default function Signups() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>حركة التسجيل</h2>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <label style={{ fontSize: 12, color: "#6B7280", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+          <label style={{ fontSize: 12, color: "#616876", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
             <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} style={{ accentColor: "#B7A6E8" }} />
             تحديث كل دقيقة
           </label>
-          <button onClick={load} style={{ background: "none", color: "#B7A6E8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>تحديث</button>
+          <button onClick={load} style={{ background: "none", color: "#6B5BA8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>تحديث</button>
         </div>
       </div>
 
@@ -75,11 +75,11 @@ export default function Signups() {
           </div>
         ))}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#9CA3AF", marginTop: 5 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#616876", marginTop: 5 }}>
         <span>قبل ٢٤ ساعة</span>
         <span>الحين</span>
       </div>
-      <p style={{ margin: "10px 0 0", fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.8 }}>
+      <p style={{ margin: "10px 0 0", fontSize: 11.5, color: "#616876", lineHeight: 1.8 }}>
         الأعمدة تعرض الحسابات الجديدة بكل ساعة بتوقيت الكويت. أثناء الحملة، توقف التدفق فجأة أسرع علامة
         على عطل بالتسجيل — أسرع من أي شكوى توصلك.
       </p>
@@ -91,7 +91,7 @@ function Stat({ label, value }) {
   return (
     <div style={{ flex: "1 1 90px", background: "#FAF7F2", borderRadius: 12, padding: "10px 12px" }}>
       <div style={{ fontSize: 20, fontWeight: 800, color: "#5C4B8C" }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: "#9CA3AF" }}>{label}</div>
+      <div style={{ fontSize: 11.5, color: "#616876" }}>{label}</div>
     </div>
   );
 }
@@ -104,4 +104,4 @@ function Card({ children }) {
   );
 }
 
-const muted = { margin: 0, fontSize: 12.5, color: "#9CA3AF" };
+const muted = { margin: 0, fontSize: 12.5, color: "#616876" };

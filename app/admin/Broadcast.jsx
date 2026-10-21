@@ -93,7 +93,7 @@ export default function Broadcast() {
   return (
     <div style={{ background: "white", borderRadius: 16, padding: 18, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
       <h2 style={{ margin: "0 0 4px", fontSize: 16, color: "#5C4B8C" }}>إشعار لكل المستخدمين</h2>
-      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#9CA3AF", lineHeight: 1.8 }}>
+      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#616876", lineHeight: 1.8 }}>
         يوصل لأجهزة التطبيق والمتصفحات معاً.
       </p>
 
@@ -102,7 +102,7 @@ export default function Broadcast() {
           <button
             key={t.key}
             onClick={() => { setTitle(t.title); setBody(t.body); }}
-            style={{ background: title === t.title ? "#B7A6E8" : "#F3F4F6", color: title === t.title ? "white" : "#6B7280", borderRadius: 999, padding: "6px 13px", fontSize: 12, fontWeight: 700 }}
+            style={{ background: title === t.title ? "#6B5BA8" : "#F3F4F6", color: title === t.title ? "white" : "#6B7280", borderRadius: 999, padding: "6px 13px", fontSize: 12, fontWeight: 700 }}
           >
             {t.label}
           </button>
@@ -113,9 +113,9 @@ export default function Broadcast() {
       <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="النص" style={{ ...input, resize: "vertical" }} />
       <label style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "2px 0 12px", cursor: "pointer" }}>
         <input type="checkbox" checked={showInApp} onChange={(e) => setShowInApp(e.target.checked)} style={{ accentColor: "#B7A6E8", marginTop: 3, flexShrink: 0 }} />
-        <span style={{ fontSize: 12.5, color: "#6B7280", lineHeight: 1.7 }}>
+        <span style={{ fontSize: 12.5, color: "#616876", lineHeight: 1.7 }}>
           اعرضيه كبطاقة كاملة داخل التطبيق
-          <span style={{ display: "block", color: "#9CA3AF", fontSize: 11.5 }}>
+          <span style={{ display: "block", color: "#616876", fontSize: 11.5 }}>
             لهذا الإعلان وحده: تطلع لمن فتح التطبيق خلال يومين من إرسالك، مرة وحدة، وتنقفل بزر.
             الإعلانات القديمة ما ترجع تطلع أبداً.
           </span>
@@ -149,20 +149,20 @@ export default function Broadcast() {
       <div style={{ marginTop: 18, borderTop: "1px solid #F0EEE8", paddingTop: 14 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <h3 style={{ margin: 0, fontSize: 14, color: "#5C4B8C" }}>نتائج الإعلانات</h3>
-          <button onClick={loadStats} style={{ background: "none", color: "#B7A6E8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>
+          <button onClick={loadStats} style={{ background: "none", color: "#6B5BA8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>
             تحديث
           </button>
         </div>
 
         {stats === null ? (
-          <p style={{ fontSize: 12.5, color: "#9CA3AF", margin: 0 }}>...جاري التحميل</p>
+          <p style={{ fontSize: 12.5, color: "#616876", margin: 0 }}>...جاري التحميل</p>
         ) : stats.length === 0 ? (
-          <p style={{ fontSize: 12.5, color: "#9CA3AF", margin: 0 }}>ما فيه إعلانات مرسلة بعد.</p>
+          <p style={{ fontSize: 12.5, color: "#616876", margin: 0 }}>ما فيه إعلانات مرسلة بعد.</p>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
               <thead>
-                <tr style={{ color: "#9CA3AF", textAlign: "start" }}>
+                <tr style={{ color: "#616876", textAlign: "start" }}>
                   <th style={th}>الإعلان</th>
                   <th style={th}>وصل</th>
                   <th style={th}>فتح الإشعار</th>
@@ -175,7 +175,7 @@ export default function Broadcast() {
                   <tr key={c.id} style={{ borderTop: "1px solid #F5F3EF" }}>
                     <td style={td}>
                       <div style={{ fontWeight: 700, color: "#374151" }}>{c.title}</div>
-                      <div style={{ color: "#9CA3AF", fontSize: 11.5 }}>
+                      <div style={{ color: "#616876", fontSize: 11.5 }}>
                         {new Date(c.sent_at).toLocaleString("ar-KW", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })}
                       </div>
                     </td>
@@ -187,7 +187,7 @@ export default function Broadcast() {
                 ))}
               </tbody>
             </table>
-            <p style={{ margin: "10px 0 0", fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.8 }}>
+            <p style={{ margin: "10px 0 0", fontSize: 11.5, color: "#616876", lineHeight: 1.8 }}>
               «فتح الإشعار» = ضغطت على الإشعار نفسه. «فتح التطبيق» = دخلت البرنامج بعد الإرسال بأي طريقة،
               حتى لو تجاهلت الإشعار. آبل ما تخبرنا إذا شافت الإشعار بلا ما تضغطه — هذا الرقم ما يقدر أحد يقيسه.
             </p>

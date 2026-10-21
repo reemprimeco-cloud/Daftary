@@ -209,7 +209,7 @@ function UsageSection({ usage }) {
     return (
       <div style={{ background: "white", borderRadius: 16, padding: 18, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
         <h2 style={{ margin: "0 0 6px", fontSize: 16, color: "#5C4B8C" }}>استهلاك الذكاء الاصطناعي</h2>
-        <p style={{ margin: 0, fontSize: 13, color: "#9CA3AF" }}>
+        <p style={{ margin: 0, fontSize: 13, color: "#616876" }}>
           ما فيه بيانات بعد. الأرقام تبدأ بالتجمّع مع أول استخدام للمعلم الذكي أو رفع الصور.
         </p>
       </div>
@@ -218,7 +218,7 @@ function UsageSection({ usage }) {
   return (
     <div style={{ background: "white", borderRadius: 16, padding: 18, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
       <h2 style={{ margin: "0 0 4px", fontSize: 16, color: "#5C4B8C" }}>استهلاك الذكاء الاصطناعي</h2>
-      <p style={{ margin: "0 0 14px", fontSize: 12, color: "#9CA3AF" }}>
+      <p style={{ margin: "0 0 14px", fontSize: 12, color: "#616876" }}>
         {usage.calls} استدعاء خلال {usage.days} يوم · {usage.activeChildren} طالب/ة استخدموا الميزات فعلياً
       </p>
 
@@ -230,7 +230,7 @@ function UsageSection({ usage }) {
 
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
-          <tr style={{ textAlign: "right", color: "#9CA3AF", fontSize: 12 }}>
+          <tr style={{ textAlign: "right", color: "#616876", fontSize: 12 }}>
             <th style={{ padding: "8px 10px" }}>الميزة</th>
             <th style={{ padding: "8px 10px" }}>عدد الاستخدامات</th>
             <th style={{ padding: "8px 10px" }}>تكلفة الاستخدام</th>
@@ -242,14 +242,14 @@ function UsageSection({ usage }) {
             <tr key={f.feature} style={{ borderTop: "1px solid #F3F4F6" }}>
               <td style={{ padding: "10px", fontWeight: 700 }}>{FEATURE_LABELS[f.feature] || f.feature}</td>
               <td style={{ padding: "10px" }}>{f.calls}</td>
-              <td style={{ padding: "10px", color: "#6B7280" }}>{kwd(f.perCall)}</td>
+              <td style={{ padding: "10px", color: "#616876" }}>{kwd(f.perCall)}</td>
               <td style={{ padding: "10px", fontWeight: 700 }}>{kwd(f.cost)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <p style={{ margin: "12px 0 0", fontSize: 11, color: "#9CA3AF", lineHeight: 1.7 }}>
+      <p style={{ margin: "12px 0 0", fontSize: 11, color: "#616876", lineHeight: 1.7 }}>
         كل الأرقام بالدينار الكويتي بسعر تحويل تقريبي (١ دولار = ٠٫٣٠٧ د.ك). «للطالب/ة بالعام الدراسي» تقدير:
         متوسط التكلفة للطالب النشط مضروباً في ٩ أشهر — كل ما طالت فترة القياس صار الرقم أدق.
       </p>
@@ -287,7 +287,7 @@ function SubscriptionsSection({ subscriptions }) {
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
           <thead>
-            <tr style={{ textAlign: "right", color: "#9CA3AF", fontSize: 12 }}>
+            <tr style={{ textAlign: "right", color: "#616876", fontSize: 12 }}>
               <th style={{ padding: "8px 10px" }}>النوع</th>
               <th style={{ padding: "8px 10px" }}>ولي الأمر</th>
               <th style={{ padding: "8px 10px" }}>الموبايل</th>
@@ -310,15 +310,15 @@ function SubscriptionsSection({ subscriptions }) {
                   </span>
                 </td>
                 <td style={{ padding: "10px", fontWeight: 700 }}>{p.motherName}</td>
-                <td dir="ltr" style={{ padding: "10px", color: "#6B7280", textAlign: "right" }}>{p.motherPhone}</td>
-                <td style={{ padding: "10px", color: "#6B7280" }}>{p.label}</td>
-                <td style={{ padding: "10px", color: "#6B7280" }}>{PLATFORM_LABELS[p.platform] || p.platform || "—"}</td>
+                <td dir="ltr" style={{ padding: "10px", color: "#616876", textAlign: "right" }}>{p.motherPhone}</td>
+                <td style={{ padding: "10px", color: "#616876" }}>{p.label}</td>
+                <td style={{ padding: "10px", color: "#616876" }}>{PLATFORM_LABELS[p.platform] || p.platform || "—"}</td>
                 <td style={{ padding: "10px", fontWeight: 700 }}>{p.amountKwd ? `${p.amountKwd.toFixed(2)} د.ك` : "—"}</td>
-                <td style={{ padding: "10px", color: "#6B7280" }}>{fmtDate(p.createdAt)}</td>
+                <td style={{ padding: "10px", color: "#616876" }}>{fmtDate(p.createdAt)}</td>
               </tr>
             ))}
             {recentPayments.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 20, textAlign: "center", color: "#9CA3AF" }}>ما فيه مدفوعات بعد</td></tr>
+              <tr><td colSpan={7} style={{ padding: 20, textAlign: "center", color: "#616876" }}>ما فيه مدفوعات بعد</td></tr>
             )}
           </tbody>
         </table>
@@ -332,13 +332,13 @@ function ProductBreakdown({ title, rows }) {
     <div style={{ background: "#FAF7F2", borderRadius: 14, padding: 14 }}>
       <h4 style={{ margin: "0 0 10px", fontSize: 13, color: "#374151" }}>{title}</h4>
       {rows.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 12.5, color: "#9CA3AF" }}>ما فيه مشتريات بعد</p>
+        <p style={{ margin: 0, fontSize: 12.5, color: "#616876" }}>ما فيه مشتريات بعد</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {rows.map((r) => (
             <div key={r.productId} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
               <span style={{ color: "#374151", fontWeight: 700 }}>{r.label}</span>
-              <span style={{ color: "#6B7280" }}>{r.count} عملية · {r.amount.toFixed(2)} د.ك</span>
+              <span style={{ color: "#616876" }}>{r.count} عملية · {r.amount.toFixed(2)} د.ك</span>
             </div>
           ))}
         </div>
@@ -411,7 +411,7 @@ function AdminDashboard({ stats }) {
               <>
                 <AlertTest />
                 <AppleNotificationTest />
-                <div style={{ background: "white", borderRadius: 16, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)", fontSize: 12.5, color: "#6B7280", lineHeight: 1.8 }}>
+                <div style={{ background: "white", borderRadius: 16, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)", fontSize: 12.5, color: "#616876", lineHeight: 1.8 }}>
                   واجبات نشطة: <strong>{stats.activeTasks}</strong> · طلاب عندهم جدول حصص: <strong>{stats.withSchedule}</strong>
                 </div>
               </>
@@ -423,8 +423,8 @@ function AdminDashboard({ stats }) {
   );
 }
 
-const th = { textAlign: "right", padding: "10px 12px", color: "#9CA3AF", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" };
-const td = { padding: "10px 12px", color: "#6B7280" };
+const th = { textAlign: "right", padding: "10px 12px", color: "#616876", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" };
+const td = { padding: "10px 12px", color: "#616876" };
 
 function MothersTable({ stats }) {
   const subscribed = stats.recentMothers.filter((m) => m.subscription).length;
@@ -432,7 +432,7 @@ function MothersTable({ stats }) {
     <div>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 0 8px", gap: 8, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>المشتركين</h2>
-        <span style={{ fontSize: 12, color: "#9CA3AF" }}>
+        <span style={{ fontSize: 12, color: "#616876" }}>
           {stats.recentMothers.length < stats.mothersCount
             ? `${stats.recentMothers.length} من ${stats.mothersCount} حساب`
             : `${stats.mothersCount} حساب`} · {subscribed} مشتركة · الأحدث أولاً
@@ -469,7 +469,7 @@ function MothersTable({ stats }) {
               </tr>
             ))}
             {stats.recentMothers.length === 0 && (
-              <tr><td colSpan={5} style={{ padding: 20, textAlign: "center", color: "#9CA3AF" }}>ما فيه مستخدمين بعد</td></tr>
+              <tr><td colSpan={5} style={{ padding: 20, textAlign: "center", color: "#616876" }}>ما فيه مستخدمين بعد</td></tr>
             )}
           </tbody>
         </table>

@@ -6,7 +6,7 @@ export default function AdminLogoutButton() {
     window.location.reload();
   }
   return (
-    <button onClick={logout} style={{ background: "#F3F4F6", color: "#6B7280", fontWeight: 700, fontSize: 13, padding: "8px 14px", borderRadius: 10, border: "none" }}>
+    <button onClick={logout} style={{ background: "#F3F4F6", color: "#616876", fontWeight: 700, fontSize: 13, padding: "8px 14px", borderRadius: 10, border: "none" }}>
       خروج
     </button>
   );

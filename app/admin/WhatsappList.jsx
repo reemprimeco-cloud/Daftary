@@ -94,7 +94,7 @@ export default function WhatsappList() {
   return (
     <div style={card}>
       <h2 style={{ margin: "0 0 4px", fontSize: 16, color: "#5C4B8C" }}>تواصل بالواتساب</h2>
-      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#9CA3AF", lineHeight: 1.8 }}>
+      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#616876", lineHeight: 1.8 }}>
         اضغطي الاسم ← يفتح واتساب والرسالة مكتوبة جاهزة، وأنتِ تضغطين إرسال.
       </p>
 
@@ -104,7 +104,7 @@ export default function WhatsappList() {
         وابدأي بالمشتركات.
       </div>
 
-      <label style={{ display: "block", fontSize: 12.5, color: "#6B7280", marginBottom: 6 }}>نص الرسالة</label>
+      <label style={{ display: "block", fontSize: 12.5, color: "#616876", marginBottom: 6 }}>نص الرسالة</label>
       <textarea
         value={msg}
         onChange={(e) => saveMsg(e.target.value)}
@@ -122,7 +122,7 @@ export default function WhatsappList() {
             key={f.key}
             onClick={() => setFilter(f.key)}
             style={{
-              background: filter === f.key ? "#B7A6E8" : "#F3F4F6",
+              background: filter === f.key ? "#6B5BA8" : "#F3F4F6",
               color: filter === f.key ? "white" : "#6B7280",
               borderRadius: 999, padding: "6px 13px", fontSize: 12, fontWeight: 700,
             }}
@@ -132,7 +132,7 @@ export default function WhatsappList() {
         ))}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12.5, color: "#6B7280", marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12.5, color: "#616876", marginBottom: 10 }}>
         <span>
           أرسلتِ <strong style={{ color: "#5C4B8C" }}>{totalSent}</strong> من {total}
           {sentToday > 0 && (
@@ -141,15 +141,15 @@ export default function WhatsappList() {
             </span>
           )}
         </span>
-        <button onClick={load} style={{ background: "none", color: "#B7A6E8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>
+        <button onClick={load} style={{ background: "none", color: "#6B5BA8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>
           تحديث
         </button>
       </div>
 
       {contacts === null || !loaded ? (
-        <p style={{ fontSize: 12.5, color: "#9CA3AF", margin: 0 }}>...جاري التحميل</p>
+        <p style={{ fontSize: 12.5, color: "#616876", margin: 0 }}>...جاري التحميل</p>
       ) : shown.length === 0 ? (
-        <p style={{ fontSize: 12.5, color: "#9CA3AF", margin: 0 }}>ما فيه أحد بهذا الفلتر.</p>
+        <p style={{ fontSize: 12.5, color: "#616876", margin: 0 }}>ما فيه أحد بهذا الفلتر.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {shown.map((c) => {
@@ -177,7 +177,7 @@ export default function WhatsappList() {
                     {!c.push && <Tag bg="#FDF3E7" fg="#8C6027">بلا إشعار</Tag>}
                     {c.test && <Tag bg="#F3F4F6" fg="#9CA3AF">اختبار</Tag>}
                   </div>
-                  <div style={{ fontSize: 11.5, color: "#9CA3AF", direction: "ltr", textAlign: "right" }}>
+                  <div style={{ fontSize: 11.5, color: "#616876", direction: "ltr", textAlign: "right" }}>
                     {c.phone} · {c.kids} طالب{c.lastSeen ? ` · آخر دخول ${c.lastSeen}` : " · ما دخلت"}
                   </div>
                 </div>

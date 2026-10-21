@@ -28,10 +28,17 @@ import CropModal from "./CropModal";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
 import { APP_TIERS, APP_PLAN, arabicDigits } from "@/lib/appPlans";
 
+// لون العلامة بدرجتين: الفاتح للخلفيات والحدود، والغامق لكل ما يحمل
+// نصاً — سواء كان هو النص أو الخلفية تحته.
+// القياس بالإنتاج ٢١ أكتوبر: #B7A6E8 يعطي 1.95:1 نصاً على خلفية آبل
+// و2.18:1 خلفيةً تحت نص أبيض، والحد 4.5:1. #6B5BA8 يعطي 5.7:1 و6.1:1.
+const BRAND = "#B7A6E8";
+const BRAND_DARK = "#6B5BA8";
+
 const PALETTE = [
   { bg: "#FDEFF3", ring: "#E8A0B4", solid: "#E39CB2", soft: "#F9D9E2", text: "#8C4E62" },
   { bg: "#EBF7F1", ring: "#7FCFB0", solid: "#68C29E", soft: "#D2EFE3", text: "#2F6E56" },
-  { bg: "#FDF3E7", ring: "#F0BE84", solid: "#EBAE68", soft: "#FAE3C4", text: "#8C6027" },
+  { bg: "#FDF3E7", ring: "#F0BE84", solid: "#EBAE68", soft: "#FAE3C4", text: "#815823" },
   { bg: "#F1EFFA", ring: "#B7A6E8", solid: "#A692E0", soft: "#DFD8F5", text: "#5C4B8C" },
   { bg: "#FDF0EB", ring: "#F0AE91", solid: "#EA9976", soft: "#FADACB", text: "#8C5636" },
   { bg: "#F0F5EA", ring: "#ABCB8F", solid: "#96BE75", soft: "#DFEBCE", text: "#516F35" },
@@ -539,14 +546,16 @@ function subjectInitial(subject) {
   return (bare || s)[0];
 }
 
-function SubjectIcon({ subject, size = 28 }) {
+// `fluid` يشيل العرض السطري فيتحكم الغلاف بالمقاس عبر CSS — النمط
+// السطري يغلب الصنف دائماً، فبدونه ما تكبر الأيقونة بشبكة الجدول.
+function SubjectIcon({ subject, size = 28, fluid = false }) {
   const file = getSubjectIconFile(subject);
   const icon = file && SUBJECT_ICONS[file];
   // مادة ما نعرف لها أيقونة (مثل «الكهرباء») تاخذ نفس شكل البلاطة بلون
   // محايد وأول حرف من اسمها — بدل دائرة رمادية بشكل مختلف عن جيرانها.
   const color = icon ? icon.color : "#9AA3AF";
   return (
-    <svg viewBox="0 0 24 24" role="img" aria-label={subject || ""} style={{ width: size, height: size, display: "block", flexShrink: 0 }}>
+    <svg viewBox="0 0 24 24" role="img" aria-label={subject || ""} style={{ ...(fluid ? {} : { width: size, height: size }), display: "block", flexShrink: 0 }}>
       <rect width="24" height="24" rx="6.2" fill={color} />
       {icon ? icon.glyph(color) : (
         <text x="12" y="12" textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="12.5" fontWeight="800">
@@ -1020,12 +1029,12 @@ export default function Home() {
             <img src="/logo.png" alt="دفتري" className="web-header-logo" style={{ borderRadius: 14, flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>مرحباً، {mother.name}</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#616876" }}>{new Date().toLocaleDateString("ar-KW", { weekday: "long", day: "numeric", month: "long" })}</p>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             {view === "dashboard" && (
-              <button onClick={() => setShowUpload(true)} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
+              <button onClick={() => setShowUpload(true)} style={{ background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
                 رفع جدول
               </button>
             )}
@@ -1055,8 +1064,8 @@ export default function Home() {
             ) : (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>الخطة الأسبوعية</span>
-                  <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
+                  <span style={{ fontSize: 12, color: "#616876" }}>الخطة الأسبوعية</span>
+                  <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: BRAND_DARK, fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
                 </div>
                 {children.length > 1 && (
                   <ChildSwitcher children={children} selectedId={planChild.id} onSelect={(id) => { setPlanChildId(id); try { localStorage.setItem("daftary_plan_child", id); } catch {} }} />
@@ -1113,8 +1122,8 @@ export default function Home() {
                 ) : (
                   <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>جدول الحصص الأسبوعي</span>
-                  <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: "#B7A6E8", fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ رفع/تحديث الجدول</button>
+                  <span style={{ fontSize: 12, color: "#616876" }}>جدول الحصص الأسبوعي</span>
+                  <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: BRAND_DARK, fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ رفع/تحديث الجدول</button>
                 </div>
                 {children.map((c) => (
                   <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} onCellClick={(day, period, entry) => setEditingCell({ child: c, day, period, entry })} />
@@ -1155,7 +1164,7 @@ export default function Home() {
       ) : (
         <div style={{ flexShrink: 0, zIndex: 10, background: "rgba(255,255,255,.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderTop: "1px solid #F0EEE8", display: "flex", paddingBottom: "env(safe-area-inset-bottom)" }}>
           {TABS.map((t) => (
-            <button key={t.key} onClick={() => setView(t.key)} style={{ flex: 1, padding: "8px 0 6px", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: view === t.key ? "#B7A6E8" : "#9CA3AF", fontWeight: 700, fontSize: 11, minHeight: 52 }}>
+            <button key={t.key} onClick={() => setView(t.key)} style={{ flex: 1, padding: "8px 0 6px", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: view === t.key ? BRAND_DARK : "#6B7280", fontWeight: 700, fontSize: 11, minHeight: 52 }}>
               {/* التبويب غير المحدد يخفت بدل ما يختفي لونه — يبقى الشريط
                   هادياً والمحدد واضح. */}
               <TileIcon name={t.key} size={25} style={{ opacity: view === t.key ? 1 : 0.6 }} />
@@ -1302,7 +1311,7 @@ function InstallPrompt() {
         <p style={{ margin: 0, fontWeight: 800, fontSize: 13 }}>
           {platform === "ios" ? "حمّلي تطبيق دفتري" : "أضيفي دفتري للشاشة الرئيسية"}
         </p>
-        <p style={{ margin: 0, fontSize: 11, color: "#6B7280" }}>
+        <p style={{ margin: 0, fontSize: 11, color: "#616876" }}>
           {platform === "ios" ? "تجربة أسرع وإشعارات فورية" : "وصول أسرع من شاشة موبايلك مباشرة"}
         </p>
       </div>
@@ -1314,9 +1323,9 @@ function InstallPrompt() {
           <img src="/app-store-badge.png" alt="حمّلي دفتري من App Store" width={120} height={36} style={{ display: "block" }} />
         </a>
       ) : (
-        <button onClick={install} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>تثبيت</button>
+        <button onClick={install} style={{ background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>تثبيت</button>
       )}
-      <button onClick={dismiss} style={{ background: "none", color: "#9CA3AF", fontSize: 18, width: 28, height: 28, flexShrink: 0 }}>×</button>
+      <button onClick={dismiss} style={{ background: "none", color: "#616876", fontSize: 18, width: 28, height: 28, flexShrink: 0 }}>×</button>
     </div>
   );
 }
@@ -1533,7 +1542,7 @@ function Onboarding({ onDone }) {
               autoComplete="new-password" style={{ ...AUTH_FIELD, marginBottom: 14, direction: "ltr", textAlign: "center" }} />
 
             <button disabled={!canSignup || busy} onClick={submitSignup}
-              style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSignup && !busy ? 1 : 0.4 }}>
+              style={{ width: "100%", padding: 13, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSignup && !busy ? 1 : 0.4 }}>
               {busy ? "جاري الإنشاء..." : "إنشاء الحساب"}
             </button>
             {error && <p style={AUTH_ERROR}>{error}</p>}
@@ -1548,7 +1557,7 @@ function Onboarding({ onDone }) {
           <div style={{ textAlign: "center", marginBottom: 18 }}>
             <img src="/logo.png" alt="دفتري" style={{ width: 120, height: 120, borderRadius: 28, margin: "0 auto 12px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
             <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 24, fontWeight: 800 }}>دفتري</h1>
-            <p style={{ color: "#6B7280", fontSize: 13, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
+            <p style={{ color: "#616876", fontSize: 13, margin: "4px 0 0" }}>متابعة واجبات واختبارات العيال، بلا تعقيد</p>
           </div>
 
           <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
@@ -1560,7 +1569,7 @@ function Onboarding({ onDone }) {
               autoComplete="current-password" style={{ ...AUTH_FIELD, marginBottom: 14, direction: "ltr", textAlign: "center" }} />
 
             <button disabled={!canLogin || busy} onClick={submitPassword}
-              style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canLogin && !busy ? 1 : 0.4 }}>
+              style={{ width: "100%", padding: 13, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canLogin && !busy ? 1 : 0.4 }}>
               {busy ? "جاري الدخول..." : "تسجيل الدخول"}
             </button>
             {error && <p style={AUTH_ERROR}>{error}</p>}
@@ -1568,7 +1577,7 @@ function Onboarding({ onDone }) {
             {/* المكان الوحيد اللي بقي فيه كود تحقق: بدونه يقدر أي شخص يعيد
                 تعيين رقم سري لأي رقم ويدخل حساب غيره. */}
             <button disabled={busy || !/^[0-9]{8}$/.test(phone.trim())} onClick={() => sendCode(false, true)}
-              style={{ width: "100%", padding: 10, background: "none", color: "#6B7280", fontWeight: 700, fontSize: 12.5, minHeight: 40, marginTop: 4, opacity: /^[0-9]{8}$/.test(phone.trim()) ? 1 : 0.45 }}>
+              style={{ width: "100%", padding: 10, background: "none", color: "#616876", fontWeight: 700, fontSize: 12.5, minHeight: 40, marginTop: 4, opacity: /^[0-9]{8}$/.test(phone.trim()) ? 1 : 0.45 }}>
               نسيت الرقم السري
             </button>
           </div>
@@ -1585,14 +1594,14 @@ function Onboarding({ onDone }) {
 const AUTH_LABEL = { fontSize: 13, fontWeight: 700, display: "block", marginBottom: 5 };
 const AUTH_FIELD = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16 };
 const AUTH_ERROR = { color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 };
-const AUTH_SWITCH = { width: "100%", padding: 12, marginTop: 12, background: "none", color: "#6B7280", fontWeight: 700, fontSize: 13.5, minHeight: 44 };
+const AUTH_SWITCH = { width: "100%", padding: 12, marginTop: 12, background: "none", color: "#616876", fontWeight: 700, fontSize: 13.5, minHeight: 44 };
 
 // لوحة أرقام بدل لوحة الحروف — والتنظيف يقبل اللصق بمسافات أو شرطات
 // (65 068 000) بدل ما يرفضه التحقق بلا ما تعرف السبب.
 function PhoneField({ phone, setPhone }) {
   return (
     <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-      <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#6B7280" }}>+965</span>
+      <span style={{ background: "#F3F4F6", borderRadius: 12, padding: "10px 12px", fontSize: 14, color: "#616876" }}>+965</span>
       <input
         value={phone}
         onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
@@ -1675,7 +1684,7 @@ function VerifyCodeScreen({ phone, code, setCode, busy, error, resendIn, onSubmi
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <img src="/logo.png" alt="دفتري" style={{ width: 100, height: 100, borderRadius: 24, margin: "0 auto 14px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
           <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 21, fontWeight: 800 }}>أدخلي كود التحقق</h1>
-          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>
+          <p style={{ color: "#616876", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>
             أرسلنا كود على واتساب للرقم<br />
             <span style={{ direction: "ltr", display: "inline-block", fontWeight: 700, color: "#5C4B8C" }}>+965 {phone}</span>
           </p>
@@ -1691,13 +1700,13 @@ function VerifyCodeScreen({ phone, code, setCode, busy, error, resendIn, onSubmi
             maxLength={10}
             style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "12px", fontSize: 24, fontWeight: 700, textAlign: "center", letterSpacing: 8, direction: "ltr", marginBottom: 14 }}
           />
-          <button disabled={!canSubmit} onClick={onSubmit} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
+          <button disabled={!canSubmit} onClick={onSubmit} style={{ width: "100%", padding: 13, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
             {busy ? "جاري التحقق..." : "دخول"}
           </button>
           {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 }}>{error}</p>}
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, gap: 8 }}>
-            <button onClick={onBack} disabled={busy} style={{ background: "none", color: "#6B7280", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
+            <button onClick={onBack} disabled={busy} style={{ background: "none", color: "#616876", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
               تغيير الرقم
             </button>
             <button onClick={onResend} disabled={busy || resendIn > 0} style={{ background: "none", color: resendIn > 0 ? "#B7B2C4" : "#7B68C4", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
@@ -1706,7 +1715,7 @@ function VerifyCodeScreen({ phone, code, setCode, busy, error, resendIn, onSubmi
           </div>
         </div>
 
-        <p style={{ color: "#9CA3AF", fontSize: 11.5, margin: "14px 0 0", lineHeight: 1.7, textAlign: "center" }}>
+        <p style={{ color: "#616876", fontSize: 11.5, margin: "14px 0 0", lineHeight: 1.7, textAlign: "center" }}>
           ما وصلك واتساب؟ بنرسله رسالة نصية تلقائياً خلال ثواني
         </p>
       </div>
@@ -1724,7 +1733,7 @@ function PasswordLoginScreen({ password, setPassword, busy, error, onSubmit, onF
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <img src="/logo.png" alt="دفتري" style={{ width: 100, height: 100, borderRadius: 24, margin: "0 auto 14px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
           <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 21, fontWeight: 800 }}>أدخلي رقمك السري</h1>
-          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0" }}>مرحباً بعودتك 🤍</p>
+          <p style={{ color: "#616876", fontSize: 13, margin: "6px 0 0" }}>مرحباً بعودتك 🤍</p>
         </div>
 
         <div style={{ background: "white", borderRadius: 20, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
@@ -1737,13 +1746,13 @@ function PasswordLoginScreen({ password, setPassword, busy, error, onSubmit, onF
             style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "12px", fontSize: 18, textAlign: "center", direction: "ltr", marginBottom: 14 }}
             onKeyDown={(e) => { if (e.key === "Enter" && canSubmit) onSubmit(); }}
           />
-          <button disabled={!canSubmit} onClick={onSubmit} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
+          <button disabled={!canSubmit} onClick={onSubmit} style={{ width: "100%", padding: 13, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: canSubmit ? 1 : 0.4 }}>
             {busy ? "جاري الدخول..." : "دخول"}
           </button>
           {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "10px 0 0", lineHeight: 1.7 }}>{error}</p>}
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, gap: 8 }}>
-            <button onClick={onBack} disabled={busy} style={{ background: "none", color: "#6B7280", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
+            <button onClick={onBack} disabled={busy} style={{ background: "none", color: "#616876", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
               تغيير الرقم
             </button>
             <button onClick={onForgot} disabled={busy} style={{ background: "none", color: "#7B68C4", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
@@ -1776,7 +1785,7 @@ function SetPasswordScreenBody({ password, setPassword, password2, setPassword2,
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <span style={{ fontSize: 40 }}>🔒</span>
           <h1 style={{ color: "#5C4B8C", margin: "8px 0 0", fontSize: 20, fontWeight: 800 }}>{title || "حدّدي رقماً سرياً"}</h1>
-          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>
+          <p style={{ color: "#616876", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>
             {subtitle || "عشان دخولك القادم — حتى من جهاز جديد — يصير بلا كود"}
           </p>
         </div>
@@ -1798,7 +1807,7 @@ function SetPasswordScreenBody({ password, setPassword, password2, setPassword2,
             autoComplete="new-password"
             style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 14, direction: "ltr", textAlign: "center" }}
           />
-          <button disabled={busy} onClick={onSave} style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: busy ? 0.6 : 1 }}>
+          <button disabled={busy} onClick={onSave} style={{ width: "100%", padding: 13, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 46, opacity: busy ? 0.6 : 1 }}>
             {busy ? "جاري الحفظ..." : "حفظ"}
           </button>
           {error && <p style={{ color: "#B91C1C", fontSize: 12.5, margin: "6px 0 0", lineHeight: 1.7, textAlign: "center" }}>{error}</p>}
@@ -1811,8 +1820,8 @@ function EmptyState({ onAdd }) {
   return (
     <div style={{ textAlign: "center", padding: "60px 0" }}>
       <p style={{ fontWeight: 800, marginBottom: 4 }}>ابدئي بإضافة أول طالب/ة</p>
-      <p style={{ color: "#9CA3AF", fontSize: 14, marginBottom: 18 }}>سجّلي مدرسته وصفه، وبعدها ارفعي صور الجدول</p>
-      <button onClick={onAdd} style={{ background: "#B7A6E8", color: "white", fontWeight: 700, padding: "10px 20px", borderRadius: 12 }}>+ إضافة طالب/ة</button>
+      <p style={{ color: "#616876", fontSize: 14, marginBottom: 18 }}>سجّلي مدرسته وصفه، وبعدها ارفعي صور الجدول</p>
+      <button onClick={onAdd} style={{ background: BRAND_DARK, color: "white", fontWeight: 700, padding: "10px 20px", borderRadius: 12 }}>+ إضافة طالب/ة</button>
     </div>
   );
 }
@@ -1860,7 +1869,7 @@ function PlanRow({ task, onToggle, onOpen }) {
       <button onClick={() => onOpen(task)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: "4px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
         <SubjectIcon subject={task.subject} size={34} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: done ? "#9CA3AF" : "#1F2937", textDecoration: done ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: done ? "#616876" : "#1F2937", textDecoration: done ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             {task.subject}
             {task.type === "اختبار" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#FEE2E2", color: "#B91C1C", borderRadius: 999, padding: "2px 8px" }}>اختبار</span>}
             {task.type === "مشروع" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#DBEAFE", color: "#1D4ED8", borderRadius: 999, padding: "2px 8px" }}>مشروع</span>}
@@ -1868,7 +1877,7 @@ function PlanRow({ task, onToggle, onOpen }) {
             {task.type === "درس" && <span style={{ fontSize: 10.5, fontWeight: 800, background: "#E0F2F1", color: "#0F766E", borderRadius: 999, padding: "2px 8px" }}>درس</span>}
           </p>
           {/* النص كما كُتب بالخطة حرفياً — بلا تلخيص ولا تعديل */}
-          {task.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: done ? "#B0B3BA" : "#6B7280", lineHeight: 1.65, whiteSpace: "pre-line" }}>{renderWithNumbers(task.details)}</p>}
+          {task.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: done ? "#616876" : "#4B5563", lineHeight: 1.65, whiteSpace: "pre-line" }}>{renderWithNumbers(task.details)}</p>}
         </div>
       </button>
       <CheckBox checked={done} label={done ? "إرجاعه لغير مكتمل" : "تم"} onClick={() => onToggle(task.id, !done)} />
@@ -1884,7 +1893,7 @@ function ChildSwitcher({ children, selectedId, onSelect }) {
         const pal = PALETTE[c.color_idx % PALETTE.length];
         const on = c.id === selectedId;
         return (
-          <button key={c.id} onClick={() => onSelect(c.id)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px 6px 8px", borderRadius: 999, background: on ? pal.solid : "white", color: on ? "white" : pal.text, border: `1px solid ${on ? pal.solid : pal.soft}`, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", minHeight: 40, flexShrink: 0 }}>
+          <button key={c.id} onClick={() => onSelect(c.id)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px 6px 8px", borderRadius: 999, background: on ? pal.text : "white", color: on ? "white" : pal.text, border: `1px solid ${on ? pal.text : pal.soft}`, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", minHeight: 40, flexShrink: 0 }}>
             <Avatar child={c} size={26} />
             {c.name}
           </button>
@@ -1934,7 +1943,7 @@ function BroadcastCard({ broadcast, onClose }) {
     >
       <div style={{ background: "white", borderRadius: 20, width: "100%", maxWidth: 460, maxHeight: "100%", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 12px 40px rgba(0,0,0,.25)" }}>
         <div style={{ flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 10, padding: "16px 16px 10px", background: "#F6F4FB" }}>
-          <div style={{ width: 34, height: 34, borderRadius: 10, background: "#B7A6E8", color: "white", display: "grid", placeItems: "center", flexShrink: 0, fontSize: 17 }}>🔔</div>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: BRAND_DARK, color: "white", display: "grid", placeItems: "center", flexShrink: 0, fontSize: 17 }}>🔔</div>
           <p style={{ margin: 0, fontWeight: 900, fontSize: 15.5, color: "#1F2937", lineHeight: 1.6, flex: 1, minWidth: 0 }}>{broadcast.title}</p>
         </div>
 
@@ -1947,7 +1956,7 @@ function BroadcastCard({ broadcast, onClose }) {
           <button
             onClick={close}
             disabled={closing}
-            style={{ width: "100%", padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, opacity: closing ? 0.6 : 1 }}
+            style={{ width: "100%", padding: 13, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, opacity: closing ? 0.6 : 1 }}
           >
             {closing ? "..." : "إغلاق"}
           </button>
@@ -2062,7 +2071,7 @@ function AttachmentsCard({ children, refreshKey }) {
     <div style={{ background: "white", borderRadius: 18, border: "1px solid #EEEDE8", overflow: "hidden" }}>
       <div style={{ padding: "11px 14px", background: "#F6F4FB", display: "flex", alignItems: "center", gap: 8 }}>
         <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: "#5C4B8C" }}>الصور المرفقة</p>
-        <span style={{ marginInlineStart: "auto", fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>للعرض فقط — بلا تذكير</span>
+        <span style={{ marginInlineStart: "auto", fontSize: 11.5, color: "#616876", fontWeight: 700 }}>للعرض فقط — بلا تذكير</span>
       </div>
       <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
         {items.map((a) => (
@@ -2078,7 +2087,7 @@ function AttachmentsCard({ children, refreshKey }) {
                 {a.kind === "class_schedule" ? "جدول حصص" : "خطة أسبوعية"}
                 {nameOf(a.child_id) ? ` — ${nameOf(a.child_id)}` : ""}
               </p>
-              <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#9CA3AF" }}>
+              <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#616876" }}>
                 {shortDate(String(a.created_at).slice(0, 10))}
                 {a.count > 1 ? ` · ${a.count} صور` : ""}
               </p>
@@ -2228,7 +2237,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
           <ProgressRing pct={pct} color={color.solid} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: "#1F2937" }}>{doneCount} من {total} مكتمل</p>
-            <p style={{ margin: "3px 0 0", fontSize: 13, color: "#6B7280" }}>{mood}</p>
+            <p style={{ margin: "3px 0 0", fontSize: 13, color: "#616876" }}>{mood}</p>
           </div>
           {total > 0 && pct >= 80 && (
             <div style={{ flexShrink: 0, background: "#FFF7E6", color: "#8C6027", borderRadius: 14, padding: "8px 10px", fontSize: 11, fontWeight: 800, textAlign: "center", lineHeight: 1.4 }}>
@@ -2239,7 +2248,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
 
         <div style={{ display: "flex", gap: 6, background: "white", borderRadius: 14, padding: 4, border: "1px solid #EEEDE8" }}>
           {chips.map(([key, label]) => (
-            <button key={key} onClick={() => setFilter(key)} style={{ flex: 1, padding: "8px 4px", borderRadius: 11, fontSize: 12.5, fontWeight: 800, background: filter === key ? color.solid : "transparent", color: filter === key ? "white" : "#6B7280", minHeight: 36 }}>
+            <button key={key} onClick={() => setFilter(key)} style={{ flex: 1, padding: "8px 4px", borderRadius: 11, fontSize: 12.5, fontWeight: 800, background: filter === key ? color.text : "transparent", color: filter === key ? "white" : "#4B5563", minHeight: 36 }}>
               {label}
             </button>
           ))}
@@ -2249,7 +2258,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
           <button
             onClick={clearDone}
             disabled={clearing}
-            style={{ alignSelf: "flex-start", background: "none", color: "#9CA3AF", fontSize: 12.5, fontWeight: 700, padding: "2px 2px 6px", minHeight: 32, opacity: clearing ? 0.5 : 1 }}
+            style={{ alignSelf: "flex-start", background: "none", color: "#616876", fontSize: 12.5, fontWeight: 700, padding: "2px 2px 6px", minHeight: 32, opacity: clearing ? 0.5 : 1 }}
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <TileIcon name="trash" size={14} />
@@ -2259,7 +2268,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
         )}
 
         {groups.length === 0 && memoShown.length === 0 && (
-          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>
+          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>
             {total === 0 ? "ما فيه واجبات هذا الأسبوع — ارفعي الخطة الأسبوعية من زر «رفع جدول» فوق." : "ما فيه شي بهالفلتر."}
           </p>
         )}
@@ -2268,7 +2277,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
           <div key={g.key} style={{ background: "white", borderRadius: 18, overflow: "hidden", border: "1px solid #EEEDE8" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: g.tone === "undated" ? "#FEF3C7" : g.tone === "upcoming" ? "#EBF4FA" : g.tone === "lesson" ? "#E0F2F1" : color.bg }}>
               <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: g.tone === "undated" ? "#92400E" : g.tone === "upcoming" ? "#31607C" : g.tone === "lesson" ? "#0F766E" : color.text }}>{g.label}</p>
-              {g.sub && <span style={{ fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>{g.sub}</span>}
+              {g.sub && <span style={{ fontSize: 11.5, color: "#616876", fontWeight: 700 }}>{g.sub}</span>}
               <span style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 800, color: groupDone(g.items) === g.items.length ? "#15803D" : "#6B7280", background: "white", borderRadius: 999, padding: "3px 9px" }}>
                 {groupDone(g.items) === g.items.length ? "✓ " : ""}{groupDone(g.items)} من {g.items.length}
               </span>
@@ -2283,7 +2292,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
           <div style={{ background: "white", borderRadius: 18, overflow: "hidden", border: "1px solid #EEEDE8" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#EDE9FE" }}>
               <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: "#5B21B6" }}>الحفظ والتسميع</p>
-              <span style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 800, color: "#6B7280", background: "white", borderRadius: 999, padding: "3px 9px" }}>
+              <span style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 800, color: "#616876", background: "white", borderRadius: 999, padding: "3px 9px" }}>
                 {memo.filter((m) => m.done).length} من {memo.length}
               </span>
             </div>
@@ -2293,9 +2302,9 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
                   <button onClick={() => setEditingMemo(m)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: "4px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
                     <SubjectIcon subject={m.kind === "حديث" ? "التربية الإسلامية" : "القرآن الكريم"} size={34} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: m.done ? "#9CA3AF" : "#1F2937", textDecoration: m.done ? "line-through" : "none" }}>{m.kind === "حديث" ? "حديث" : "القرآن الكريم"} · {m.reference}</p>
+                      <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: m.done ? "#616876" : "#1F2937", textDecoration: m.done ? "line-through" : "none" }}>{m.kind === "حديث" ? "حديث" : "القرآن الكريم"} · {m.reference}</p>
                       {m.recite_on && !m.done && <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: 800, color: "#5B21B6" }}>موعد التسميع: {fmtDate(m.recite_on)}</p>}
-                      {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: m.done ? "#B0B3BA" : "#6B7280", lineHeight: 1.65 }}>{m.details}</p>}
+                      {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: m.done ? "#616876" : "#4B5563", lineHeight: 1.65 }}>{m.details}</p>}
                     </div>
                   </button>
                   <CheckBox checked={m.done} label={m.done ? "إرجاعه لغير مكتمل" : "تم"} onClick={() => toggleMemo(m.id)} />
@@ -2335,7 +2344,7 @@ function EditMemoModal({ item, onClose, onSave, onDelete }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
         <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 17 }}>تعديل الحفظ</h2>
-          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#616876", width: 36, height: 36 }}>×</button>
         </div>
         <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
@@ -2355,7 +2364,7 @@ function EditMemoModal({ item, onClose, onSave, onDelete }) {
             <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={3} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, resize: "vertical", fontFamily: "inherit" }} />
           </div>
           {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
-          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
             {saving ? "جارِ الحفظ..." : "حفظ التعديلات"}
           </button>
           <button onClick={() => onDelete(item.id)} style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
@@ -2398,12 +2407,12 @@ function RequirementsCard({ child, items, onToggle, onDeleteReq, onClearBought, 
         )}
       </div>
       <div style={{ background: "white", padding: 12 }}>
-        {items.length === 0 && <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا توجد طلبات حالياً</p>}
+        {items.length === 0 && <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "16px 0" }}>لا توجد طلبات حالياً</p>}
         {items.map((r) => (
           <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid #F3F4F6", gap: 4 }}>
             <button onClick={() => setEditingItem(r)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: r.bought ? "#9CA3AF" : "#374151", textDecoration: r.bought ? "line-through" : "none" }}>{r.item}</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>{fmtDate(r.due_date)}</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: r.bought ? "#616876" : "#374151", textDecoration: r.bought ? "line-through" : "none" }}>{r.item}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#616876" }}>{fmtDate(r.due_date)}</p>
             </button>
             <CircleCheck checked={r.bought} onClick={() => onToggle(r.id)} label={r.bought ? "إرجاعه لغير مُشترى" : "تحديد كمُشترى"} />
             <button onClick={() => onDeleteReq(r.id)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 16, width: 24, height: 24, flexShrink: 0, padding: 0 }}>×</button>
@@ -2446,7 +2455,7 @@ function EditRequirementModal({ item, onClose, onSave, onDelete }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
         <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 17 }}>تعديل الطلب</h2>
-          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#616876", width: 36, height: 36 }}>×</button>
         </div>
         <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
@@ -2458,7 +2467,7 @@ function EditRequirementModal({ item, onClose, onSave, onDelete }) {
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
           </div>
           {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
-          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
             {saving ? "جارِ الحفظ..." : "حفظ التعديلات"}
           </button>
           <button onClick={() => onDelete(item.id)} style={{ padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
@@ -2547,11 +2556,11 @@ function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
       </div>
       <div style={{ background: "white", padding: 12, overflowX: "auto" }}>
         {schedule.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>لا يوجد جدول حصص مضاف بعد</p>
+          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "16px 0" }}>لا يوجد جدول حصص مضاف بعد</p>
         ) : (
           <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 11, color: "#9CA3AF" }}>اضغطي أي خانة للتعديل</span>
+            <span style={{ fontSize: 11, color: "#616876" }}>اضغطي أي خانة للتعديل</span>
             <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
               {exporting ? (
                 "جاري التصدير..."
@@ -2568,16 +2577,19 @@ function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
           {/* نفس ترتيب الجدول الورقي اللي تعرفه الأم: الأيام صفوف والحصص
               أعمدة. والمقاسات مضغوطة عشان الجدول كله يبان بشاشة الآيفون
               بلا سحب أفقي — الخانة ٧ حصص × ٥ أيام تدخل بعرض ٣٩٠ بكسل. */}
-          <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 2, fontSize: 10 }}>
+          {/* الغلاف هو حاوية استعلامات الحاوية — مقاسات الخط بـglobals.css
+              تتبع عرضه (`cqw`) بدل ما تكون ثابتة بكل جهاز. */}
+          <div className="sched-wrap">
+          <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 2 }}>
             <colgroup>
-              <col style={{ width: 40 }} />
+              <col style={{ width: "clamp(40px, 7cqw, 86px)" }} />
               {periods.map((p) => <col key={p} />)}
             </colgroup>
             <thead>
               <tr>
-                <th style={{ padding: "5px 2px", background: "#F3F4F6", color: "#6B7280", borderRadius: 6, fontWeight: 800, fontSize: 9 }}>اليوم</th>
+                <th className="sched-day" style={{ padding: "5px 2px", background: "#F3F4F6", color: "#4B5563", borderRadius: 6, fontWeight: 800 }}>اليوم</th>
                 {periods.map((p) => (
-                  <th key={p} style={{ padding: "5px 1px", background: "#F3F4F6", color: "#6B7280", borderRadius: 6, fontWeight: 800, fontSize: 8.5, lineHeight: 1.2 }}>
+                  <th key={p} className="sched-period" style={{ padding: "5px 1px", background: "#F3F4F6", color: "#4B5563", borderRadius: 6, fontWeight: 800 }}>
                     {PERIOD_LABELS[p - 1] || p}
                   </th>
                 ))}
@@ -2588,29 +2600,33 @@ function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
                 const dayPal = PALETTE[di % PALETTE.length];
                 return (
                   <tr key={d}>
-                    <td style={{ padding: "4px 2px", textAlign: "center", background: dayPal.soft, color: dayPal.text, borderRadius: 6, fontWeight: 800, fontSize: 9, lineHeight: 1.2 }}>{d}</td>
+                    <td className="sched-day" style={{ padding: "4px 2px", textAlign: "center", background: dayPal.soft, color: dayPal.text, borderRadius: 6, fontWeight: 800 }}>{d}</td>
                     {periods.map((p) => {
                       const entry = grid[`${d}-${p}`];
                       return (
                         <td key={p} onClick={() => onCellClick(d, p, entry || null)} style={{ padding: "4px 1px", textAlign: "center", background: dayPal.bg, borderRadius: 6, verticalAlign: "middle", cursor: "pointer" }}>
                           {entry ? (
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-                              <div style={{ position: "relative", lineHeight: 0 }}>
-                                <SubjectIcon subject={entry.subject} size={17} />
+                              <div className="sched-icon" style={{ position: "relative", lineHeight: 0 }}>
+                                <SubjectIcon subject={entry.subject} fluid />
                                 {getSubjectIconFile(entry.subject) === "pe" && child.pe_uniform_color && (
                                   <span style={{ position: "absolute", bottom: -2, left: -2, width: 7, height: 7, borderRadius: "50%", background: child.pe_uniform_color, border: child.pe_uniform_color === "#FFFFFF" ? "1px solid #E5E7EB" : "1px solid rgba(0,0,0,.15)" }} />
                                 )}
                               </div>
-                              <span style={{ fontSize: 7.5, fontWeight: 800, color: dayPal.text, lineHeight: 1.2, wordBreak: "break-word" }}>{entry.subject}</span>
-                              {entry.teacher && <span style={{ fontSize: 6.5, color: dayPal.text, opacity: 0.75, lineHeight: 1.15, wordBreak: "break-word" }}>{entry.teacher}</span>}
+                              <span className="sched-subject" style={{ fontWeight: 800, color: dayPal.text }}>{entry.subject}</span>
+                              {entry.teacher && <span className="sched-teacher" style={{ color: dayPal.text, opacity: 0.85 }}>{entry.teacher}</span>}
                               {/* dir="ltr" إجباري — بدونه يعكس RTL ترتيب الوقتين فتبان
                                   الحصة كأنها تنتهي قبل ما تبدأ (08:15 - 07:30). */}
                               {(entry.start_time || entry.end_time) && (
-                                <span dir="ltr" style={{ fontSize: 6, color: dayPal.text, opacity: 0.55, direction: "ltr" }}>{[entry.start_time, entry.end_time].filter(Boolean).join(" - ")}</span>
+                                <span dir="ltr" className="sched-time" style={{ color: dayPal.text, opacity: 0.75, direction: "ltr" }}>
+                                  {entry.start_time && <span>{entry.start_time}</span>}
+                                  {entry.start_time && entry.end_time && <span className="sched-time-sep">–</span>}
+                                  {entry.end_time && <span>{entry.end_time}</span>}
+                                </span>
                               )}
                             </div>
                           ) : (
-                            <span style={{ color: dayPal.text, opacity: 0.35, fontWeight: 800 }}>+</span>
+                            <span className="sched-subject" style={{ color: dayPal.text, opacity: 0.45, fontWeight: 800 }}>+</span>
                           )}
                         </td>
                       );
@@ -2620,6 +2636,7 @@ function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
               })}
             </tbody>
           </table>
+          </div>
           </>
         )}
       </div>
@@ -2707,7 +2724,7 @@ function EditScheduleCellModal({ child, day, period, entry, onClose, onSave, onD
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
         <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 17 }}>{entry ? "تعديل الحصة" : "إضافة حصة"} — {day} · الحصة {period}</h2>
-          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#616876", width: 36, height: 36 }}>×</button>
         </div>
         <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
@@ -2729,7 +2746,7 @@ function EditScheduleCellModal({ child, day, period, entry, onClose, onSave, onD
             </div>
           </div>
           {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
-          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: color.text, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
             {saving ? "جارِ الحفظ..." : "حفظ"}
           </button>
           {entry && (
@@ -2781,7 +2798,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
           <div style={{ flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 22, color: color.text }}><TypeGlyph type={task.type} native={typeof window !== "undefined" && isNativeApp()} size={22} /></span>
             <h3 style={{ margin: "4px 0 2px", color: color.text, fontSize: 18 }}>{task.subject}</h3>
-            <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>{task.type} · {task.due_date ? fmtDate(task.due_date) : "بدون تاريخ محدد"}</p>
+            <p style={{ margin: 0, fontSize: 13, color: "#616876" }}>{task.type} · {task.due_date ? fmtDate(task.due_date) : "بدون تاريخ محدد"}</p>
           </div>
           {!editing && (
             <button onClick={() => setEditing(true)} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
@@ -2791,7 +2808,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
               </span>
             </button>
           )}
-          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36, flexShrink: 0 }}>×</button>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#616876", width: 36, height: 36, flexShrink: 0 }}>×</button>
         </div>
 
         {editing ? (
@@ -2818,10 +2835,10 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
             </div>
             {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0 }}>{error}</p>}
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { setEditing(false); setSubject(task.subject || ""); setType(task.type); setDetails(task.details || ""); setDateValue(task.due_date || ""); setError(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#F3F4F6", color: "#6B7280", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+              <button onClick={() => { setEditing(false); setSubject(task.subject || ""); setType(task.type); setDetails(task.details || ""); setDateValue(task.due_date || ""); setError(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#F3F4F6", color: "#616876", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
                 إلغاء
               </button>
-              <button onClick={save} disabled={saving || !changed} style={{ flex: 2, padding: 12, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: (saving || !changed) ? 0.5 : 1 }}>
+              <button onClick={save} disabled={saving || !changed} style={{ flex: 2, padding: 12, borderRadius: 12, background: color.text, color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: (saving || !changed) ? 0.5 : 1 }}>
                 {saving ? "جارِ الحفظ..." : "حفظ التعديلات"}
               </button>
             </div>
@@ -2848,7 +2865,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
                 إرجاعه لغير مكتمل
               </button>
             ) : (
-              <button onClick={() => onMarkDone(task.id, true)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.solid, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
+              <button onClick={() => onMarkDone(task.id, true)} style={{ width: "100%", padding: 14, borderRadius: 12, background: color.text, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, marginBottom: 10 }}>
                 {meta.done}
               </button>
             )}
@@ -2888,7 +2905,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
         <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 17 }}>{isEdit ? `تعديل بيانات ${studentWord(gender)}` : `إضافة ${word}`}</h2>
-          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#616876", width: 36, height: 36 }}>×</button>
         </div>
         <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
@@ -2990,7 +3007,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
             </div>
           )}
 
-          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo, colorIdx, peUniformColor: peColor })} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+          <button disabled={!canSave} onClick={() => onSave({ name: name.trim(), grade, section, gender, school, governorate: gov, photo, colorIdx, peUniformColor: peColor })} style={{ padding: 14, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
             {isEdit ? "حفظ التعديلات" : `إضافة ${word === "طالبة" ? "الطالبة" : "الطالب"}`}
           </button>
           {isEdit && (
@@ -3027,7 +3044,7 @@ function AddTaskModal({ child, onClose, onSave }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0" }}>
         <div style={{ position: "sticky", top: 0, background: "white", padding: "16px 20px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", zIndex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 17 }}>إضافة واجب/اختبار لـ {child.name}</h2>
-          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#9CA3AF", width: 36, height: 36 }}>×</button>
+          <button onClick={onClose} style={{ background: "none", fontSize: 22, color: "#616876", width: 36, height: 36 }}>×</button>
         </div>
         <div style={{ padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)", display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
@@ -3050,7 +3067,7 @@ function AddTaskModal({ child, onClose, onSave }) {
             <label style={{ fontSize: 13, fontWeight: 700 }}>التاريخ</label>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5 }} />
           </div>
-          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
+          <button disabled={!canSave} onClick={save} style={{ padding: 14, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: canSave ? 1 : 0.4 }}>
             {saving ? "جارِ الإضافة..." : "إضافة"}
           </button>
         </div>
@@ -3250,7 +3267,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
                   <span style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0, border: `2px solid ${mode === opt.key ? "#7B68C4" : "#D1D5DB"}`, background: mode === opt.key ? "#7B68C4" : "white", boxShadow: mode === opt.key ? "inset 0 0 0 2.5px white" : "none" }} />
                   <span style={{ fontSize: 13.5, fontWeight: 800, color: "#1F2937" }}>{opt.title}</span>
                 </span>
-                <span style={{ display: "block", fontSize: 12, color: "#6B7280", marginTop: 4, lineHeight: 1.6 }}>{opt.desc}</span>
+                <span style={{ display: "block", fontSize: 12, color: "#616876", marginTop: 4, lineHeight: 1.6 }}>{opt.desc}</span>
               </button>
             ))}
           </div>
@@ -3287,7 +3304,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
                     <input type="radio" name="uploadChild" checked={childId === c.id} onChange={() => setChildId(c.id)} style={{ accentColor: "#B7A6E8" }} />
                     <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{c.name}</span>
                   </span>
-                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>{classLabel(c.grade, c.section)}</span>
+                  <span style={{ fontSize: 12, color: "#616876" }}>{classLabel(c.grade, c.section)}</span>
                 </label>
               ))}
             </div>
@@ -3314,7 +3331,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         ) : (
           <div onClick={() => fileRef.current?.click()} style={{ border: "2px dashed #D1D5DB", borderRadius: 16, padding: 30, textAlign: "center", background: "#FAFAFA", cursor: "pointer" }}>
             <p style={{ margin: 0, fontWeight: 700 }}>اضغطي لاختيار الصور</p>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#9CA3AF" }}>يمكنك اختيار أكثر من صورة دفعة وحدة</p>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#616876" }}>يمكنك اختيار أكثر من صورة دفعة وحدة</p>
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
           </div>
         )}
@@ -3329,7 +3346,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             ))}
           </div>
         )}
-        <button disabled={!canRun || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, opacity: canRun ? 1 : 0.4 }}>
+        <button disabled={!canRun || status === "loading"} onClick={run} style={{ padding: 13, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, opacity: canRun ? 1 : 0.4 }}>
           {status === "loading"
             ? (mode === "attach" ? "...جاري الحفظ" : onReview ? "🤖 جاري فهم الخطة..." : "جاري التحليل...")
             : mode === "attach" ? "احفظي الصورة للرجوع إليها" : buttonLabel}
@@ -3380,7 +3397,7 @@ function SourceText({ text, compact }) {
   if (!text) return null;
   return (
     <div style={{ background: "#F7F7F5", border: "1px dashed #D9D6CE", borderRadius: 10, padding: "8px 10px" }}>
-      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: "#9CA3AF" }}>النص كما جاء بالصورة</p>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: "#616876" }}>النص كما جاء بالصورة</p>
       <p style={{ margin: "3px 0 0", fontSize: compact ? 12 : 12.5, color: "#4B5563", lineHeight: 1.7, whiteSpace: "pre-line" }}>{text}</p>
     </div>
   );
@@ -3523,7 +3540,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
 
   const rowBox = { borderTop: "1px solid #F3F2EE", padding: "10px 0" };
   const field = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 10, padding: "8px 10px", marginTop: 5, fontSize: 14 };
-  const label = { fontSize: 12, fontWeight: 700, color: "#6B7280" };
+  const label = { fontSize: 12, fontWeight: 700, color: "#616876" };
 
   // المعلومة اللي ما قدر النموذج يحددها بثقة تطلع بعلامة تنبيه بدل ما
   // يخمّنها — والأم تحددها بنفسها. تختفي العلامة أول ما تعدّل الصف.
@@ -3562,7 +3579,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
             تم العثور على {countLabel(total, "عنصر", "عنصران", "عناصر")} لـ {child?.name || "الطالب/ة"}
           </p>
           {lines.length > 0 && (
-            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6B7280", lineHeight: 1.9 }}>
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#616876", lineHeight: 1.9 }}>
               {lines.map(([n, one, two, plural]) => countLabel(n, one, two, plural)).join(" · ")}
             </p>
           )}
@@ -3577,7 +3594,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
         </div>
 
         {total === 0 && (
-          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>ما بقى أي عنصر — ارجعي وارفعي الخطة مرة ثانية.</p>
+          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>ما بقى أي عنصر — ارجعي وارفعي الخطة مرة ثانية.</p>
         )}
 
         {tasks.length > 0 && (
@@ -3590,7 +3607,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
                     <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>
                       {t.subject} <span style={{ fontSize: 11, fontWeight: 800, background: "#F1EFFA", color: "#5C4B8C", borderRadius: 999, padding: "2px 8px" }}>{t.type}</span>
                     </p>
-                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280", lineHeight: 1.6 }}>
+                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#616876", lineHeight: 1.6 }}>
                       {t.dueDate ? fmtDate(t.dueDate) : t.dueText || "بدون موعد"}{t.details ? ` — ${t.details}` : ""}
                     </p>
                     {unclearFields(t).length > 0 && (
@@ -3639,7 +3656,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                   <button onClick={() => setOpenRow(openRow === `r${i}` ? null : `r${i}`)} style={{ flex: 1, minWidth: 0, background: "none", textAlign: "right", padding: 0 }}>
                     <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#1F2937" }}>{r.item}</p>
-                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280" }}>
+                    <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#616876" }}>
                       {r.dueDate ? fmtDate(r.dueDate) : r.dueText || "بدون موعد"}
                       {r.relatedSubject && <span style={{ color: "#8C6027", fontWeight: 700 }}> · لـ {r.relatedSubject}</span>}
                     </p>
@@ -3677,7 +3694,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
                         {[m.surah && `سورة ${m.surah}`, m.fromAyah && `آية ${m.fromAyah}${m.toAyah && m.toAyah !== m.fromAyah ? ` إلى ${m.toAyah}` : ""}`, m.reciteOn && `تسميع ${fmtDate(m.reciteOn)}`].filter(Boolean).join(" · ")}
                       </p>
                     )}
-                    {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#6B7280" }}>{m.details}</p>}
+                    {m.details && <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#616876" }}>{m.details}</p>}
                   </button>
                   <button onClick={() => removeRow("memorization", i)} title="حذف" style={{ background: "none", color: "#B91C1C", opacity: 0.6, fontSize: 17, width: 26, height: 26, flexShrink: 0, padding: 0 }}>×</button>
                 </div>
@@ -3724,7 +3741,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
       </div>
 
       <div style={{ flexShrink: 0, background: "white", borderTop: "1px solid #F0EEE8", padding: "12px 16px calc(env(safe-area-inset-bottom) + 12px)", display: "flex", flexDirection: "column", gap: 8 }}>
-        <button disabled={saving || total === 0} onClick={apply} style={{ padding: 14, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 15, minHeight: 50, opacity: saving || total === 0 ? 0.5 : 1 }}>
+        <button disabled={saving || total === 0} onClick={apply} style={{ padding: 14, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 15, minHeight: 50, opacity: saving || total === 0 ? 0.5 : 1 }}>
           {saving ? "جارِ الإضافة..." : `اعتماد وإضافة ${countLabel(total, "عنصر", "عنصران", "عناصر")}`}
         </button>
         <button onClick={discard} disabled={saving} style={{ padding: 10, borderRadius: 12, background: "none", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 40 }}>
@@ -3775,7 +3792,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <TileIcon name="teacher" size={54} style={{ borderRadius: 18 }} />
           {onClose && (
-            <button onClick={onClose} aria-label="إغلاق" style={{ background: "#F3F4F6", color: "#6B7280", borderRadius: "50%", width: 30, height: 30, fontSize: 17, lineHeight: 1 }}>
+            <button onClick={onClose} aria-label="إغلاق" style={{ background: "#F3F4F6", color: "#616876", borderRadius: "50%", width: 30, height: 30, fontSize: 17, lineHeight: 1 }}>
               ×
             </button>
           )}
@@ -3784,7 +3801,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
           <h2 style={{ margin: 0, fontSize: 21, fontWeight: 800, color: "#1F2937", lineHeight: 1.4 }}>
             معلّم خاص لأبنائك
           </h2>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.75, color: "#6B7280" }}>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.75, color: "#616876" }}>
             يشرح الدروس ويجاوب على أسئلتك — من منهج وزارة التربية.
           </p>
         </div>
@@ -3792,7 +3809,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
         {platform === "web" && canBuy && <TapPayerNotice />}
 
         {platform === null ? (
-          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
+          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
         ) : !canBuy ? (
           <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
             الاشتراك يتم من تطبيق دفتري على موبايلك. نزّله وسجّل دخولك بنفس رقمك،
@@ -3819,7 +3836,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
                   {priceOf(t.productId, t.priceKwd)} / سنة
                 </span>
               </span>
-              <span style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 500 }}>١٠ فلوس للسؤال</span>
+              <span style={{ fontSize: 12, color: "#616876", fontWeight: 500 }}>١٠ فلوس للسؤال</span>
             </button>
           ))
         )}
@@ -3857,7 +3874,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
           </button>
         )}
 
-        <p style={{ margin: 0, fontSize: 10.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.9 }}>
+        <p style={{ margin: 0, fontSize: 10.5, color: "#616876", textAlign: "center", lineHeight: 1.9 }}>
           {platform === "store"
             ? "يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك"
             : "شراء لسنة دراسية واحدة · بدون تجديد تلقائي"}
@@ -3875,7 +3892,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
           )}
         </p>
 
-        <p style={{ margin: 0, paddingTop: 11, borderTop: "1px solid #F0EEE8", fontSize: 11.5, color: "#6B7280", textAlign: "center", lineHeight: 1.7 }}>
+        <p style={{ margin: 0, paddingTop: 11, borderTop: "1px solid #F0EEE8", fontSize: 11.5, color: "#616876", textAlign: "center", lineHeight: 1.7 }}>
           هذا اشتراك مستقل خاص بالمعلم الذكي، منفصل عن اشتراك دفتري الأساسي.
         </p>
       </div>
@@ -3883,7 +3900,7 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
   );
 }
 
-const termsLink = { color: "#9CA3AF", textDecoration: "underline" };
+const termsLink = { color: "#616876", textDecoration: "underline" };
 
 // الدفع بالبطاقة يمر ببوابة Tap المسجّلة باسم الشركة المالكة، فيظهر
 // «Prime Printing» بصفحة الدفع وبكشف الحساب. بلا تنبيه مسبق، الأم تشوف
@@ -4039,7 +4056,7 @@ function FeedbackBanner({ onOpen }) {
           تقييمك بنص دقيقة يساعدنا نطوّره
         </span>
       </span>
-      <span style={{ marginInlineStart: "auto", color: "#B7A6E8", fontSize: 18, flexShrink: 0 }}>‹</span>
+      <span style={{ marginInlineStart: "auto", color: BRAND_DARK, fontSize: 18, flexShrink: 0 }}>‹</span>
     </button>
   );
 }
@@ -4083,11 +4100,11 @@ function FeedbackModal({ onClose, onDone }) {
     <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(30,25,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
       <div style={{ background: "white", borderRadius: 20, padding: "22px 18px", width: "100%", maxWidth: 380, boxShadow: "0 8px 30px rgba(0,0,0,.18)" }}>
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -6 }}>
-          <button onClick={onClose} aria-label="إغلاق" style={{ background: "#F3F4F6", color: "#6B7280", borderRadius: "50%", width: 28, height: 28, fontSize: 16, lineHeight: 1 }}>×</button>
+          <button onClick={onClose} aria-label="إغلاق" style={{ background: "#F3F4F6", color: "#616876", borderRadius: "50%", width: 28, height: 28, fontSize: 16, lineHeight: 1 }}>×</button>
         </div>
 
         <p style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 800, color: "#374151", textAlign: "center" }}>شرايكم بدفتري؟</p>
-        <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.7 }}>
+        <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "#616876", textAlign: "center", lineHeight: 1.7 }}>
           رأيك يوصل لنا مباشرة ويساعدنا نطوّر البرنامج
         </p>
 
@@ -4242,7 +4259,7 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
       {canPayByCard && <TapPayerNotice />}
 
       {platform === null ? (
-        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
+        <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
       ) : platform !== "store" && !canPayByCard ? (
         <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
           الاشتراك يتم من تطبيق دفتري على موبايلك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
@@ -4282,7 +4299,7 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
         </button>
       )}
 
-      <p style={{ margin: 0, fontSize: 10.5, color: "#9CA3AF", textAlign: "center", lineHeight: 1.9 }}>
+      <p style={{ margin: 0, fontSize: 10.5, color: "#616876", textAlign: "center", lineHeight: 1.9 }}>
         {/* الدفع بالبطاقة شراء لسنة واحدة بلا تجديد تلقائي — كتابة «يتجدد
             سنوياً» هناك وعد بشي ما يصير. */}
         {platform === "store"
@@ -4359,7 +4376,7 @@ function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, o
 
         {overLimit && <ManageChildrenInline motherId={motherId} onChanged={onUnlocked} />}
 
-        <button onClick={onLogout} style={{ background: "transparent", color: "#9CA3AF", fontSize: 12.5, fontWeight: 700, padding: 8 }}>
+        <button onClick={onLogout} style={{ background: "transparent", color: "#616876", fontSize: 12.5, fontWeight: 700, padding: 8 }}>
           تسجيل الخروج
         </button>
       </div>
@@ -4388,13 +4405,13 @@ function SubscriptionManageView({ motherId, studentsCount, onClose, onChanged })
       </div>
       <div className="app-scroll" style={{ flex: 1, padding: "18px 16px calc(env(safe-area-inset-bottom) + 20px)" }}>
         <div style={{ maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 13 }}>
-          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.75, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.75, color: "#616876" }}>
             {access?.subscription?.max_students
               ? `اشتراكك الحالي يغطي ${access.subscription.max_students} ${access.subscription.max_students === 1 ? "طالب/ة" : "طلاب"}. رقّي باقتك هنا وقت ما تحتاجين.`
               : "اختاري الباقة المناسبة لعدد أبنائك."}
           </p>
           {access === null ? (
-            <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
+            <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
           ) : (
             <SubscriptionTiersPicker
               studentsCount={studentsCount}
@@ -4671,7 +4688,7 @@ function TeacherView({ children, motherId }) {
             onClick={() => setPaywallOpen(true)}
             style={{ background: "transparent", padding: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
           >
-            <span style={{ fontSize: 11.5, color: "#9CA3AF", fontWeight: 700 }}>
+            <span style={{ fontSize: 11.5, color: "#616876", fontWeight: 700 }}>
               متبقي {quota.remainingTotal} سؤال
               {quota.plan !== "annual" && (quota.remainingTrial || 0) > 0 ? " (تجربة مجانية)" : ""}
             </span>
@@ -4687,9 +4704,9 @@ function TeacherView({ children, motherId }) {
           الشاشة بدل ما تتمرر داخلياً — وهذا «زر الإرسال ما يظهر». */}
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {historyLoading ? (
-          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>...جاري التحميل</p>
+          <p style={{ textAlign: "center", color: "#616876", fontSize: 13 }}>...جاري التحميل</p>
         ) : messages.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>ابدئي بسؤال 👋</p>
+          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "20px 0" }}>ابدئي بسؤال 👋</p>
         ) : (
           messages.map((m, i) => (
             <div key={m.id || i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-start" : "flex-end" }}>
@@ -4737,7 +4754,7 @@ function TeacherView({ children, motherId }) {
         )}
         {sending && (
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <div style={{ padding: "10px 13px", borderRadius: 14, fontSize: 13, background: "#F3F2FA", color: "#9CA3AF" }}>...المعلم الذكي يفكر</div>
+            <div style={{ padding: "10px 13px", borderRadius: 14, fontSize: 13, background: "#F3F2FA", color: "#616876" }}>...المعلم الذكي يفكر</div>
           </div>
         )}
         {errorMsg && (
@@ -4766,7 +4783,7 @@ function TeacherView({ children, motherId }) {
 
       <div style={{ flexShrink: 0, borderTop: "1px solid #F0EEE8", background: "white", padding: "8px 16px calc(env(safe-area-inset-bottom) + 10px)", display: "flex", flexDirection: "column", gap: 8 }}>
         {/* أكثر سبب لرد «أرسلي صورة أوضح»: ظل اليد على الصفحة. نقولها قبل التصوير. */}
-        <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.6 }}>
+        <p style={{ margin: 0, fontSize: 11.5, color: "#616876", lineHeight: 1.6 }}>
           📸 صوّري الصفحة بلا ظل — وبعدها حدّدي السؤال بالإطار عشان يطلع بأوضح صورة، أو أرسلي الصفحة كاملة.
         </p>
         {/* الصورة من ألبوم الجوال أعلى جودة من كاميرا داخل التطبيق، فنعرض
@@ -4816,7 +4833,7 @@ function TeacherView({ children, motherId }) {
             style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "11px 12px", fontSize: 16, resize: "none", fontFamily: "inherit", minHeight: 44, maxHeight: 100 }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           />
-          <button disabled={sending || (!input.trim() && !image)} onClick={send} style={{ background: "#B7A6E8", color: "white", borderRadius: 12, width: 44, height: 44, fontSize: 16, flexShrink: 0, opacity: sending || (!input.trim() && !image) ? 0.4 : 1 }}>➤</button>
+          <button disabled={sending || (!input.trim() && !image)} onClick={send} style={{ background: BRAND_DARK, color: "white", borderRadius: 12, width: 44, height: 44, fontSize: 16, flexShrink: 0, opacity: sending || (!input.trim() && !image) ? 0.4 : 1 }}>➤</button>
         </div>
       </div>
     </div>
@@ -5005,29 +5022,29 @@ function TeacherNotesSection({ child, motherId, subjects }) {
           <input value={customTerm} onChange={(e) => setCustomTerm(e.target.value)} placeholder="اسم الفترة" style={field} />
         )}
         {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0, lineHeight: 1.7 }}>{error}</p>}
-        <button onClick={save} disabled={!canSave} style={{ width: "100%", padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: canSave ? 1 : 0.45 }}>
+        <button onClick={save} disabled={!canSave} style={{ width: "100%", padding: 11, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: canSave ? 1 : 0.45 }}>
           {busy ? "..." : "حفظ الملاحظة"}
         </button>
       </div>
 
       {loading ? (
-        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0" }}>...جاري التحميل</p>
+        <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "16px 0" }}>...جاري التحميل</p>
       ) : items.length === 0 ? (
-        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "16px 0", lineHeight: 1.8 }}>
+        <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "16px 0", lineHeight: 1.8 }}>
           ما فيه ملاحظات مسجّلة لـ{child.name} بعد — أول ملاحظة من اجتماع أولياء الأمور تنكتب من فوق.
         </p>
       ) : (
         groups.map((g) => (
           <div key={g.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <p style={{ margin: "4px 0 0", fontSize: 12.5, fontWeight: 800, color: "#5C4B8C" }}>
-              {g.key} <span style={{ color: "#9CA3AF", fontWeight: 400 }}>({countLabel(g.notes.length, "ملاحظة", "ملاحظتان", "ملاحظات")})</span>
+              {g.key} <span style={{ color: "#616876", fontWeight: 400 }}>({countLabel(g.notes.length, "ملاحظة", "ملاحظتان", "ملاحظات")})</span>
             </p>
             {g.notes.map((it) => (
               <button key={it.id} onClick={() => setEditing(it)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: "white", border: "1px solid #EEEDE8", textAlign: "right", width: "100%" }}>
                 <SubjectIcon subject={it.subject} size={22} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: "#374151", lineHeight: 1.7 }}>{it.note}</p>
-                  <p style={{ margin: "3px 0 0", fontSize: 11.5, color: "#9CA3AF" }}>
+                  <p style={{ margin: "3px 0 0", fontSize: 11.5, color: "#616876" }}>
                     {it.subject} · {new Date(it.created_at).toLocaleDateString("ar-KW", { day: "numeric", month: "long" })}
                   </p>
                 </div>
@@ -5079,7 +5096,7 @@ function EditTeacherNoteModal({ item, subjects, onClose, onSave, onDelete }) {
       <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "100%", background: "#FAF7F2", borderRadius: "20px 20px 0 0", padding: "16px 16px calc(env(safe-area-inset-bottom) + 16px)", display: "flex", flexDirection: "column", gap: 9, maxHeight: "88%", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>تعديل الملاحظة</p>
-          <button onClick={onClose} style={{ background: "none", fontSize: 20, color: "#9CA3AF", padding: "0 4px" }}>×</button>
+          <button onClick={onClose} style={{ background: "none", fontSize: 20, color: "#616876", padding: "0 4px" }}>×</button>
         </div>
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} style={{ ...field, resize: "vertical", lineHeight: 1.7 }} />
         <select value={subject} onChange={(e) => setSubject(e.target.value)} style={field}>
@@ -5093,7 +5110,7 @@ function EditTeacherNoteModal({ item, subjects, onClose, onSave, onDelete }) {
         </select>
         {term === "__other" && <input value={customTerm} onChange={(e) => setCustomTerm(e.target.value)} placeholder="اسم الفترة" style={field} />}
         {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0, lineHeight: 1.7 }}>{error}</p>}
-        <button onClick={submit} disabled={busy || !note.trim() || !finalSubject} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14.5, minHeight: 46, opacity: busy || !note.trim() || !finalSubject ? 0.5 : 1 }}>
+        <button onClick={submit} disabled={busy || !note.trim() || !finalSubject} style={{ width: "100%", padding: 12, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 14.5, minHeight: 46, opacity: busy || !note.trim() || !finalSubject ? 0.5 : 1 }}>
           {busy ? "..." : "حفظ التعديلات"}
         </button>
         <button onClick={() => onDelete(item.id)} style={{ width: "100%", padding: 12, borderRadius: 12, background: "#FEF2F2", color: "#B91C1C", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
@@ -5186,20 +5203,20 @@ function GradesSection({ child, motherId, subjects = [] }) {
           )}
           <div style={{ display: "flex", gap: 8 }}>
             <input value={score} onChange={(e) => setScore(e.target.value)} placeholder="الدرجة" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
-            <span style={{ alignSelf: "center", color: "#9CA3AF" }}>من</span>
+            <span style={{ alignSelf: "center", color: "#616876" }}>من</span>
             <input value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="الدرجة الكلية" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
           </div>
           <input value={examName} onChange={(e) => setExamName(e.target.value)} placeholder="اسم الاختبار (اختياري)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
-          <button disabled={!canAdd} onClick={handleAdd} style={{ padding: 10, borderRadius: 10, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13, opacity: canAdd ? 1 : 0.5 }}>
+          <button disabled={!canAdd} onClick={handleAdd} style={{ padding: 10, borderRadius: 10, background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 13, opacity: canAdd ? 1 : 0.5 }}>
             {saving ? "جاري الحفظ..." : "حفظ الدرجة"}
           </button>
         </div>
       )}
 
       {loading ? (
-        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>...جاري التحميل</p>
+        <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "20px 0" }}>...جاري التحميل</p>
       ) : Object.keys(bySubject).length === 0 ? (
-        <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 13, padding: "20px 0" }}>ما فيه درجات مسجّلة بعد لـ{child.name}</p>
+        <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "20px 0" }}>ما فيه درجات مسجّلة بعد لـ{child.name}</p>
       ) : (
         Object.entries(bySubject).map(([subj, entries]) => {
           const totalScore = entries.reduce((s, e) => s + Number(e.score), 0);
@@ -5212,10 +5229,10 @@ function GradesSection({ child, motherId, subjects = [] }) {
                 <span style={{ fontSize: 13, fontWeight: 800, color: "#5C4B8C" }}>{pct}% ({totalScore}/{totalMax})</span>
               </div>
               {entries.map((e) => (
-                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 12.5, color: "#6B7280" }}>
+                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 12.5, color: "#616876" }}>
                   <span>
                     {e.exam_name || "اختبار"} — {e.score}/{e.max_score}
-                    {e.period && <span style={{ color: "#9CA3AF" }}> · {e.period}</span>}
+                    {e.period && <span style={{ color: "#616876" }}> · {e.period}</span>}
                   </span>
                   <button onClick={() => handleDelete(e.id)} style={{ background: "none", color: "#D1785A", fontSize: 12 }}>حذف</button>
                 </div>
@@ -5448,7 +5465,7 @@ function PasswordSetting({ ios }) {
       </button>
       {open && (
         <div style={{ padding: ios ? "0 16px 14px" : "0 18px 16px" }}>
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: "#9CA3AF", lineHeight: 1.7 }}>
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: "#616876", lineHeight: 1.7 }}>
             دخول قادم بموبايلك ورقمك السري بلا كود، حتى من جهاز جديد.
           </p>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رقم سري جديد" autoComplete="new-password" style={inputStyle} />
@@ -5510,18 +5527,18 @@ function FamilySetting({ ios }) {
       </button>
       {open && (
         <div style={{ padding: ios ? "0 16px 14px" : "0 18px 16px" }}>
-          {!data && <p style={{ fontSize: 12.5, color: "#9CA3AF" }}>...جاري التحميل</p>}
+          {!data && <p style={{ fontSize: 12.5, color: "#616876" }}>...جاري التحميل</p>}
           {data && (
             <>
-              <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9CA3AF", lineHeight: 1.8 }}>
+              <p style={{ margin: "0 0 10px", fontSize: 12, color: "#616876", lineHeight: 1.8 }}>
                 اشتراكك يغطي ولي أمر ثاني (الأب) — يدخل بحسابه ورقمه هو، ويشوف نفس الأبناء والواجبات ويوصله نفس التذكيرات.
               </p>
 
               {(data.parents || []).map((p) => (
                 <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0", borderTop: "1px solid #F3F2EE" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700 }}>{p.name} {p.isMe && <span style={{ color: "#9CA3AF", fontWeight: 400 }}>(أنت)</span>}</p>
-                    <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF" }}>{p.role === "primary" ? "صاحب الاشتراك" : "ولي أمر ثاني"}</p>
+                    <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700 }}>{p.name} {p.isMe && <span style={{ color: "#616876", fontWeight: 400 }}>(أنت)</span>}</p>
+                    <p style={{ margin: 0, fontSize: 11.5, color: "#616876" }}>{p.role === "primary" ? "صاحب الاشتراك" : "ولي أمر ثاني"}</p>
                   </div>
                   {data.role === "primary" && p.role === "secondary" && (
                     <button onClick={() => remove(p.id)} disabled={busy} style={{ background: "#FEF2F2", color: "#B91C1C", fontSize: 11.5, fontWeight: 700, padding: "6px 10px", borderRadius: 9 }}>إخراج</button>
@@ -5533,9 +5550,9 @@ function FamilySetting({ ios }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0", borderTop: "1px solid #F3F2EE" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#8C6027" }}>دعوة معلّقة — {data.invite.phone}</p>
-                    <p style={{ margin: 0, fontSize: 11.5, color: "#9CA3AF" }}>تظهر له بحسابه أول ما يدخل برقمه</p>
+                    <p style={{ margin: 0, fontSize: 11.5, color: "#616876" }}>تظهر له بحسابه أول ما يدخل برقمه</p>
                   </div>
-                  <button onClick={() => remove(null)} disabled={busy} style={{ background: "#F3F4F6", color: "#6B7280", fontSize: 11.5, fontWeight: 700, padding: "6px 10px", borderRadius: 9 }}>إلغاء</button>
+                  <button onClick={() => remove(null)} disabled={busy} style={{ background: "#F3F4F6", color: "#616876", fontSize: 11.5, fontWeight: 700, padding: "6px 10px", borderRadius: 9 }}>إلغاء</button>
                 </div>
               )}
 
@@ -5543,23 +5560,23 @@ function FamilySetting({ ios }) {
                 <div style={{ marginTop: 10 }}>
                   <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم موبايل ولي الأمر الثاني" inputMode="numeric"
                     style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", fontSize: 15, marginBottom: 8, direction: "ltr", textAlign: "center" }} />
-                  <button onClick={invite} disabled={busy || phone.trim().length < 8} style={{ width: "100%", padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13.5, minHeight: 42, opacity: busy || phone.trim().length < 8 ? 0.5 : 1 }}>
+                  <button onClick={invite} disabled={busy || phone.trim().length < 8} style={{ width: "100%", padding: 11, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 13.5, minHeight: 42, opacity: busy || phone.trim().length < 8 ? 0.5 : 1 }}>
                     {busy ? "..." : "إرسال الدعوة"}
                   </button>
                 </div>
               )}
 
               {data.role === "secondary" && (
-                <p style={{ margin: "10px 0 0", fontSize: 12, color: "#6B7280", lineHeight: 1.8 }}>أنت ولي أمر ثاني بهذي العائلة — الاشتراك وإدارة العائلة عند صاحب الاشتراك.</p>
+                <p style={{ margin: "10px 0 0", fontSize: 12, color: "#616876", lineHeight: 1.8 }}>أنت ولي أمر ثاني بهذي العائلة — الاشتراك وإدارة العائلة عند صاحب الاشتراك.</p>
               )}
 
               {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: "8px 0 0", lineHeight: 1.7 }}>{error}</p>}
 
               {(data.activity || []).length > 0 && (
                 <div style={{ marginTop: 14 }}>
-                  <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 800, color: "#6B7280" }}>آخر النشاط</p>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 800, color: "#616876" }}>آخر النشاط</p>
                   {data.activity.slice(0, 8).map((a, i) => (
-                    <p key={i} style={{ margin: "0 0 4px", fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.8 }}>
+                    <p key={i} style={{ margin: "0 0 4px", fontSize: 11.5, color: "#616876", lineHeight: 1.8 }}>
                       {a.actor_name || "ولي أمر"} {a.action}{a.entity ? `: ${a.entity}` : ""}
                     </p>
                   ))}
@@ -5598,15 +5615,15 @@ function FamilyInviteBanner({ onJoined }) {
       <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#5C4B8C", lineHeight: 1.8 }}>
         {invite.fromName} يدعوك تنضم لعائلته بدفتري
       </p>
-      <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "#6B7280", lineHeight: 1.8 }}>
+      <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "#616876", lineHeight: 1.8 }}>
         راح تشوف نفس الأبناء والواجبات والاختبارات، ويوصلك نفس التذكيرات — بحسابك هذا وبلا اشتراك جديد.
       </p>
       {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: "0 0 8px", lineHeight: 1.7 }}>{error}</p>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => answer(true)} disabled={busy} style={{ flex: 2, padding: 11, borderRadius: 12, background: "#B7A6E8", color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: busy ? 0.6 : 1 }}>
+        <button onClick={() => answer(true)} disabled={busy} style={{ flex: 2, padding: 11, borderRadius: 12, background: BRAND_DARK, color: "white", fontWeight: 800, fontSize: 14, minHeight: 44, opacity: busy ? 0.6 : 1 }}>
           {busy ? "..." : "انضمام"}
         </button>
-        <button onClick={() => answer(false)} disabled={busy} style={{ flex: 1, padding: 11, borderRadius: 12, background: "white", color: "#6B7280", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
+        <button onClick={() => answer(false)} disabled={busy} style={{ flex: 1, padding: 11, borderRadius: 12, background: "white", color: "#616876", fontWeight: 700, fontSize: 13, minHeight: 44 }}>
           رفض
         </button>
       </div>
@@ -5747,8 +5764,8 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             {mother.name?.[0] || "؟"}
           </div>
           <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#374151" }}>{mother.name}</p>
-          <p style={{ margin: "4px 0 0", fontSize: 13.5, color: "#9CA3AF", direction: "ltr" }}>+965 {phone}</p>
-          <p style={{ margin: "10px 0 0", fontSize: 12.5, color: "#B7A6E8", fontWeight: 700 }}>{childrenLabel}</p>
+          <p style={{ margin: "4px 0 0", fontSize: 13.5, color: "#616876", direction: "ltr" }}>+965 {phone}</p>
+          <p style={{ margin: "10px 0 0", fontSize: 12.5, color: BRAND_DARK, fontWeight: 700 }}>{childrenLabel}</p>
         </div>
 
         <div style={{ background: "white", borderRadius: 18, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,.05)", display: "flex", flexDirection: "column", gap: 11 }}>
@@ -5761,10 +5778,10 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span style={{ background: plan.bg, color: plan.color, fontSize: 12, fontWeight: 800, padding: "5px 11px", borderRadius: 999, flexShrink: 0 }}>{plan.status}</span>
             )}
           </div>
-          {plan?.detail && <p style={{ margin: 0, fontSize: 13, color: "#6B7280", lineHeight: 1.7 }}>{plan.detail}</p>}
+          {plan?.detail && <p style={{ margin: 0, fontSize: 13, color: "#616876", lineHeight: 1.7 }}>{plan.detail}</p>}
           <button
             onClick={onManageSubscription}
-            style={{ background: "#B7A6E8", color: "white", fontWeight: 700, fontSize: 14, padding: "11px 16px", borderRadius: 12, width: "100%", minHeight: 44 }}
+            style={{ background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 14, padding: "11px 16px", borderRadius: 12, width: "100%", minHeight: 44 }}
           >
             {plan ? plan.action : "..."}
           </button>
@@ -5794,7 +5811,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
           </a>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: "#374151" }}>الإصدار</span>
-            <span style={{ fontSize: 13.5, color: "#9CA3AF", direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>
+            <span style={{ fontSize: 13.5, color: "#616876", direction: "ltr", fontVariantNumeric: "tabular-nums" }}>{APP_VERSION}</span>
           </div>
         </div>
 
@@ -5856,7 +5873,7 @@ function DeleteAccountButton({ mother, onDeleted, ios }) {
       );
     }
     return (
-      <button onClick={() => setStep("confirm")} style={{ marginTop: 4, padding: 10, borderRadius: 12, background: "none", color: "#9CA3AF", fontWeight: 700, fontSize: 12.5 }}>
+      <button onClick={() => setStep("confirm")} style={{ marginTop: 4, padding: 10, borderRadius: 12, background: "none", color: "#616876", fontWeight: 700, fontSize: 12.5 }}>
         حذف الحساب نهائياً
       </button>
     );
@@ -5886,7 +5903,7 @@ function DeleteAccountButton({ mother, onDeleted, ios }) {
         >
           {busy ? "جاري الحذف..." : "تأكيد الحذف النهائي"}
         </button>
-        <button onClick={() => { setStep("idle"); setConfirmPhone(""); setErrorMsg(""); }} style={{ flex: 1, padding: 11, borderRadius: 10, background: "white", color: "#6B7280", fontWeight: 700, fontSize: 13, border: "1px solid #E5E7EB" }}>
+        <button onClick={() => { setStep("idle"); setConfirmPhone(""); setErrorMsg(""); }} style={{ flex: 1, padding: 11, borderRadius: 10, background: "white", color: "#616876", fontWeight: 700, fontSize: 13, border: "1px solid #E5E7EB" }}>
           إلغاء
         </button>
       </div>

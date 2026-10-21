@@ -35,9 +35,9 @@ export default function Errors() {
     <Card>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
         <h2 style={{ margin: 0, fontSize: 16, color: "#5C4B8C" }}>بلاغات الأخطاء</h2>
-        <button onClick={load} style={{ background: "none", color: "#B7A6E8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>تحديث</button>
+        <button onClick={load} style={{ background: "none", color: "#6B5BA8", fontSize: 12, fontWeight: 700, padding: "4px 6px" }}>تحديث</button>
       </div>
-      <p style={{ margin: "0 0 12px", fontSize: 12, color: "#9CA3AF", lineHeight: 1.8 }}>
+      <p style={{ margin: "0 0 12px", fontSize: 12, color: "#616876", lineHeight: 1.8 }}>
         آخر ٧ أيام. يُسجَّل تلقائياً بلا ما تضغط الأم شي — حتى الأخطاء اللي ما توصل السيرفر.
         ويوصلك إشعار لو واجهن نفس المشكلة ٣ أمهات بساعة.
       </p>
@@ -60,11 +60,11 @@ export default function Errors() {
                   {g.affected} {g.affected === 1 ? "أم" : "أمهات"} · {g.count} مرة
                 </span>
               </div>
-              <p style={{ margin: "5px 0 0", fontSize: 12.5, color: "#6B7280" }}>
+              <p style={{ margin: "5px 0 0", fontSize: 12.5, color: "#616876" }}>
                 {REASON_AR[g.reason] || g.reason || "—"}
               </p>
               {g.names.length > 0 && (
-                <p style={{ margin: "5px 0 0", fontSize: 11.5, color: "#9CA3AF" }}>{g.names.join("، ")}</p>
+                <p style={{ margin: "5px 0 0", fontSize: 11.5, color: "#616876" }}>{g.names.join("، ")}</p>
               )}
               {g.notes.map((n, j) => (
                 <p key={j} style={{ margin: "6px 0 0", fontSize: 12, color: "#374151", background: "#FAF7F2", borderRadius: 8, padding: "7px 9px", lineHeight: 1.7 }}>“{n}”</p>
@@ -88,4 +88,4 @@ function Card({ children }) {
   );
 }
 
-const muted = { margin: 0, fontSize: 12.5, color: "#9CA3AF", lineHeight: 1.8 };
+const muted = { margin: 0, fontSize: 12.5, color: "#616876", lineHeight: 1.8 };
