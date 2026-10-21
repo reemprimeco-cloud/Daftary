@@ -158,7 +158,7 @@ input:focus, select:focus, textarea:focus {
    انتقلت هنا عشان استعلام الوضع الأفقي يقدر يغلبها. */
 .ios-navbar { padding: calc(env(safe-area-inset-top) + 4px) 16px 10px; }
 .ios-navbar-row { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
-.ios-navbar-logo { min-height: 44px; }
+.ios-navbar-logo { min-height: 44px; min-width: 44px; justify-content: center; } /* الشعار ٣٢px — الزر يبقى ٤٤ */
 .ios-navbar-logo img { width: 32px; height: 32px; border-radius: 8px; display: block; }
 .ios-navbar-greeting {
   font-size: 15px; font-weight: 700; color: #1C1C1E;
@@ -196,7 +196,7 @@ input:focus, select:focus, textarea:focus {
 /* الفاصل يبدأ بعد الحشو الأمامي — نفس سلوك UITableView */
 .ios-row + .ios-row { box-shadow: inset 0 0.5px 0 rgba(0,0,0,.14); }
 .ios-row-value { color: #616876; font-size: 17px; }
-.ios-chevron { color: #C7C7CC; font-size: 17px; flex-shrink: 0; }
+.ios-chevron { color: #6D6D72; /* كان #C7C7CC بـ1.68:1 */ font-size: 17px; flex-shrink: 0; }
 .ios-group-header {
   font-size: 13px;
   font-weight: 400;
@@ -226,7 +226,7 @@ input:focus, select:focus, textarea:focus {
   font-weight: 400;
   min-height: 44px;
 }
-.ios-btn-destructive { color: #FF3B30; }
+.ios-btn-destructive { color: #D70015; } /* كان #FF3B30 بـ3.55:1 */
 
 /* ————— المُقسّم (Segmented Control) ————— */
 .ios-segmented {
@@ -238,7 +238,7 @@ input:focus, select:focus, textarea:focus {
 }
 .ios-segmented button {
   flex: 1;
-  min-height: 28px;
+  min-height: 44px;
   border-radius: 7px;
   background: none;
   font-size: 13px;
@@ -363,6 +363,32 @@ input:focus, select:focus, textarea:focus {
    `word-break: break-word` كان يكسرها دائماً فتطلع «الرياضيا/ت» —
    وهذا يصير بالجوال وحده؛ بالآيباد الخانة واسعة فما فيه كسر أصلاً. */
 .sched-subject, .sched-teacher { overflow-wrap: break-word; word-break: normal; }
+
+/* ==========================================================================
+   منطقة لمس ٤٤×٤٤ بلا تغيير الشكل  (قرار ٢١ أكتوبر)
+   ==========================================================================
+   آبل تشترط ٤٤×٤٤ نقطة وجوجل ٤٨×٤٨dp. وبالقياس كان فيه ٥٢ عنصراً تحت
+   الحد، منها روابط «شروط الاستخدام» بارتفاع **١٣px** — أي أقل حتى من حد
+   WCAG 2.5.8 (AA) البالغ ٢٤.
+
+   تكبير العناصر نفسها يفسد التنسيق (رابط بسطر نص يصير بلوكاً)، فنوسّع
+   **منطقة الضغط وحدها** بعنصر زائف شفاف متمركز فوق العنصر. الشكل ما
+   يتغيّر ولا بكسل، والإصبع تمسك ٤٤px.
+
+   `pointer-events` ما تُلمس: العنصر الزائف جزء من العنصر نفسه فيرث
+   التقاط الضغط تلقائياً. و`z-index: -1` ممنوع — يخليه تحت الخلفية. */
+.tap { position: relative; }
+.tap::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+}
+/* داخل سطر نص: العنصر الزائف ما يدفع السطور لأنه مطلق أصلاً */
+a.tap, button.tap { display: inline-block; }
 
 /* ==========================================================================
    الجوال بالوضع الأفقي — الارتفاع ينزل لـ~٣٩٠ بكسل بدل ٨٤٤

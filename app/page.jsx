@@ -1005,7 +1005,7 @@ export default function Home() {
         <div className="ios-navbar">
           <div className="ios-navbar-row">
             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              <button onClick={() => setShowProfile(true)} aria-label="حسابي" className="ios-navbar-logo" style={{ background: "none", padding: 0, display: "flex", alignItems: "center", flexShrink: 0 }}>
+              <button onClick={() => setShowProfile(true)} aria-label="حسابي" className="ios-navbar-logo tap" style={{ background: "none", padding: 0, display: "flex", alignItems: "center", flexShrink: 0 }}>
                 <img src="/logo.png" alt="" />
               </button>
               <span className="ios-navbar-greeting">مرحباً، {mother.name}</span>
@@ -1034,11 +1034,11 @@ export default function Home() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             {view === "dashboard" && (
-              <button onClick={() => setShowUpload(true)} style={{ background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 40 }}>
+              <button onClick={() => setShowUpload(true)} style={{ background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 44 }}>
                 رفع جدول
               </button>
             )}
-            <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", padding: "8px 10px", borderRadius: 12, minHeight: 40, lineHeight: 1 }}>
+            <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", padding: "8px 10px", borderRadius: 12, minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
               <TileIcon name="gear" size={23} />
             </button>
           </div>
@@ -1065,7 +1065,7 @@ export default function Home() {
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "#616876" }}>الخطة الأسبوعية</span>
-                  <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: BRAND_DARK, fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ إضافة طالب/ة</button>
+                  <button onClick={() => setShowAddChild(true)} style={{ background: "none", color: BRAND_DARK, fontWeight: 700, fontSize: 13, padding: "11px 6px", minHeight: 44 }}>+ إضافة طالب/ة</button>
                 </div>
                 {children.length > 1 && (
                   <ChildSwitcher children={children} selectedId={planChild.id} onSelect={(id) => { setPlanChildId(id); try { localStorage.setItem("daftary_plan_child", id); } catch {} }} />
@@ -1123,7 +1123,7 @@ export default function Home() {
                   <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "#616876" }}>جدول الحصص الأسبوعي</span>
-                  <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: BRAND_DARK, fontWeight: 700, fontSize: 13, padding: "8px 4px", minHeight: 36 }}>+ رفع/تحديث الجدول</button>
+                  <button onClick={() => setShowUploadSchedule(true)} style={{ background: "none", color: BRAND_DARK, fontWeight: 700, fontSize: 13, padding: "11px 6px", minHeight: 44 }}>+ رفع/تحديث الجدول</button>
                 </div>
                 {children.map((c) => (
                   <ScheduleCard key={c.id} child={c} schedule={classSchedule.filter((s) => s.child_id === c.id)} onUpload={() => setShowUploadSchedule(true)} onCellClick={(day, period, entry) => setEditingCell({ child: c, day, period, entry })} />
@@ -1667,10 +1667,10 @@ function AuthShell({ children }) {
         {children}
       </div>
       <div style={{ textAlign: "center", flexShrink: 0, width: "100%", maxWidth: 380, margin: "0 auto" }}>
-        <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+        <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", minHeight: 44, padding: "8px 18px", borderRadius: 12, background: "white", color: "#5C4B8C", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
           تواصل معنا
         </a>
-        <p style={{ color: "#B7B2C4", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
+        <p style={{ color: "#616876", fontSize: 11, margin: "8px 0 0" }}>Copyright © Reemora.app 2026</p>
       </div>
     </div>
   );
@@ -1709,7 +1709,7 @@ function VerifyCodeScreen({ phone, code, setCode, busy, error, resendIn, onSubmi
             <button onClick={onBack} disabled={busy} style={{ background: "none", color: "#616876", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
               تغيير الرقم
             </button>
-            <button onClick={onResend} disabled={busy || resendIn > 0} style={{ background: "none", color: resendIn > 0 ? "#B7B2C4" : "#7B68C4", fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
+            <button onClick={onResend} disabled={busy || resendIn > 0} style={{ background: "none", color: resendIn > 0 ? "#616876" : BRAND_DARK, fontSize: 12.5, fontWeight: 700, padding: "8px 0", minHeight: 40 }}>
               {resendIn > 0 ? `إعادة الإرسال بعد ${resendIn}` : "إعادة إرسال الكود"}
             </button>
           </div>
@@ -1893,7 +1893,7 @@ function ChildSwitcher({ children, selectedId, onSelect }) {
         const pal = PALETTE[c.color_idx % PALETTE.length];
         const on = c.id === selectedId;
         return (
-          <button key={c.id} onClick={() => onSelect(c.id)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px 6px 8px", borderRadius: 999, background: on ? pal.text : "white", color: on ? "white" : pal.text, border: `1px solid ${on ? pal.text : pal.soft}`, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", minHeight: 40, flexShrink: 0 }}>
+          <button key={c.id} onClick={() => onSelect(c.id)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px 6px 8px", borderRadius: 999, background: on ? pal.text : "white", color: on ? "white" : pal.text, border: `1px solid ${on ? pal.text : pal.soft}`, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", minHeight: 44, flexShrink: 0 }}>
             <Avatar child={c} size={26} />
             {c.name}
           </button>
@@ -2007,8 +2007,8 @@ function ImageZoomViewer({ urls, startIndex = 0, onClose }) {
           <span style={{ color: "rgba(255,255,255,.75)", fontSize: 12.5, fontWeight: 700 }}>صورة {i + 1} من {urls.length}</span>
         )}
         <div style={{ marginInlineStart: "auto", display: "flex", gap: 6 }}>
-          <button onClick={() => setZoom((z) => Math.max(1, z - 0.5))} aria-label="تصغير" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, width: 36, height: 34, fontSize: 18, lineHeight: 1 }}>−</button>
-          <button onClick={() => setZoom((z) => Math.min(5, z + 0.5))} aria-label="تكبير" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, width: 36, height: 34, fontSize: 18, lineHeight: 1 }}>+</button>
+          <button onClick={() => setZoom((z) => Math.max(1, z - 0.5))} aria-label="تصغير" className="tap" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, width: 36, height: 34, fontSize: 18, lineHeight: 1 }}>−</button>
+          <button onClick={() => setZoom((z) => Math.min(5, z + 0.5))} aria-label="تكبير" className="tap" style={{ background: "rgba(255,255,255,.14)", color: "white", borderRadius: 10, width: 36, height: 34, fontSize: 18, lineHeight: 1 }}>+</button>
         </div>
       </div>
 
@@ -2093,7 +2093,7 @@ function AttachmentsCard({ children, refreshKey }) {
               </p>
             </div>
             <button onClick={() => a.urls.length && setView(a.urls)} style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 10, padding: "7px 12px", fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>فتح</button>
-            <button onClick={() => remove(a.id)} aria-label="حذف" style={{ background: "none", padding: 6, flexShrink: 0 }}>
+            <button onClick={() => remove(a.id)} aria-label="حذف" className="tap" style={{ background: "none", padding: 6, flexShrink: 0 }}>
               <TileIcon name="trash" size={16} />
             </button>
           </div>
@@ -2221,10 +2221,10 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
                 </span>
               )}
             </div>
-            <button onClick={onAddTask} style={{ background: "white", color: color.text, fontSize: 12, fontWeight: 800, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>
+            <button onClick={onAddTask} style={{ background: "white", color: color.text, fontSize: 12, fontWeight: 800, padding: "8px 12px", borderRadius: 10, flexShrink: 0, minHeight: 44 }}>
               + واجب
             </button>
-            <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
+            <button onClick={onEdit} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0, minHeight: 44 }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
                 <TileIcon name="pencil" size={15} />
                 تعديل
@@ -2248,7 +2248,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
 
         <div style={{ display: "flex", gap: 6, background: "white", borderRadius: 14, padding: 4, border: "1px solid #EEEDE8" }}>
           {chips.map(([key, label]) => (
-            <button key={key} onClick={() => setFilter(key)} style={{ flex: 1, padding: "8px 4px", borderRadius: 11, fontSize: 12.5, fontWeight: 800, background: filter === key ? color.text : "transparent", color: filter === key ? "white" : "#4B5563", minHeight: 36 }}>
+            <button key={key} onClick={() => setFilter(key)} style={{ flex: 1, padding: "11px 4px", borderRadius: 11, fontSize: 12.5, fontWeight: 800, background: filter === key ? color.text : "transparent", color: filter === key ? "white" : "#4B5563", minHeight: 44 }}>
               {label}
             </button>
           ))}
@@ -2258,7 +2258,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
           <button
             onClick={clearDone}
             disabled={clearing}
-            style={{ alignSelf: "flex-start", background: "none", color: "#616876", fontSize: 12.5, fontWeight: 700, padding: "2px 2px 6px", minHeight: 32, opacity: clearing ? 0.5 : 1 }}
+            style={{ alignSelf: "flex-start", background: "none", color: "#616876", fontSize: 12.5, fontWeight: 700, padding: "2px 2px 6px", minHeight: 44, opacity: clearing ? 0.5 : 1 }}
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <TileIcon name="trash" size={14} />
@@ -2543,7 +2543,7 @@ function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
           <p style={{ margin: 0, fontWeight: 800, color: color.text }}>{child.name}</p>
           <p style={{ margin: 0, fontSize: 12, color: color.text, opacity: 0.75 }}>{classLabel(child.grade, child.section)}</p>
         </div>
-        <button onClick={onUpload} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0 }}>
+        <button onClick={onUpload} style={{ background: "none", color: color.text, opacity: 0.7, fontSize: 12, fontWeight: 700, padding: "6px 8px", flexShrink: 0, minHeight: 44 }}>
           {schedule.length ? (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
               <TileIcon name="refresh" size={15} />
@@ -2561,7 +2561,7 @@ function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
           <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 11, color: "#616876" }}>اضغطي أي خانة للتعديل</span>
-            <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1 }}>
+            <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1, minHeight: 44 }}>
               {exporting ? (
                 "جاري التصدير..."
               ) : native ? (
@@ -3461,8 +3461,8 @@ function HintBanner({ id, children, style }) {
   return (
     <div style={{ position: "relative", background: "#FDF3E7", color: "#8C6027", borderRadius: 12, padding: 12, paddingInlineEnd: 36, fontSize: 12, fontWeight: 700, lineHeight: 1.7, ...style }}>
       {children}
-      <button onClick={close} aria-label="إغلاق الشرح"
-        style={{ position: "absolute", top: 2, insetInlineEnd: 2, background: "none", color: "#B08A4F", fontSize: 18, lineHeight: 1, width: 32, height: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <button onClick={close} aria-label="إغلاق الشرح" className="tap"
+        style={{ position: "absolute", top: 2, insetInlineEnd: 2, background: "none", color: "#7A5C28", fontSize: 18, lineHeight: 1, width: 32, height: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
         ×
       </button>
     </div>
@@ -3879,13 +3879,13 @@ function SubscriptionScreen({ quota, onTrial, onBuy, onRestore, onClose, buying,
             ? "يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك"
             : "شراء لسنة دراسية واحدة · بدون تجديد تلقائي"}
           <br />
-          <a href="/terms" style={termsLink}>شروط الاستخدام</a>
+          <a href="/terms" className="tap" style={termsLink}>شروط الاستخدام</a>
           {" · "}
-          <a href="/privacy" style={termsLink}>سياسة الخصوصية</a>
+          <a href="/privacy" className="tap" style={termsLink}>سياسة الخصوصية</a>
           {platform === "store" && (
             <>
               {" · "}
-              <button onClick={onRestore} style={{ ...termsLink, background: "transparent", padding: 0, fontSize: 10.5, fontWeight: 400 }}>
+              <button onClick={onRestore} className="tap" style={{ ...termsLink, background: "transparent", padding: 0, fontSize: 10.5, fontWeight: 400 }}>
                 استعادة المشتريات
               </button>
             </>
@@ -4004,7 +4004,7 @@ function PermissionsBanner() {
       <button
         onClick={() => { setDismissed(signature); try { localStorage.setItem("daftary_hint_perm", signature); } catch {} }}
         aria-label="إغلاق"
-        style={{ background: "none", color: "#B08A4F", fontSize: 18, lineHeight: 1, width: 28, height: 28, padding: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+        style={{ background: "none", color: "#7A5C28", fontSize: 18, lineHeight: 1, width: 28, height: 28, padding: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
       >
         ×
       </button>
@@ -4294,7 +4294,7 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
       )}
 
       {platform === "store" && (
-        <button onClick={restore} disabled={buying} style={{ background: "transparent", color: "#5C4B8C", borderRadius: 15, padding: 11, fontSize: 14, fontWeight: 800 }}>
+        <button onClick={restore} disabled={buying} style={{ background: "transparent", color: "#5C4B8C", borderRadius: 15, padding: 11, fontSize: 14, fontWeight: 800, minHeight: 44 }}>
           استعادة المشتريات
         </button>
       )}
@@ -4306,9 +4306,9 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
           ? "يتجدد سنوياً · تلغيه بأي وقت من إعدادات جهازك"
           : "اشتراك لسنة دراسية واحدة · بدون تجديد تلقائي"}
         <br />
-        <a href="/terms" style={termsLink}>شروط الاستخدام</a>
+        <a href="/terms" className="tap" style={termsLink}>شروط الاستخدام</a>
         {" · "}
-        <a href="/privacy" style={termsLink}>سياسة الخصوصية</a>
+        <a href="/privacy" className="tap" style={termsLink}>سياسة الخصوصية</a>
       </p>
     </div>
   );
@@ -4376,7 +4376,7 @@ function AppAccessPaywall({ studentsCount, subscription, motherId, onUnlocked, o
 
         {overLimit && <ManageChildrenInline motherId={motherId} onChanged={onUnlocked} />}
 
-        <button onClick={onLogout} style={{ background: "transparent", color: "#616876", fontSize: 12.5, fontWeight: 700, padding: 8 }}>
+        <button onClick={onLogout} style={{ background: "transparent", color: "#616876", fontSize: 12.5, fontWeight: 700, padding: 8, minHeight: 44 }}>
           تسجيل الخروج
         </button>
       </div>
@@ -4810,7 +4810,7 @@ function TeacherView({ children, motherId }) {
                 onClick={() => setViewImage(image)}
                 style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
               />
-              <button aria-label="حذف الصورة" onClick={() => setImage(null)} style={{ position: "absolute", top: 3, left: 3, background: "rgba(0,0,0,.6)", color: "white", borderRadius: "50%", width: 20, height: 20, fontSize: 13, lineHeight: 1 }}>×</button>
+              <button aria-label="حذف الصورة" className="tap" onClick={() => setImage(null)} style={{ position: "absolute", top: 3, left: 3, background: "rgba(0,0,0,.6)", color: "white", borderRadius: "50%", width: 20, height: 20, fontSize: 13, lineHeight: 1 }}>×</button>
             </div>
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 12.5, color: "#374151", fontWeight: 700 }}>الصورة اللي بتنرسل</p>
@@ -4821,7 +4821,7 @@ function TeacherView({ children, motherId }) {
           </div>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <button onClick={() => (native ? setPickMenu((v) => !v) : fileRef.current?.click())} aria-label="إرفاق صورة" style={{ background: pickMenu ? "#F1EFFA" : "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0, color: "#7B68C4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button onClick={() => (native ? setPickMenu((v) => !v) : fileRef.current?.click())} aria-label="إرفاق صورة" className="tap" style={{ background: pickMenu ? "#F1EFFA" : "#F3F4F6", borderRadius: 12, width: 44, height: 44, fontSize: 18, flexShrink: 0, color: "#7B68C4", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {native ? <Icon name="camera" size={22} /> : <TileIcon name="camera" size={24} />}
           </button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={handlePickImage} />
@@ -5461,7 +5461,7 @@ function PasswordSetting({ ios }) {
           {!ios && <TileIcon name="lock" size={25} />}
           الرقم السري للدخول
         </span>
-        <span style={{ color: ios ? "#C7C2D4" : "#C7C2D4", fontSize: 16 }}>{open ? "︿" : "‹"}</span>
+        <span style={{ color: "#6D6D72", fontSize: 16 }}>{open ? "︿" : "‹"}</span>
       </button>
       {open && (
         <div style={{ padding: ios ? "0 16px 14px" : "0 18px 16px" }}>
@@ -5523,7 +5523,7 @@ function FamilySetting({ ios }) {
           {!ios && <TileIcon name="gift" size={25} />}
           العائلة (مشاركة الاشتراك)
         </span>
-        <span style={{ color: "#C7C2D4", fontSize: 16 }}>{open ? "︿" : "‹"}</span>
+        <span style={{ color: "#6D6D72", fontSize: 16 }}>{open ? "︿" : "‹"}</span>
       </button>
       {open && (
         <div style={{ padding: ios ? "0 16px 14px" : "0 18px 16px" }}>
@@ -5670,8 +5670,8 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               {mother.name?.[0] || "؟"}
             </div>
             <p style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em" }}>{mother.name}</p>
-            <p style={{ margin: "2px 0 0", fontSize: 15, color: "#8E8E93", direction: "ltr" }}>+965 {phone}</p>
-            <p style={{ margin: "2px 0 0", fontSize: 15, color: "#8E8E93" }}>{childrenLabel}</p>
+            <p style={{ margin: "2px 0 0", fontSize: 15, color: "#616876", direction: "ltr" }}>+965 {phone}</p>
+            <p style={{ margin: "2px 0 0", fontSize: 15, color: "#616876" }}>{childrenLabel}</p>
           </div>
 
           <div>
@@ -5685,7 +5685,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
                 </span>
               </button>
               {plan?.detail && (
-                <div className="ios-row" style={{ color: "#8E8E93", fontSize: 14 }}>
+                <div className="ios-row" style={{ color: "#616876", fontSize: 14 }}>
                   <span>{plan.detail}</span>
                 </div>
               )}
@@ -5745,7 +5745,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
             <DeleteAccountButton mother={mother} onDeleted={onAccountDeleted} ios />
           </div>
 
-          <p style={{ textAlign: "center", color: "#8E8E93", fontSize: 13, margin: 0 }}>Copyright © Reemora.app 2026</p>
+          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, margin: 0 }}>Copyright © Reemora.app 2026</p>
         </div>
       </div>
     );
@@ -5793,21 +5793,21 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <TileIcon name="lock" size={25} />
               سياسة الخصوصية
             </span>
-            <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
+            <span style={{ color: "#6D6D72", fontSize: 16 }}>‹</span>
           </a>
           <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
               <TileIcon name="instagram" size={25} />
               تواصل معانا
             </span>
-            <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
+            <span style={{ color: "#6D6D72", fontSize: 16 }}>‹</span>
           </a>
           <a href={WHATSAPP_URL} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", textDecoration: "none", color: "#374151", borderBottom: "1px solid #F5F3EF" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
               <TileIcon name="whatsapp" size={25} />
               تواصل معانا
             </span>
-            <span style={{ color: "#C7C2D4", fontSize: 16 }}>‹</span>
+            <span style={{ color: "#6D6D72", fontSize: 16 }}>‹</span>
           </a>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px" }}>
             <span style={{ fontSize: 14.5, fontWeight: 700, color: "#374151" }}>الإصدار</span>
@@ -5831,7 +5831,7 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
           <DeleteAccountButton mother={mother} onDeleted={onAccountDeleted} />
         </div>
 
-        <p style={{ textAlign: "center", color: "#B7B2C4", fontSize: 11.5, margin: "14px 0 0" }}>Copyright © Reemora.app 2026</p>
+        <p style={{ textAlign: "center", color: "#616876", fontSize: 11.5, margin: "14px 0 0" }}>Copyright © Reemora.app 2026</p>
       </div>
     </div>
   );
