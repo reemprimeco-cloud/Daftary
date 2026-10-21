@@ -304,6 +304,82 @@ input:focus, select:focus, textarea:focus {
 @media (prefers-reduced-motion: reduce) { .splash-logo { animation: none; } }
 
 /* ==========================================================================
+   مظهر Material للأندرويد — يُفعَّل بـ.android-native من initNative()
+   ==========================================================================
+   البنية مشتركة مع آبل (نفس الأصناف بالـJSX: شريط تبويبات، ترويسة،
+   قوائم مجمّعة)، والمختلف هو الكسوة. فما نعيد كتابة الواجهة، نكسوها.
+
+   اللي انشال عن الأندرويد: خط SF العربي (ما هو موجود على أندرويد أصلاً
+   فيرجع لافتراضي عشوائي)، وخلفية آبل `#F2F2F7`، وضغطة التلاشي، ومقياس
+   ١٧px. اللي انضاف: مؤشّر التبويب النشط (حبّة Material 3)، وترويسة
+   بعنوان ٢٢px بدل العنوان الكبير ٣٤px، وأزرار بزوايا كاملة الاستدارة. */
+
+/* الخط والخلفية يبقون على هوية دفتري — Tajawal و`#FAF7F2` — بدل ما
+   نستعير رمادي آبل. Material ما يفرض خلفية، فالهوية تتقدّم. */
+.android-native,
+.android-native body {
+  font-family: "Tajawal", "Noto Sans Arabic", system-ui, sans-serif;
+  background: #FAF7F2;
+}
+
+/* ————— الضغط: طبقة حالة بدل تصغير آبل ————— */
+.android-native button:active { transform: none; }
+.android-native .ios-row:active,
+.android-native .ios-tabbar button:active { background-color: rgba(107,91,168,.10); }
+
+/* ————— شريط التبويبات: شريط تنقّل Material 3 ————— */
+.android-native .ios-tabbar {
+  background: #FDFBFF;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-top: 1px solid #E7E0EC;
+}
+.android-native .ios-tabbar button {
+  position: relative;
+  min-height: 64px;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #49454F;
+}
+/* حبّة المؤشّر خلف الأيقونة — علامة Material 3 المميّزة */
+.android-native .ios-tabbar button[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px;
+  height: 32px;
+  border-radius: 16px;
+  background: #E7E0F2;
+}
+.android-native .ios-tabbar button > * { position: relative; }
+.android-native .ios-tabbar svg { width: 24px; height: 24px; }
+
+/* ————— الترويسة: شريط علوي ٦٤dp بعنوان ٢٢px ————— */
+.android-native .ios-large-title { font-size: 22px; font-weight: 600; letter-spacing: 0; }
+.android-native .ios-navbar {
+  background: #FAF7F2;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-bottom: 1px solid #E7E0EC;
+}
+.android-native .ios-navbar-back { color: #6B5BA8; font-size: 16px; }
+
+/* ————— القوائم والأزرار ————— */
+.android-native .ios-group { border-radius: 12px; }
+.android-native .ios-row { font-size: 15px; }
+.android-native .ios-row-value { font-size: 15px; }
+/* زر Material ممتلئ: استدارة كاملة */
+.android-native .ios-btn-filled { border-radius: 20px; min-height: 48px; }
+.android-native .ios-btn-plain { border-radius: 20px; }
+.android-native .ios-sheet { border-radius: 28px 28px 0 0 !important; }
+.android-native .ios-grabber { background: rgba(73,69,79,.4); }
+
+/* حقول الإدخال تبقى ١٦px (قاعدة الزوم) — Material يستخدم ١٦ أصلاً */
+
+/* ==========================================================================
    شبكة جدول الحصص: الخط يتبع عرض الخانة
    ==========================================================================
    كانت المقاسات ثابتة (مادة 7.5px، معلّمة 6.5px، وقت 6px) بكل جهاز —
