@@ -1903,6 +1903,176 @@ function ChildSwitcher({ children, selectedId, onSelect }) {
   );
 }
 
+// ————— اجتماع أولياء الأمور (طلبها ٢٤ أكتوبر) —————
+// سطر جنب الطالب/ة بالرئيسية: الموعد القادم أو زر لإضافته. التذكير
+// يوصل مساء اليوم اللي قبله (كرون /api/cron/meeting، ٧ م بتوقيت الكويت).
+
+// «بكرا» / «بعد ٣ أيام» / التاريخ — الأم تقرأ القرب لا الرقم.
+function meetingWhen(meetOn) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(`${meetOn}T00:00:00`);
+  const days = Math.round((d - today) / 86400000);
+  if (days < 0) return { label: "فات", past: true };
+  if (days === 0) return { label: "اليوم", soon: true };
+  if (days === 1) return { label: "بكرا", soon: true };
+  if (days <= 6) return { label: `بعد ${days} أيام`, soon: days <= 2 };
+  return { label: d.toLocaleDateString("ar-KW", { day: "numeric", month: "long" }) };
+}
+
+function MeetingLine({ meeting, color, onOpen }) {
+  if (!meeting) {
+    return (
+      <button
+        onClick={onOpen}
+        style={{ width: "100%", background: "white", color: color.text, opacity: 0.85, fontSize: 12, fontWeight: 800, padding: "6px 12px", borderRadius: 12, minHeight: 44, display: "flex", alignItems: "center", gap: 6 }}
+      >
+        <TileIcon name="calendar" size={14} />
+        + موعد اجتماع أولياء الأمور
+      </button>
+    );
+  }
+  const when = meetingWhen(meeting.meet_on);
+  return (
+    <button
+      onClick={onOpen}
+      aria-label={`موعد اجتماع أولياء الأمور — ${when.label}`}
+      style={{
+        width: "100%", background: when.past ? "#F3F4F6" : "white",
+        color: when.past ? "#616876" : color.text,
+        fontSize: 12, fontWeight: 800, padding: "8px 12px", borderRadius: 12,
+        minHeight: 44, display: "flex", alignItems: "center", gap: 7, textAlign: "start", width: "100%",
+      }}
+    >
+      <TileIcon name="calendar" size={14} />
+      <span>
+        اجتماع أولياء الأمور · {when.label}
+        {meeting.meet_time ? ` · ${meeting.meet_time}` : ""}
+      </span>
+      {when.soon && !when.past && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#D70015", flexShrink: 0 }} />}
+    </button>
+  );
+}
+
+function MeetingModal({ child, meeting, color, onClose, onSaved }) {
+  const [date, setDate] = useState(meeting?.meet_on || "");
+  const [time, setTime] = useState(meeting?.meet_time || "");
+  const [note, setNote] = useState(meeting?.note || "");
+  const [sourceText, setSourceText] = useState(meeting?.source_text || "");
+  const [fromImage, setFromImage] = useState(false);
+  const [unclear, setUnclear] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const fileRef = useRef(null);
+
+  // الصورة تُقرأ وتُعرض القراءة بالنموذج — **ما تُحفظ** إلا بضغطة «حفظ».
+  // موعد يُكتب بصمت من تخمين النموذج أسوأ من لا موعد: بينبني عليه تذكير.
+  async function readImage(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setError(""); setBusy("read");
+    try {
+      const url = await resizeToDataUrl(file, 1568, false, 0.92);
+      const res = await fetch("/api/meetings/extract", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childId: child.id, images: [url] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "تعذّرت قراءة الصورة");
+      setDate(data.date || ""); setTime(data.time || ""); setNote(data.note || "");
+      setSourceText(data.sourceText || ""); setFromImage(true); setUnclear(!!data.unclear);
+    } catch (err) {
+      setError(err.message || "تعذّرت قراءة الصورة");
+    }
+    setBusy("");
+  }
+
+  async function save() {
+    setError(""); setBusy("save");
+    try {
+      const res = await fetch("/api/meetings", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childId: child.id, meetOn: date, meetTime: time, note, sourceText, fromImage }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "تعذّر الحفظ");
+      hapticSuccess();
+      onSaved(data.meeting);
+    } catch (err) {
+      setError(err.message || "تعذّر الحفظ");
+      setBusy("");
+    }
+  }
+
+  async function remove() {
+    if (!confirm("حذف موعد اجتماع أولياء الأمور؟ التذكير بينلغي معه.")) return;
+    setBusy("del");
+    await fetch(`/api/meetings?childId=${child.id}`, { method: "DELETE" }).catch(() => {});
+    hapticLight();
+    onSaved(null);
+  }
+
+  const field = { width: "100%", boxSizing: "border-box", border: "1px solid #E5E7EB", borderRadius: 10, padding: "11px 12px", fontSize: 16, fontFamily: "inherit", color: "#1F2937", background: "white", marginBottom: 10 };
+  const label = { display: "block", fontSize: 12.5, color: "#616876", fontWeight: 700, marginBottom: 5 };
+
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} className="ios-sheet" style={{ background: "white", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", WebkitOverflowScrolling: "touch", borderRadius: "24px 24px 0 0", padding: "20px 20px calc(env(safe-area-inset-bottom) + 20px)" }}>
+        <p style={{ margin: "0 0 2px", fontWeight: 900, fontSize: 16, color: color.text }}>اجتماع أولياء الأمور</p>
+        <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "#616876" }}>
+          {child.name} · يوصلك تذكير <strong>مساء اليوم اللي قبله</strong>
+        </p>
+
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={!!busy}
+          style={{ width: "100%", background: color.soft, color: color.text, borderRadius: 12, padding: 12, fontSize: 13.5, fontWeight: 800, minHeight: 48, marginBottom: 14, opacity: busy ? 0.6 : 1 }}
+        >
+          {busy === "read" ? "جاري قراءة الصورة..." : "📷 اقرأي الموعد من صورة"}
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={readImage} />
+
+        {unclear && (
+          <p style={{ margin: "-6px 0 12px", background: "#FDF3E7", color: "#7A5C28", borderRadius: 10, padding: "9px 11px", fontSize: 12, lineHeight: 1.8 }}>
+            الموعد بالصورة مو واضح تماماً — تأكدي منه قبل الحفظ.
+          </p>
+        )}
+
+        <label style={label} htmlFor="meet-date">التاريخ</label>
+        <input id="meet-date" type="date" value={date} onChange={(e) => { setDate(e.target.value); setFromImage(false); }} style={field} />
+
+        <label style={label} htmlFor="meet-time">الوقت (اختياري)</label>
+        <input id="meet-time" value={time} onChange={(e) => { setTime(e.target.value); setFromImage(false); }} placeholder="مثال: ٥:٣٠ م" style={field} />
+
+        <label style={label} htmlFor="meet-note">ملاحظة (اختياري)</label>
+        <input id="meet-note" value={note} onChange={(e) => { setNote(e.target.value); setFromImage(false); }} placeholder="مثال: قاعة المسرح" style={field} />
+
+        {sourceText && (
+          <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "#616876", background: "#FBFAF8", border: "1px solid #F0EEE8", borderRadius: 10, padding: "9px 11px", lineHeight: 1.8 }}>
+            النص كما جاء بالصورة: {sourceText}
+          </p>
+        )}
+
+        {error && <p style={{ margin: "0 0 10px", fontSize: 12.5, color: "#B91C1C" }}>{error}</p>}
+
+        <button
+          onClick={save}
+          disabled={!date || !!busy}
+          style={{ width: "100%", padding: 14, borderRadius: 12, background: color.text, color: "white", fontWeight: 800, fontSize: 15, minHeight: 48, opacity: !date || busy ? 0.45 : 1 }}
+        >
+          {busy === "save" ? "جاري الحفظ..." : "حفظ الموعد"}
+        </button>
+
+        {meeting && (
+          <button onClick={remove} disabled={!!busy} style={{ width: "100%", background: "none", color: "#D70015", fontSize: 13, fontWeight: 700, padding: 10, minHeight: 44, marginTop: 6 }}>
+            حذف الموعد
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // الخطة الأسبوعية للطالب/ة كقائمة إنجاز — وهي الواجهة الرئيسية للتطبيق
 // (قرار صاحبة التطبيق ١٥ سبتمبر): كل واجب بسطر مع تفاصيله كما كُتبت بالخطة
 // وعلامة ✓، مجمّعة باليوم، مع نسبة الإنجاز وفلاتر.
@@ -2125,6 +2295,18 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
     }, 700));
   };
   const toggleTask = (id, done) => { if (done && filter === "open") grace(id); onToggle(id, done); };
+
+  // موعد اجتماع أولياء الأمور — صف واحد جارٍ لكل طالب/ة (طلبها ٢٤ أكتوبر)
+  const [meeting, setMeeting] = useState(null);
+  const [showMeeting, setShowMeeting] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/meetings")
+      .then((r) => r.json())
+      .then((d) => { if (alive) setMeeting((d.meetings || []).find((m) => m.child_id === child.id) || null); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [child.id]);
   const [memo, setMemo] = useState([]);
   const [editingMemo, setEditingMemo] = useState(null);
   const [clearing, setClearing] = useState(false);
@@ -2251,6 +2433,11 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
               </span>
             </button>
           </div>
+          {/* سطر مستقل بعرض البطاقة — داخل عمود الاسم كان ينكسر ثلاثة
+              أسطر جنب زرّي «+ واجب» و«تعديل» ويزحم اسم المدرسة. */}
+          <div style={{ padding: "0 14px 12px" }}>
+            <MeetingLine meeting={meeting} color={color} onOpen={() => setShowMeeting(true)} />
+          </div>
         </div>
 
         <div style={{ background: "white", borderRadius: 18, padding: 14, display: "flex", alignItems: "center", gap: 14, border: `1px solid ${color.soft}` }}>
@@ -2273,6 +2460,16 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
             </button>
           ))}
         </div>
+
+        {showMeeting && (
+          <MeetingModal
+            child={child}
+            meeting={meeting}
+            color={color}
+            onClose={() => setShowMeeting(false)}
+            onSaved={(m) => { setMeeting(m); setShowMeeting(false); }}
+          />
+        )}
 
         {doneCount > 0 && (
           <button

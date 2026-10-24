@@ -67,7 +67,7 @@ export async function POST(req) {
   if (childIds.length) {
     // ملفات المرفقات بالتخزين — قبل حذف صفوفها، وإلا ضاع أثرها وبقيت.
     await purgeAttachmentFiles(sb, childIds);
-    for (const table of ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages", "teacher_notes", "plan_attachments"]) {
+    for (const table of ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages", "teacher_notes", "plan_attachments", "parent_meetings"]) {
       const { error } = await sb.from(table).delete().in("child_id", childIds);
       if (error) return NextResponse.json({ error: `فشل حذف ${table}: ${error.message}` }, { status: 400 });
     }

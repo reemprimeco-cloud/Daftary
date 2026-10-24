@@ -19,7 +19,7 @@ export async function POST(req) {
   // المرفقات لها ملفات بالتخزين، فحذف صفوفها وحده يخلي ملفات يتيمة للأبد.
   await purgeAttachmentFiles(sb, childIds);
 
-  const tables = ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages", "teacher_notes", "plan_attachments"];
+  const tables = ["tasks", "requirements", "class_schedule", "memorization", "exam_grades", "ai_messages", "teacher_notes", "plan_attachments", "parent_meetings"];
   for (const table of tables) {
     const { error } = await sb.from(table).delete().in("child_id", childIds);
     if (error) return NextResponse.json({ error: `فشل مسح ${table}: ${error.message}` }, { status: 400 });
