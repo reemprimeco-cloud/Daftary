@@ -2299,12 +2299,21 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   // موعد اجتماع أولياء الأمور — صف واحد جارٍ لكل طالب/ة (طلبها ٢٤ أكتوبر)
   const [meeting, setMeeting] = useState(null);
   const [showMeeting, setShowMeeting] = useState(false);
+  // **ما يظهر السطر إلا لما يرد المسار بنجاح.** الجدول يُنشأ بترحيل
+  // منفصل (migrations/2026-10-24_parent_meetings.sql)، ولو انشر الكود
+  // قبله كان يطلع للأم زر ينكسر أول ما تضغطه. فالغياب الصامت هنا مقصود:
+  // الميزة تولد وحدها لحظة ما ينطبّق الترحيل، بلا نشر ثانٍ.
+  const [meetingsReady, setMeetingsReady] = useState(false);
   useEffect(() => {
     let alive = true;
     fetch("/api/meetings")
-      .then((r) => r.json())
-      .then((d) => { if (alive) setMeeting((d.meetings || []).find((m) => m.child_id === child.id) || null); })
-      .catch(() => {});
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`http_${r.status}`))))
+      .then((d) => {
+        if (!alive) return;
+        setMeeting((d.meetings || []).find((m) => m.child_id === child.id) || null);
+        setMeetingsReady(true);
+      })
+      .catch(() => { if (alive) setMeetingsReady(false); });
     return () => { alive = false; };
   }, [child.id]);
   const [memo, setMemo] = useState([]);
@@ -2435,9 +2444,11 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
           </div>
           {/* سطر مستقل بعرض البطاقة — داخل عمود الاسم كان ينكسر ثلاثة
               أسطر جنب زرّي «+ واجب» و«تعديل» ويزحم اسم المدرسة. */}
-          <div style={{ padding: "0 14px 12px" }}>
-            <MeetingLine meeting={meeting} color={color} onOpen={() => setShowMeeting(true)} />
-          </div>
+          {meetingsReady && (
+            <div style={{ padding: "0 14px 12px" }}>
+              <MeetingLine meeting={meeting} color={color} onOpen={() => setShowMeeting(true)} />
+            </div>
+          )}
         </div>
 
         <div style={{ background: "white", borderRadius: 18, padding: 14, display: "flex", alignItems: "center", gap: 14, border: `1px solid ${color.soft}` }}>
