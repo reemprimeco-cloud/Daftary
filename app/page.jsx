@@ -5,6 +5,7 @@ import {
   isNativeApp,
   initNative,
   nativePickImage,
+  nativePickImages,
   nativeScanDocument,
   hasDocumentScanner,
   hapticSuccess,
@@ -1013,9 +1014,12 @@ export default function Home() {
               </button>
               <span className="ios-navbar-greeting">مرحباً، {mother.name}</span>
             </div>
+            {/* **«رفع جدول» كانت تلخبط** (طلبها ٢٥ أكتوبر): الأم تقراها فتظن
+                إنه جدول الحصص — وهو شاشة ثانية تماماً. الاسم صار يقول وش
+                يُرفع فعلاً، مختصراً عشان يسع بالشريط. */}
             {view === "dashboard" && (
               <button onClick={() => setShowUpload(true)} className="ios-btn-plain" style={{ fontWeight: 600, flexShrink: 0 }}>
-                رفع جدول
+                ارفعي الخطط
               </button>
             )}
           </div>
@@ -1038,7 +1042,7 @@ export default function Home() {
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             {view === "dashboard" && (
               <button onClick={() => setShowUpload(true)} style={{ background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 44 }}>
-                رفع جدول
+                ارفعي الخطط
               </button>
             )}
             <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", padding: "8px 10px", borderRadius: 12, minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
@@ -2523,7 +2527,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
 
         {groups.length === 0 && memoShown.length === 0 && (
           <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>
-            {total === 0 ? "ما فيه واجبات هذا الأسبوع — ارفعي الخطة الأسبوعية من زر «رفع جدول» فوق." : "ما فيه شي بهالفلتر."}
+            {total === 0 ? "ما فيه واجبات هذا الأسبوع — ارفعي صور الخطة والاختبارات من الزر اللي فوق." : "ما فيه شي بهالفلتر."}
           </p>
         )}
 
@@ -3388,6 +3392,28 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
 
   async function addFromNative(source) {
     setPickError(null);
+    // **الألبوم ياخذ عدة صور دفعة وحدة** (طلبها ٢٥ أكتوبر). الكاميرا
+    // والماسح يبقون صورة صورة بطبيعتهم.
+    if (source === "photos") {
+      const { urls, reason, missed } = await nativePickImages();
+      if (urls?.length) {
+        hapticLight();
+        setImages((prev) => [...prev, ...urls]);
+        // صورة اختارتها وما انقرأت: تُقال صراحةً، وإلا رفعت خطة ناقصة
+        // وما تدري.
+        if (missed > 0) setPickError({ reason: "partial", source, missed });
+        return;
+      }
+      // نسخة قديمة من الإضافة داخل التطبيق المثبّت — نرجّع للمفرد
+      if (reason && reason !== "single") {
+        if (reason !== "cancelled") {
+          setPickError({ reason, source });
+          reportError("image_picker", { reason, detail: source });
+        }
+        return;
+      }
+    }
+
     const { url, reason } = source === "scan" ? await nativeScanDocument() : await nativePickImage(source);
     if (url) {
       hapticLight();
@@ -4273,6 +4299,17 @@ function PermissionsBanner() {
 // نفسه: ما تعرف هل الخلل من البرنامج ولا من جوالها ولا وش تسوي.
 function PickErrorNotice({ error }) {
   const isCamera = error.source === "camera";
+  // صور اختارتها الأم وما انقرأت — تنبيه لا خطأ، والباقي انضاف فعلاً
+  if (error.reason === "partial") {
+    return (
+      <div style={{ background: "#FEF3C7", borderRadius: 12, padding: "12px 14px" }}>
+        <p style={{ margin: 0, fontSize: 12.5, color: "#92400E", fontWeight: 700, lineHeight: 1.8 }}>
+          {countWord(error.missed, "صورة وحدة", "صورتان", "صور", "صورة")} من اللي اخترتيها ما انقرأت
+          وما انضافت. اختاريها مرة ثانية لحالها.
+        </p>
+      </div>
+    );
+  }
   const text =
     error.reason === "denied"
       ? `دفتري ما عنده إذن يوصل ${isCamera ? "للكاميرا" : "لصورك"}. افتحي إعدادات موبايلك ← دفتري ← ${isCamera ? "الكاميرا" : "الصور"} وفعّلي الإذن، ثم ارجعي وجربي.`
@@ -4297,7 +4334,8 @@ function PickErrorNotice({ error }) {
 }
 
 // طلب التقييم. ما فيه زر «مو الحين»: يبقى ظاهراً لين تقيّم، وبعدها يختفي
-// نهائياً — القيد بجدول app_feedback (صف واحد لكل ولية أمر) هو اللي يضمنه.
+// نهائياً — `feedbackDue` بالداشبورد يفحص وجود أي صف لها. واللي قيّمت
+// تدخل بعدها من سطر «رأيك وملاحظاتك» بحسابي (قرارها ٢٥ أكتوبر).
 function FeedbackBanner({ onOpen }) {
   return (
     <button
