@@ -809,7 +809,7 @@ export default function Home() {
       setChildren((prev) => [...prev, data.child]);
       setShowAddChild(false);
     } else {
-      alert(data.error || "تعذّرت إضافة الطالب/ة، حاولي مرة ثانية.");
+      alert(data.error || "تعذّرت إضافة الطالب/ة، حاول مرة ثانية.");
     }
   }
 
@@ -820,14 +820,14 @@ export default function Home() {
       setChildren((prev) => prev.map((c) => (c.id === id ? data.child : c)));
       setEditingChild(null);
     } else {
-      alert(data.error || "تعذّر حفظ التعديلات، حاولي مرة ثانية.");
+      alert(data.error || "تعذّر حفظ التعديلات، حاول مرة ثانية.");
     }
   }
 
   async function handleDeleteChild(id) {
     if (!confirm("حذف هذا الطالب/ـة نهائياً؟ راح تنحذف كل واجباته ومتطلباته معه.")) return;
     const res = await fetch(`/api/children/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
-    if (!res.ok) { alert("تعذّر حذف الطالب/ة، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر حذف الطالب/ة، حاول مرة ثانية."); return; }
     setChildren((prev) => prev.filter((c) => c.id !== id));
     setTasks((prev) => prev.filter((t) => t.child_id !== id));
     setUndatedTasks((prev) => prev.filter((t) => t.child_id !== id));
@@ -841,7 +841,7 @@ export default function Home() {
   // وdone=false ترجّعه لمكانه حسب تاريخه. تحديث محلي فوري بلا إعادة تحميل.
   async function handleMarkDone(taskId, done = true) {
     const res = await fetch(`/api/tasks/${taskId}/done`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id, done }) });
-    if (!res.ok) { alert("تعذّر تحديث الواجب، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر تحديث الواجب، حاول مرة ثانية."); return; }
     done ? hapticSuccess() : hapticLight();
     const found = [...tasks, ...undatedTasks, ...upcomingTasks, ...doneTasks].find((t) => t.id === taskId);
     const strip = (prev) => prev.filter((t) => t.id !== taskId);
@@ -859,7 +859,7 @@ export default function Home() {
   async function handleDeleteTask(taskId) {
     if (!confirm("حذف هذا الواجب نهائياً؟")) return;
     const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
-    if (!res.ok) { alert("تعذّر حذف الواجب، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر حذف الواجب، حاول مرة ثانية."); return; }
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUndatedTasks((prev) => prev.filter((t) => t.id !== taskId));
     setUpcomingTasks((prev) => prev.filter((t) => t.id !== taskId));
@@ -881,7 +881,7 @@ export default function Home() {
 
   async function handleToggleReq(id) {
     const res = await fetch(`/api/requirements/${id}/toggle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
-    if (!res.ok) { alert("تعذّر تحديث الطلب، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر تحديث الطلب، حاول مرة ثانية."); return; }
     hapticLight();
     setRequirements((prev) => prev.map((r) => (r.id === id ? { ...r, bought: !r.bought } : r)));
   }
@@ -889,7 +889,7 @@ export default function Home() {
   async function handleDeleteReq(id) {
     if (!confirm("حذف هذا الطلب؟")) return;
     const res = await fetch(`/api/requirements/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id }) });
-    if (!res.ok) { alert("تعذّر حذف الطلب، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر حذف الطلب، حاول مرة ثانية."); return; }
     setRequirements((prev) => prev.filter((r) => r.id !== id));
   }
 
@@ -905,7 +905,7 @@ export default function Home() {
   async function handleClearBought(childId) {
     if (!confirm("مسح كل المستلزمات المُشتراة لهذا الطالب/ة؟")) return;
     const res = await fetch("/api/requirements/clear-bought", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ childId, motherId: mother.id }) });
-    if (!res.ok) { alert("تعذّر المسح، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر المسح، حاول مرة ثانية."); return; }
     setRequirements((prev) => prev.filter((r) => !(r.child_id === childId && r.bought)));
   }
 
@@ -914,7 +914,7 @@ export default function Home() {
   async function handleAddTask(taskData) {
     const res = await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(taskData) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { alert(data.error || "تعذّرت إضافة الواجب، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert(data.error || "تعذّرت إضافة الواجب، حاول مرة ثانية."); return; }
     setShowAddTask(false);
     await loadAll(mother.id);
   }
@@ -936,7 +936,7 @@ export default function Home() {
   async function handleDeleteScheduleCell(entryId) {
     if (!confirm("حذف هذه الحصة من الجدول؟")) return;
     const res = await fetch(`/api/class-schedule/${entryId}`, { method: "DELETE" });
-    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر الحذف، حاول مرة ثانية."); return; }
     setEditingCell(null);
     await loadAll(mother.id);
   }
@@ -947,7 +947,7 @@ export default function Home() {
         <div style={{ height: "100%", background: "#FAF7F2", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 28 }}>
           <img src="/logo.png" alt="دفتري" className="splash-logo" style={{ width: 68, height: 68, borderRadius: 21 }} />
           <p style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: "#5C4B8C", textAlign: "center", lineHeight: 1.9, maxWidth: 280 }}>
-            مع دفتري ما راح تنسين واجب ولا اختبار
+            مع دفتري ما راح تنسى واجب ولا اختبار
           </p>
         </div>
         <InstallPrompt />
@@ -1019,7 +1019,7 @@ export default function Home() {
                 يُرفع فعلاً، مختصراً عشان يسع بالشريط. */}
             {view === "dashboard" && (
               <button onClick={() => setShowUpload(true)} className="ios-btn-plain" style={{ fontWeight: 600, flexShrink: 0 }}>
-                ارفعي الخطط
+                ارفع الخطط
               </button>
             )}
           </div>
@@ -1042,7 +1042,7 @@ export default function Home() {
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             {view === "dashboard" && (
               <button onClick={() => setShowUpload(true)} style={{ background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 14, padding: "10px 16px", borderRadius: 12, minHeight: 44 }}>
-                ارفعي الخطط
+                ارفع الخطط
               </button>
             )}
             <button onClick={() => setShowProfile(true)} title="حسابي" aria-label="حسابي" style={{ background: "#F3F4F6", padding: "8px 10px", borderRadius: 12, minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
@@ -1208,7 +1208,7 @@ export default function Home() {
         <UploadView
           children={children}
           motherId={mother.id}
-          hint="ارفعي الخطط الأسبوعية، جدول الاختبارات ومتطلبات العام الدراسي هنا"
+          hint="ارفع الخطط الأسبوعية، جدول الاختبارات ومتطلبات العام الدراسي هنا"
           onClose={() => setShowUpload(false)}
           onDone={() => { loadAll(mother.id); setAttachmentsKey((k) => k + 1); }}
           onReview={(draft) => { setShowUpload(false); setReviewDraft(draft); }}
@@ -1229,7 +1229,7 @@ export default function Home() {
           endpoint="/api/upload-class-schedule"
           title="رفع جدول الحصص"
           buttonLabel="تحليل وتصميم الجدول"
-          hint="ارفعي صورة جدول الحصص الأسبوعي (جدول المواد اليومي) هنا"
+          hint="ارفع صورة جدول الحصص الأسبوعي (جدول المواد اليومي) هنا"
           renderSummary={(s) => (
             <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13 }}>
               تم تحليل {s.imagesProcessed} صورة ✓ — تصميم جدول الحصص ({s.matchedPeriods} حصة).
@@ -1317,7 +1317,7 @@ function InstallPrompt() {
       <img src="/logo.png" alt="دفتري" style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ margin: 0, fontWeight: 800, fontSize: 13 }}>
-          {platform === "ios" ? "حمّلي تطبيق دفتري" : "أضيفي دفتري للشاشة الرئيسية"}
+          {platform === "ios" ? "حمّل تطبيق دفتري" : "أضف دفتري للشاشة الرئيسية"}
         </p>
         <p style={{ margin: 0, fontSize: 11, color: "#616876" }}>
           {platform === "ios" ? "تجربة أسرع وإشعارات فورية" : "وصول أسرع من شاشة موبايلك مباشرة"}
@@ -1328,7 +1328,7 @@ function InstallPrompt() {
         // ومع مساحة فارغة حولها لا تقل عن ١٠٪ من ارتفاعها — فنعطيها هامشاً
         // وما نضغطها داخل الشريط.
         <a href={APP_STORE_URL} target="_blank" rel="noreferrer" style={{ flexShrink: 0, lineHeight: 0, padding: "4px 0" }}>
-          <img src="/app-store-badge.png" alt="حمّلي دفتري من App Store" width={120} height={36} style={{ display: "block" }} />
+          <img src="/app-store-badge.png" alt="حمّل دفتري من App Store" width={120} height={36} style={{ display: "block" }} />
         </a>
       ) : (
         <button onClick={install} style={{ background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>تثبيت</button>
@@ -1380,13 +1380,13 @@ function Onboarding({ onDone }) {
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "صار خطأ، حاولي مرة ثانية.");
+    if (!res.ok) throw new Error(data.error || "صار خطأ، حاول مرة ثانية.");
     return data;
   }
 
   function friendly(err) {
     return String(err.message).includes("Failed to fetch")
-      ? "تعذّر الاتصال بالإنترنت، تأكدي من الشبكة وحاولي مرة ثانية."
+      ? "تعذّر الاتصال بالإنترنت، تأكد من الشبكة وحاول مرة ثانية."
       : err.message;
   }
 
@@ -1502,8 +1502,8 @@ function Onboarding({ onDone }) {
         busy={busy}
         error={error}
         onSave={saveNewPassword}
-        title={forgot ? "اختاري رقماً سرياً جديداً" : undefined}
-        subtitle={forgot ? "تأكدنا من رقمك بالكود — حدّدي رقمك السري الجديد وبتدخلين فيه من أي جهاز" : undefined}
+        title={forgot ? "اختار رقماً سرياً جديداً" : undefined}
+        subtitle={forgot ? "تأكدنا من رقمك بالكود — حدّد رقمك السري الجديد وبتدخل فيه من أي جهاز" : undefined}
       />
     );
   }
@@ -1532,7 +1532,7 @@ function Onboarding({ onDone }) {
             <img src="/logo.png" alt="دفتري" style={{ width: 96, height: 96, borderRadius: 24, margin: "0 auto 12px", display: "block", boxShadow: "0 6px 18px rgba(183,166,232,.4)" }} />
             <h1 style={{ color: "#5C4B8C", margin: 0, fontSize: 22, fontWeight: 800 }}>إنشاء حساب</h1>
             <p style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: "10px 0 0", background: "#FFF7E6", color: "#8C6027", fontWeight: 800, fontSize: 12.5, padding: "7px 14px", borderRadius: 999 }}>
-              🎁 جرّبي مجاناً: طالب واحد + جدول حصص + خطة أسبوعية، بلا اشتراك
+              🎁 جرّب مجاناً: طالب واحد + جدول حصص + خطة أسبوعية، بلا اشتراك
             </p>
           </div>
 
@@ -1546,7 +1546,7 @@ function Onboarding({ onDone }) {
             <label style={AUTH_LABEL}>الرقم السري</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="٤ أحرف/أرقام على الأقل"
               autoComplete="new-password" style={{ ...AUTH_FIELD, marginBottom: 10, direction: "ltr", textAlign: "center" }} />
-            <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="أعيدي كتابته"
+            <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="أعد كتابته"
               autoComplete="new-password" style={{ ...AUTH_FIELD, marginBottom: 14, direction: "ltr", textAlign: "center" }} />
 
             <button disabled={!canSignup || busy} onClick={submitSignup}
@@ -1557,7 +1557,7 @@ function Onboarding({ onDone }) {
           </div>
 
           <button onClick={() => goto("login")} style={AUTH_SWITCH}>
-            عندك حساب؟ <span style={{ color: "#5C4B8C", fontWeight: 800 }}>سجّلي دخول</span>
+            عندك حساب؟ <span style={{ color: "#5C4B8C", fontWeight: 800 }}>سجّل دخول</span>
           </button>
         </>
       ) : (
@@ -1657,8 +1657,8 @@ function ExistingUserPasswordSetup({ name, onDone }) {
   return (
     <AuthShell>
       <SetPasswordScreenBody
-        title={`أهلاً ${name || ""}، أكملي حسابك`}
-        subtitle="صار الدخول بالموبايل + رقم سري بدل الكود. حدّدي رقمك السري مرة وحدة الحين — بياناتك وعيالك كلهم باقين كما هم."
+        title={`أهلاً ${name || ""}، أكمل حسابك`}
+        subtitle="صار الدخول بالموبايل + رقم سري بدل الكود. حدّد رقمك السري مرة وحدة الحين — بياناتك وعيالك كلهم باقين كما هم."
         password={password} setPassword={setPassword}
         password2={password2} setPassword2={setPassword2}
         busy={busy} error={error} onSave={save}
@@ -1792,7 +1792,7 @@ function SetPasswordScreenBody({ password, setPassword, password2, setPassword2,
     <>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <span style={{ fontSize: 40 }}>🔒</span>
-          <h1 style={{ color: "#5C4B8C", margin: "8px 0 0", fontSize: 20, fontWeight: 800 }}>{title || "حدّدي رقماً سرياً"}</h1>
+          <h1 style={{ color: "#5C4B8C", margin: "8px 0 0", fontSize: 20, fontWeight: 800 }}>{title || "حدّد رقماً سرياً"}</h1>
           <p style={{ color: "#616876", fontSize: 13, margin: "6px 0 0", lineHeight: 1.7 }}>
             {subtitle || "عشان دخولك القادم — حتى من جهاز جديد — يصير بلا كود"}
           </p>
@@ -1811,7 +1811,7 @@ function SetPasswordScreenBody({ password, setPassword, password2, setPassword2,
             type="password"
             value={password2}
             onChange={(e) => setPassword2(e.target.value)}
-            placeholder="أعيدي كتابته"
+            placeholder="أعد كتابته"
             autoComplete="new-password"
             style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 12px", fontSize: 16, marginBottom: 14, direction: "ltr", textAlign: "center" }}
           />
@@ -1827,8 +1827,8 @@ function SetPasswordScreenBody({ password, setPassword, password2, setPassword2,
 function EmptyState({ onAdd }) {
   return (
     <div style={{ textAlign: "center", padding: "60px 0" }}>
-      <p style={{ fontWeight: 800, marginBottom: 4 }}>ابدئي بإضافة أول طالب/ة</p>
-      <p style={{ color: "#616876", fontSize: 14, marginBottom: 18 }}>سجّلي مدرسته وصفه، وبعدها ارفعي صور الجدول</p>
+      <p style={{ fontWeight: 800, marginBottom: 4 }}>ابدأ بإضافة أول طالب/ة</p>
+      <p style={{ color: "#616876", fontSize: 14, marginBottom: 18 }}>سجّل مدرسته وصفه، وبعدها ارفع صور الجدول</p>
       <button onClick={onAdd} style={{ background: BRAND_DARK, color: "white", fontWeight: 700, padding: "10px 20px", borderRadius: 12 }}>+ إضافة طالب/ة</button>
     </div>
   );
@@ -2052,7 +2052,7 @@ function MeetingModal({ child, meeting, color, onClose, onSaved }) {
 
         {unclear && (
           <p style={{ margin: "-6px 0 12px", background: "#FDF3E7", color: "#7A5C28", borderRadius: 10, padding: "9px 11px", fontSize: 12, lineHeight: 1.8 }}>
-            الموعد بالصورة مو واضح تماماً — تأكدي منه قبل الحفظ.
+            الموعد بالصورة مو واضح تماماً — تأكد منه قبل الحفظ.
           </p>
         )}
 
@@ -2248,7 +2248,7 @@ function AttachmentsCard({ children, refreshKey }) {
   async function remove(id) {
     if (!confirm("حذف هذه الصورة المرفقة نهائياً؟")) return;
     const res = await fetch(`/api/attachments/${id}`, { method: "DELETE" });
-    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر الحذف، حاول مرة ثانية."); return; }
     setItems((prev) => (prev || []).filter((a) => a.id !== id));
   }
 
@@ -2366,7 +2366,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   async function deleteMemo(id) {
     if (!confirm("حذف هذا العنصر من الحفظ نهائياً؟")) return;
     const res = await fetch(`/api/memorization/${id}`, { method: "DELETE" });
-    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر الحذف، حاول مرة ثانية."); return; }
     setMemo((prev) => prev.filter((m) => m.id !== id));
     setEditingMemo(null);
   }
@@ -2440,7 +2440,7 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
       body: JSON.stringify({ childId: child.id }),
     }).catch(() => null);
     setClearing(false);
-    if (!res?.ok) { alert("تعذّر المسح، حاولي مرة ثانية."); return; }
+    if (!res?.ok) { alert("تعذّر المسح، حاول مرة ثانية."); return; }
     hapticSuccess();
     setMemo((prev) => prev.filter((m) => !m.done));
     onClearedDone?.(child.id);
@@ -2520,14 +2520,14 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <TileIcon name="trash" size={14} />
-              {clearing ? "...جاري المسح" : `امسحي المنجز (${doneCount})`}
+              {clearing ? "...جاري المسح" : `امسح المنجز (${doneCount})`}
             </span>
           </button>
         )}
 
         {groups.length === 0 && memoShown.length === 0 && (
           <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>
-            {total === 0 ? "ما فيه واجبات هذا الأسبوع — ارفعي صور الخطة والاختبارات من الزر اللي فوق." : "ما فيه شي بهالفلتر."}
+            {total === 0 ? "ما فيه واجبات هذا الأسبوع — ارفع صور الخطة والاختبارات من الزر اللي فوق." : "ما فيه شي بهالفلتر."}
           </p>
         )}
 
@@ -2595,7 +2595,7 @@ function EditMemoModal({ item, onClose, onSave, onDelete }) {
     try {
       await onSave(item.id, { kind, reference: reference.trim(), details: details.trim() || null });
     } catch (e) {
-      setError(e.message || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setError(e.message || "تعذّر الحفظ، حاول مرة ثانية.");
       setSaving(false);
     }
   }
@@ -2706,7 +2706,7 @@ function EditRequirementModal({ item, onClose, onSave, onDelete }) {
     try {
       await onSave(item.id, { item: name.trim(), dueDate: dueDate || null });
     } catch (e) {
-      setError(e.message || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setError(e.message || "تعذّر الحفظ، حاول مرة ثانية.");
       setSaving(false);
     }
   }
@@ -2821,7 +2821,7 @@ function ScheduleCard({ child, schedule, onUpload, onCellClick }) {
         ) : (
           <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 11, color: "#616876" }}>اضغطي أي خانة للتعديل</span>
+            <span style={{ fontSize: 11, color: "#616876" }}>اضغط أي خانة للتعديل</span>
             <button onClick={exportPdf} disabled={exporting} style={{ background: color.soft, color: color.text, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 10, opacity: exporting ? 0.6 : 1, minHeight: 44 }}>
               {exporting ? (
                 "جاري التصدير..."
@@ -2975,7 +2975,7 @@ function EditScheduleCellModal({ child, day, period, entry, onClose, onSave, onD
     try {
       await onSave(entry?.id || null, { childId: child.id, day, periodNumber: period, subject: subject.trim(), teacher: teacher.trim() || null, startTime: startTime.trim() || null, endTime: endTime.trim() || null });
     } catch (e) {
-      setError(e.message || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setError(e.message || "تعذّر الحفظ، حاول مرة ثانية.");
       setSaving(false);
     }
   }
@@ -3046,7 +3046,7 @@ function TaskModal({ task, motherId, color, onClose, onMarkDone, onDelete, onUpd
       await onUpdateTask(task.id, { subject: subject.trim(), type, details: details.trim() || null, dueDate: dateValue || null });
       onClose();
     } catch (e) {
-      setError(e.message || "تعذّر حفظ التعديلات، حاولي مرة ثانية.");
+      setError(e.message || "تعذّر حفظ التعديلات، حاول مرة ثانية.");
     } finally {
       setSaving(false);
     }
@@ -3236,7 +3236,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
           <div>
             <label style={{ fontSize: 13, fontWeight: 700 }}>المحافظة</label>
             <select value={gov} onChange={(e) => { setGov(e.target.value); setSchool(""); setOtherSchool(false); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
-              <option value="">— اختاري —</option>
+              <option value="">— اختار —</option>
               {schools && Object.keys(schools).map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
@@ -3253,7 +3253,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
                 }}
                 style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}
               >
-                <option value="">— اختاري —</option>
+                <option value="">— اختار —</option>
                 {options.map((s) => <option key={s} value={s}>{s}</option>)}
                 <option value="__other__">أخرى (مدرسة جديدة غير مدرجة)</option>
               </select>
@@ -3261,7 +3261,7 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
                 <input
                   value={school}
                   onChange={(e) => setSchool(e.target.value)}
-                  placeholder="اكتبي اسم المدرسة"
+                  placeholder="اكتب اسم المدرسة"
                   style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 8 }}
                 />
               )}
@@ -3369,11 +3369,11 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   // الزر المعطّل بلا تفسير طريق مسدود: الأم تضغط وما يصير شي، وتظن إن
   // البرنامج خربان. نقول لها وش الناقص بالضبط.
   const blockedReason = !school
-    ? "اختاري المدرسة أولاً"
+    ? "اختار المدرسة أولاً"
     : needsChildConfirm && !effectiveChildId
-    ? "اختاري الطالب/ة صاحب الجدول"
+    ? "اختار الطالب/ة صاحب الجدول"
     : images.length === 0
-    ? "أضيفي صورة الجدول أولاً"
+    ? "أضف صورة الجدول أولاً"
     : "";
 
   async function handleFiles(e) {
@@ -3459,13 +3459,13 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         body: JSON.stringify({ childId: effectiveChildId, kind: ATTACH_KIND, images: payload }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "تعذّر حفظ الصورة، حاولي مرة ثانية.");
+      if (!res.ok) throw new Error(data.error || "تعذّر حفظ الصورة، حاول مرة ثانية.");
       setImages([]);
       setSummary({ attached: payload.length, replaced: data.attachment?.replaced || 0 });
       setStatus("done");
       onDone();
     } catch (err) {
-      setErrorMsg(err.message || "تعذّر حفظ الصورة، حاولي مرة ثانية.");
+      setErrorMsg(err.message || "تعذّر حفظ الصورة، حاول مرة ثانية.");
       setStatus("error");
       reportError("attachments", { reason: "attach_failed", detail: err.message || "" });
     }
@@ -3475,7 +3475,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
   // وهذا شي ما تكتشفه إلا بعد ما يفوت الموعد.
   function chooseAttach() {
     const ok = confirm(
-      "عند اختيارك «رفع صورة فقط»:\n\n• ما يوصلك تذكير عن أي واجب أو اختبار أو مستلزم بهالجدول.\n• الصورة تنحفظ بس عشان ترجعين لها وتكبّرينها.\n• تذكير المتابعة اليومي (٣ العصر) يبقى يوصلك كالعادة — هو عام ما يخص جدولاً بعينه.\n\nللحصول على تذكيرات هذه الخطة لازم تختارين «تحليل وتذكير».\n\nتكملين؟"
+      "عند اختيارك «رفع صورة فقط»:\n\n• ما يوصلك تذكير عن أي واجب أو اختبار أو مستلزم بهالجدول.\n• الصورة تنحفظ بس عشان ترجع لها وتكبّرها.\n• تذكير المتابعة اليومي (٣ العصر) يبقى يوصلك كالعادة — هو عام ما يخص جدولاً بعينه.\n\nللحصول على تذكيرات هذه الخطة لازم تختار «تحليل وتذكير».\n\nتكمل؟"
     );
     if (ok) { setMode("attach"); hapticLight(); }
   }
@@ -3497,7 +3497,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         setImages(current);
         data = await post(current);
       }
-      if (data.needsRotation) throw new Error("ما قدرنا نضبط اتجاه الصورة. صوّري الجدول وهو معتدل وجربي مرة ثانية.");
+      if (data.needsRotation) throw new Error("ما قدرنا نضبط اتجاه الصورة. صوّر الجدول وهو معتدل وجرب مرة ثانية.");
       setImages([]);
       // رفعة الخطة ما تحفظ شي بنفسها — ترجّع مسودة تراجعها الأم وتعتمدها.
       // بقية المسارات (جدول الحصص) تحفظ مباشرة كما كانت.
@@ -3531,11 +3531,11 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
 
         {canAttach && (
         <div>
-          <label style={{ fontSize: 13, fontWeight: 700 }}>الخطة الأسبوعية — وش تبين نسوي فيها؟</label>
+          <label style={{ fontSize: 13, fontWeight: 700 }}>الخطة الأسبوعية — وش تبي نسوي فيها؟</label>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {[
               { key: "analyze", title: "تحليل وتذكير", desc: "نستخرج الواجبات والاختبارات والمستلزمات، وتوصلك التذكيرات." },
-              { key: "attach", title: "رفع صورة فقط", desc: "نحفظ الصورة عشان ترجعين لها وتكبّرينها — بلا تحليل، وبلا تذكير عن بنودها. الصورة الجديدة تحل محل السابقة." },
+              { key: "attach", title: "رفع صورة فقط", desc: "نحفظ الصورة عشان ترجع لها وتكبّرها — بلا تحليل، وبلا تذكير عن بنودها. الصورة الجديدة تحل محل السابقة." },
             ].map((opt) => (
               <button
                 key={opt.key}
@@ -3561,14 +3561,14 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
             التذكيرات لازم تعرفه الأم كل مرة ترفع بهالوضع. */}
         {mode === "attach" && (
           <p style={{ margin: 0, fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 12, padding: "10px 12px", lineHeight: 1.7 }}>
-            ⚠️ باختيارك «رفع صورة فقط» ما يوصلك تذكير عن واجبات هالخطة ولا اختباراتها. للتذكيرات اختاري «تحليل وتذكير». (تذكير المتابعة اليومي ٣ العصر يبقى كالعادة.)
+            ⚠️ باختيارك «رفع صورة فقط» ما يوصلك تذكير عن واجبات هالخطة ولا اختباراتها. للتذكيرات اختار «تحليل وتذكير». (تذكير المتابعة اليومي ٣ العصر يبقى كالعادة.)
           </p>
         )}
 
         <div>
           <label style={{ fontSize: 13, fontWeight: 700 }}>هذي الصور من مدرسة:</label>
           <select value={school} onChange={(e) => { setSchool(e.target.value); setChildId(""); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
-            <option value="">— اختاري —</option>
+            <option value="">— اختار —</option>
             {schoolsOfChildren.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
@@ -3613,7 +3613,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
           </div>
         ) : (
           <div onClick={() => fileRef.current?.click()} style={{ border: "2px dashed #D1D5DB", borderRadius: 16, padding: 30, textAlign: "center", background: "#FAFAFA", cursor: "pointer" }}>
-            <p style={{ margin: 0, fontWeight: 700 }}>اضغطي لاختيار الصور</p>
+            <p style={{ margin: 0, fontWeight: 700 }}>اضغط لاختيار الصور</p>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#616876" }}>يمكنك اختيار أكثر من صورة دفعة وحدة</p>
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
           </div>
@@ -3641,9 +3641,9 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
         )}
         {status === "done" && summary?.attached ? (
           <div style={{ background: "#F0FDF4", color: "#166534", borderRadius: 12, padding: 12, fontSize: 13, lineHeight: 1.7 }}>
-            انحفظت {summary.attached} صورة ✓ — تلقينها بتبويب «الطلبات والجداول» تحت «الصور المرفقة»، وتقدرين تفتحينها وتكبّرينها.
+            انحفظت {summary.attached} صورة ✓ — تلقاها بتبويب «الطلبات والجداول» تحت «الصور المرفقة»، وتقدر تفتحها وتكبّرها.
             {summary.replaced > 0 && <div style={{ marginTop: 6 }}>وحلّت محل الصورة السابقة لنفس الطالب/ة.</div>}
-            <div style={{ marginTop: 6, opacity: 0.85 }}>ما فيه تذكير عن بنود هالصورة — لو تبينها ترفعيها مرة ثانية باختيار «تحليل وتذكير». وتذكير المتابعة اليومي ٣ العصر ما يتأثر.</div>
+            <div style={{ marginTop: 6, opacity: 0.85 }}>ما فيه تذكير عن بنود هالصورة — لو تبيها ترفعيها مرة ثانية باختيار «تحليل وتذكير». وتذكير المتابعة اليومي ٣ العصر ما يتأثر.</div>
           </div>
         ) : null}
         {status === "done" && summary && !summary.attached && (renderSummary ? renderSummary(summary) : (
@@ -3661,7 +3661,7 @@ function UploadView({ children, motherId, endpoint = "/api/upload-schedule", tit
           // السبب الحقيقي كان يُعرض بخط ١١ باهت تحت عنوان «صار خلل» — فالأم
           // تقرأ العنوان وتعيد نفس الصورة بالضبط. صار السبب هو العنوان.
           <div style={{ background: "#FEF2F2", color: "#B91C1C", borderRadius: 12, padding: 14, fontSize: 13.5, fontWeight: 700, lineHeight: 1.8 }}>
-            {errorMsg || "صار خلل أثناء التحليل، حاولي مرة ثانية."}
+            {errorMsg || "صار خلل أثناء التحليل، حاول مرة ثانية."}
             {errorTips.length > 0 && (
               <ul style={{ margin: "10px 0 0", paddingInlineStart: 18, fontWeight: 400, fontSize: 12.5 }}>
                 {errorTips.map((tip, i) => <li key={i} style={{ marginBottom: 3 }}>{tip}</li>)}
@@ -3807,7 +3807,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
     }).catch(() => null);
     const data = await res?.json().catch(() => ({}));
     if (!res?.ok) {
-      setError(data?.error || "تعذّر الحفظ، حاولي مرة ثانية.");
+      setError(data?.error || "تعذّر الحفظ، حاول مرة ثانية.");
       setSaving(false);
       return;
     }
@@ -3838,7 +3838,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
     <div dir="rtl" className="app-root" style={{ position: "fixed", inset: 0, zIndex: 50, background: "#FAF7F2", display: "flex", flexDirection: "column" }}>
       <div style={{ flexShrink: 0, background: "white", padding: "calc(env(safe-area-inset-top) + 12px) 16px 14px", borderBottom: "1px solid #F0EEE8", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={onClose} style={{ background: "none", fontSize: 20, width: 36, height: 36 }}>←</button>
-        <p style={{ margin: 0, fontWeight: 800, fontSize: 16, flex: 1, minWidth: 0 }}>راجعي المعلومات قبل إضافتها</p>
+        <p style={{ margin: 0, fontWeight: 800, fontSize: 16, flex: 1, minWidth: 0 }}>راجع المعلومات قبل إضافتها</p>
         {draft.sourceId && (
           <button onClick={() => setShowSource(true)} style={{ background: "#F1EFFA", color: "#5C4B8C", fontWeight: 700, fontSize: 12, padding: "8px 12px", borderRadius: 10, flexShrink: 0 }}>
             عرض الصورة
@@ -3853,7 +3853,7 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
               ⚠️ الخطة مكتوب عليها الصف {draft.mismatch.planGrade}، و{draft.mismatch.childName} بالصف {draft.mismatch.childGrade}
             </p>
             <p style={{ margin: "6px 0 0", fontSize: 12.5, color: "#7F1D1D", lineHeight: 1.8 }}>
-              تأكدي إنك اخترتِ الطالب/ة الصحيح قبل الاعتماد. لو الخطة فعلاً له، كملي عادي.
+              تأكد إنك اخترت الطالب/ة الصحيح قبل الاعتماد. لو الخطة فعلاً له، كمل عادي.
             </p>
           </div>
         )}
@@ -3867,17 +3867,17 @@ function ReviewDraftScreen({ draft, child, onClose, onApplied }) {
             </p>
           )}
           <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "#8C6027", background: "#FDF3E7", borderRadius: 10, padding: "8px 10px", lineHeight: 1.7 }}>
-            ما ينحفظ شي إلا بعد ما تعتمدينه. عدّلي أي معلومة أو احذفيها قبل الاعتماد.
+            ما ينحفظ شي إلا بعد ما تعتمده. عدّل أي معلومة أو احذفها قبل الاعتماد.
           </p>
           {needsReviewCount > 0 && (
             <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "#B45309", background: "#FEF3C7", borderRadius: 10, padding: "8px 10px", lineHeight: 1.7, fontWeight: 700 }}>
-              ⚠️ {countLabel(needsReviewCount, "بند", "بندان", "بنود")} فيها معلومة ما كانت واضحة بالصورة — حدّديها بنفسك.
+              ⚠️ {countLabel(needsReviewCount, "بند", "بندان", "بنود")} فيها معلومة ما كانت واضحة بالصورة — حدّدها بنفسك.
             </p>
           )}
         </div>
 
         {total === 0 && (
-          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>ما بقى أي عنصر — ارجعي وارفعي الخطة مرة ثانية.</p>
+          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>ما بقى أي عنصر — ارجع وارفع الخطة مرة ثانية.</p>
         )}
 
         {tasks.length > 0 && (
@@ -4268,10 +4268,10 @@ function PermissionsBanner() {
     <div style={{ background: "#FDF3E7", borderRadius: 14, padding: "12px 14px", margin: "0 16px 12px", display: "flex", alignItems: "center", gap: 11 }}>
       <TileIcon name="bell" size={30} />
       <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#8C6027" }}>فعّلي {label}</p>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#8C6027" }}>فعّل {label}</p>
         <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#A07C43", lineHeight: 1.6 }}>
           {blocked || needsSettings
-            ? `من إعدادات موبايلك ← دفتري ← فعّلي ${label}`
+            ? `من إعدادات موبايلك ← دفتري ← فعّل ${label}`
             : "عشان يوصلك تذكير الواجبات، ويشتغل رفع صور الجداول"}
         </p>
       </div>
@@ -4305,17 +4305,17 @@ function PickErrorNotice({ error }) {
       <div style={{ background: "#FEF3C7", borderRadius: 12, padding: "12px 14px" }}>
         <p style={{ margin: 0, fontSize: 12.5, color: "#92400E", fontWeight: 700, lineHeight: 1.8 }}>
           {countWord(error.missed, "صورة وحدة", "صورتان", "صور", "صورة")} من اللي اخترتيها ما انقرأت
-          وما انضافت. اختاريها مرة ثانية لحالها.
+          وما انضافت. اختارها مرة ثانية لحالها.
         </p>
       </div>
     );
   }
   const text =
     error.reason === "denied"
-      ? `دفتري ما عنده إذن يوصل ${isCamera ? "للكاميرا" : "لصورك"}. افتحي إعدادات موبايلك ← دفتري ← ${isCamera ? "الكاميرا" : "الصور"} وفعّلي الإذن، ثم ارجعي وجربي.`
+      ? `دفتري ما عنده إذن يوصل ${isCamera ? "للكاميرا" : "لصورك"}. افتح إعدادات موبايلك ← دفتري ← ${isCamera ? "الكاميرا" : "الصور"} وفعّل الإذن، ثم ارجع وجرب.`
       : error.reason === "unavailable"
-      ? "هذي الميزة تحتاج آخر إصدار من التطبيق. حدّثيه من آب ستور وجربي مرة ثانية."
-      : "صار خلل فني وما انفتحت الصور. جربي تقفلين التطبيق وتفتحينه من جديد.";
+      ? "هذي الميزة تحتاج آخر إصدار من التطبيق. حدّثيه من آب ستور وجرب مرة ثانية."
+      : "صار خلل فني وما انفتحت الصور. جرب تقفل التطبيق وتفتحه من جديد.";
 
   return (
     <div style={{ background: "#FEF2F2", borderRadius: 12, padding: "12px 14px" }}>
@@ -4363,7 +4363,7 @@ function useCallbackRef(fn) {
   return useRef((...args) => ref.current(...args)).current;
 }
 
-const RATING_LABELS = ["", "غير راضية", "مو زينة", "عادية", "راضية", "راضية جداً"];
+const RATING_LABELS = ["", "غير راضي", "مو زينة", "عادية", "راضي", "راضي جداً"];
 
 function FeedbackModal({ onClose, onDone }) {
   const [rating, setRating] = useState(0);
@@ -4393,7 +4393,7 @@ function FeedbackModal({ onClose, onDone }) {
       if (rating <= 2) { setLowDone(true); setBusy(false); return; }
       onDone();
     } catch (e) {
-      setError(e.message || "تعذّر الإرسال، حاولي مرة ثانية.");
+      setError(e.message || "تعذّر الإرسال، حاول مرة ثانية.");
       setBusy(false);
     }
   }
@@ -4411,8 +4411,8 @@ function FeedbackModal({ onClose, onDone }) {
               وصلنا تقييمك — شكراً لصراحتك
             </p>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#616876", textAlign: "center", lineHeight: 1.9 }}>
-              ودّنا نسمع منك أكثر: وش اللي ضايقك بالضبط؟ أرسلي لنا بالدايركت ونصلّحه — وإذا كانت
-              الميزة موجودة وما لقيتيها، نوريك وين.
+              ودّنا نسمع منك أكثر: وش اللي ضايقك بالضبط؟ أرسل لنا بالدايركت ونصلّحه — وإذا كانت
+              الميزة موجودة وما لقيتها، نوريك وين.
             </p>
             <a
               href={INSTAGRAM_URL}
@@ -4583,10 +4583,10 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
     <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
       {subscription?.max_students && subscription.max_students < studentsCount && (
         <div style={{ background: "#FDF3E7", color: "#8C6027", borderRadius: 14, padding: "12px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.8 }}>
-          عندك اشتراك فعلي يغطي {subscription.max_students} {subscription.max_students === 1 ? "طالب/ة" : "طلاب"} بس، وعندك {studentsCount} مسجَّلين الحين.
+          عندك اشتراك فعل يغطي {subscription.max_students} {subscription.max_students === 1 ? "طالب/ة" : "طلاب"} بس، وعندك {studentsCount} مسجَّلين الحين.
           {platform === "store"
-            ? " اختاري باقة أكبر تغطي الجميع — تُحتسب ترقية وآبل تحسب الفرق تلقائياً، مو شراءً جديداً."
-            : " اختاري باقة أكبر تغطي الجميع."}
+            ? " اختار باقة أكبر تغطي الجميع — تُحتسب ترقية وآبل تحسب الفرق تلقائياً، مو شراءً جديداً."
+            : " اختار باقة أكبر تغطي الجميع."}
         </div>
       )}
 
@@ -4596,7 +4596,7 @@ function SubscriptionTiersPicker({ studentsCount, subscription, motherId, onUnlo
         <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
       ) : platform !== "store" && !canPayByCard ? (
         <div style={{ background: "#F1EFFA", color: "#5C4B8C", borderRadius: 14, padding: "14px 16px", fontSize: 13, fontWeight: 700, lineHeight: 1.8 }}>
-          الاشتراك يتم من تطبيق دفتري على موبايلك. نزّلي التطبيق وسجّلي دخولك بنفس رقمك.
+          الاشتراك يتم من تطبيق دفتري على موبايلك. نزّلي التطبيق وسجّل دخولك بنفس رقمك.
         </div>
       ) : (
         APP_TIERS.map((t) => (
@@ -4672,7 +4672,7 @@ function ManageChildrenInline({ motherId, onChanged }) {
       setChildren((prev) => prev.filter((c) => c.id !== id));
       onChanged?.();
     } catch {
-      alert("تعذّر الحذف، حاولي مرة ثانية.");
+      alert("تعذّر الحذف، حاول مرة ثانية.");
     }
     setBusyId(null);
   }
@@ -4681,7 +4681,7 @@ function ManageChildrenInline({ motherId, onChanged }) {
 
   return (
     <div style={{ background: "white", border: "1.5px solid #EDE9F4", borderRadius: 18, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-      <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#1F2937" }}>أو احذفي طالباً/ة لترجعي تحت حد باقتك الحالية:</p>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#1F2937" }}>أو احذف طالباً/ة لترجع تحت حد باقتك الحالية:</p>
       {children.map((c) => (
         <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <span style={{ fontSize: 13.5, color: "#374151" }}>{c.name}</span>
@@ -4741,8 +4741,8 @@ function SubscriptionManageView({ motherId, studentsCount, onClose, onChanged })
         <div style={{ maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 13 }}>
           <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.75, color: "#616876" }}>
             {access?.subscription?.max_students
-              ? `اشتراكك الحالي يغطي ${access.subscription.max_students} ${access.subscription.max_students === 1 ? "طالب/ة" : "طلاب"}. رقّي باقتك هنا وقت ما تحتاجين.`
-              : "اختاري الباقة المناسبة لعدد أبنائك."}
+              ? `اشتراكك الحالي يغطي ${access.subscription.max_students} ${access.subscription.max_students === 1 ? "طالب/ة" : "طلاب"}. رقّي باقتك هنا وقت ما تحتاج.`
+              : "اختار الباقة المناسبة لعدد أبنائك."}
           </p>
           {access === null ? (
             <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "24px 0" }}>...جاري التحميل</p>
@@ -4882,7 +4882,7 @@ function TeacherView({ children, motherId }) {
         setQuota((q) => ({ ...(q || {}), remainingTotal: data.quota.remaining }));
       }
     } catch (err) {
-      setErrorMsg(err.message || "تعذّر إرسال السؤال، حاولي مرة ثانية.");
+      setErrorMsg(err.message || "تعذّر إرسال السؤال، حاول مرة ثانية.");
     }
     setSending(false);
   }
@@ -5014,7 +5014,7 @@ function TeacherView({ children, motherId }) {
         )}
 
         <HintBanner id="teacher" style={{ lineHeight: 1.6 }}>
-          اسألي عن أي واجب أو درس بمنهج {child ? `الصف ${child.grade}` : "ابنك/ابنتك"} — تقدرين ترفقين صورة الواجب مباشرة، والمعلم الذكي يستعين بمواد وزارة التربية الرسمية لما تكون متوفرة.
+          اسأل عن أي واجب أو درس بمنهج {child ? `الصف ${child.grade}` : "ابنك/ابنتك"} — تقدر ترفق صورة الواجب مباشرة، والمعلم الذكي يستعين بمواد وزارة التربية الرسمية لما تكون متوفرة.
         </HintBanner>
 
         {quota && (quota.remainingTotal || 0) > 0 && (
@@ -5040,7 +5040,7 @@ function TeacherView({ children, motherId }) {
         {historyLoading ? (
           <p style={{ textAlign: "center", color: "#616876", fontSize: 13 }}>...جاري التحميل</p>
         ) : messages.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "20px 0" }}>ابدئي بسؤال 👋</p>
+          <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "20px 0" }}>ابدأ بسؤال 👋</p>
         ) : (
           messages.map((m, i) => (
             <div key={m.id || i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-start" : "flex-end" }}>
@@ -5116,9 +5116,9 @@ function TeacherView({ children, motherId }) {
       )}
 
       <div style={{ flexShrink: 0, borderTop: "1px solid #F0EEE8", background: "white", padding: "8px 16px calc(env(safe-area-inset-bottom) + 10px)", display: "flex", flexDirection: "column", gap: 8 }}>
-        {/* أكثر سبب لرد «أرسلي صورة أوضح»: ظل اليد على الصفحة. نقولها قبل التصوير. */}
+        {/* أكثر سبب لرد «أرسل صورة أوضح»: ظل اليد على الصفحة. نقولها قبل التصوير. */}
         <p style={{ margin: 0, fontSize: 11.5, color: "#616876", lineHeight: 1.6 }}>
-          📸 صوّري الصفحة بلا ظل — وبعدها حدّدي السؤال بالإطار عشان يطلع بأوضح صورة، أو أرسلي الصفحة كاملة.
+          📸 صوّر الصفحة بلا ظل — وبعدها حدّد السؤال بالإطار عشان يطلع بأوضح صورة، أو أرسل الصفحة كاملة.
         </p>
         {/* الصورة من ألبوم الجوال أعلى جودة من كاميرا داخل التطبيق، فنعرض
             الخيارين (والماسح لو متوفر) بقائمة صغيرة بدل الكاميرا مباشرة. */}
@@ -5149,7 +5149,7 @@ function TeacherView({ children, motherId }) {
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 12.5, color: "#374151", fontWeight: 700 }}>الصورة اللي بتنرسل</p>
               <button onClick={() => setViewImage(image)} style={{ marginTop: 4, background: "#F1EFFA", color: "#5C4B8C", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 700 }}>
-                اضغطي للتكبير
+                اضغط للتكبير
               </button>
             </div>
           </div>
@@ -5162,7 +5162,7 @@ function TeacherView({ children, motherId }) {
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="اكتبي سؤالك..."
+            placeholder="اكتب سؤالك..."
             rows={1}
             style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 12, padding: "11px 12px", fontSize: 16, resize: "none", fontFamily: "inherit", minHeight: 44, maxHeight: 100 }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
@@ -5297,7 +5297,7 @@ function TeacherNotesSection({ child, motherId, subjects }) {
   async function remove(id) {
     if (!confirm("حذف هذه الملاحظة نهائياً؟")) return;
     const res = await fetch(`/api/teacher-notes/${id}`, { method: "DELETE" });
-    if (!res.ok) { alert("تعذّر الحذف، حاولي مرة ثانية."); return; }
+    if (!res.ok) { alert("تعذّر الحذف، حاول مرة ثانية."); return; }
     setItems((prev) => prev.filter((it) => it.id !== id));
     setEditing(null);
   }
@@ -5338,8 +5338,8 @@ function TeacherNotesSection({ child, motherId, subjects }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <HintBanner id="teacher-notes">
-        ملاحظات المعلم للطالب من اجتماع أولياء الأمور — اكتبي كل ملاحظة بمادتها
-        وفترتها، وبنهاية السنة تشوفين تطوّر {child.name} فترة بفترة بمكان واحد.
+        ملاحظات المعلم للطالب من اجتماع أولياء الأمور — اكتب كل ملاحظة بمادتها
+        وفترتها، وبنهاية السنة تشوف تطوّر {child.name} فترة بفترة بمكان واحد.
       </HintBanner>
 
       <div style={{ background: "white", borderRadius: 14, border: "1px solid #EEEDE8", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -5351,16 +5351,16 @@ function TeacherNotesSection({ child, motherId, subjects }) {
           style={{ ...field, resize: "vertical", lineHeight: 1.7 }}
         />
         <select value={subject} onChange={(e) => setSubject(e.target.value)} style={field}>
-          <option value="">اختاري المادة…</option>
+          <option value="">اختار المادة…</option>
           {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
-          <option value="__other">مادة ثانية (اكتبيها)</option>
+          <option value="__other">مادة ثانية (اكتبها)</option>
         </select>
         {subject === "__other" && (
           <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={field} />
         )}
         <select value={term} onChange={(e) => setTerm(e.target.value)} style={field}>
           {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
-          <option value="__other">فترة ثانية (اكتبيها)</option>
+          <option value="__other">فترة ثانية (اكتبها)</option>
         </select>
         {term === "__other" && (
           <input value={customTerm} onChange={(e) => setCustomTerm(e.target.value)} placeholder="اسم الفترة" style={field} />
@@ -5445,12 +5445,12 @@ function EditTeacherNoteModal({ item, subjects, onClose, onSave, onDelete }) {
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} style={{ ...field, resize: "vertical", lineHeight: 1.7 }} />
         <select value={subject} onChange={(e) => setSubject(e.target.value)} style={field}>
           {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
-          <option value="__other">مادة ثانية (اكتبيها)</option>
+          <option value="__other">مادة ثانية (اكتبها)</option>
         </select>
         {subject === "__other" && <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={field} />}
         <select value={term} onChange={(e) => setTerm(e.target.value)} style={field}>
           {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
-          <option value="__other">فترة ثانية (اكتبيها)</option>
+          <option value="__other">فترة ثانية (اكتبها)</option>
         </select>
         {term === "__other" && <input value={customTerm} onChange={(e) => setCustomTerm(e.target.value)} placeholder="اسم الفترة" style={field} />}
         {error && <p style={{ color: "#B91C1C", fontSize: 12, margin: 0, lineHeight: 1.7 }}>{error}</p>}
@@ -5792,7 +5792,7 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
 
           {catalog.length === 0 ? (
             <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "16px 0" }}>
-              ارفعي جدول الحصص عشان تطلع مواد {child.name} هنا، أو أضيفي مادة بنفسك.
+              ارفع جدول الحصص عشان تطلع مواد {child.name} هنا، أو أضف مادة بنفسك.
             </p>
           ) : (
             catalog.map((c) => (
@@ -5814,7 +5814,7 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
             <input
               value={extraSubject}
               onChange={(e) => setExtraSubject(e.target.value)}
-              placeholder="مادة ثانية (اكتبيها)"
+              placeholder="مادة ثانية (اكتبها)"
               style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44 }}
             />
             <button
@@ -5868,7 +5868,7 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
                   {perSubject.some((r) => r.percent != null && r.weightSource === "none") &&
                     " وفيه مادة ما لها وزن معروف فأخذت حصة وحدة."}
                   {perSubject.some((r) => r.percent != null && r.weightSource === "typical") &&
-                    " والحصص المعلَّمة «تقديري» من متوسط جداول المدارس عندنا — ارفعي جدول الحصص ياخذ وزن طالبك/طالبتك بالضبط."}
+                    " والحصص المعلَّمة «تقديري» من متوسط جداول المدارس عندنا — ارفع جدول الحصص ياخذ وزن طالبك/طالبتك بالضبط."}
                 </p>
               </div>
             </div>
@@ -5883,16 +5883,16 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
       {showFree && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 12, background: "#FAFAF8", border: "1px solid #EEEDE8" }}>
           <select value={subject} onChange={(e) => setSubject(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44, background: "white" }}>
-            <option value="">اختاري المادة…</option>
+            <option value="">اختار المادة…</option>
             {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
-            <option value="__other">مادة ثانية (اكتبيها)</option>
+            <option value="__other">مادة ثانية (اكتبها)</option>
           </select>
           {subject === "__other" && (
             <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44 }} />
           )}
           <select value={period} onChange={(e) => setPeriod(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44, background: "white" }}>
             {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
-            <option value="__other">فترة ثانية (اكتبيها)</option>
+            <option value="__other">فترة ثانية (اكتبها)</option>
           </select>
           {period === "__other" && (
             <input value={customPeriod} onChange={(e) => setCustomPeriod(e.target.value)} placeholder="اسم الفترة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44 }} />
@@ -5951,10 +5951,10 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
         }}
       >
         <span style={{ fontWeight: 700, fontSize: 13, color: BRAND_DARK }}>
-          لقيتي بنداً غلط؟ بلّغينا
+          لقيت بنداً غلط؟ بلّغنا
         </span>
         <span style={{ fontSize: 11.5, color: "#616876", lineHeight: 1.8 }}>
-          التوزيع منقول من أوراق وزارة التربية، ومدرستكم ممكن تختلف. أرسلي لنا صورة ورقة
+          التوزيع منقول من أوراق وزارة التربية، ومدرستكم ممكن تختلف. أرسل لنا صورة ورقة
           الدرجات ورسالة بالدايركت ونعدّلها.
         </span>
       </a>
@@ -5975,7 +5975,7 @@ function ResetYearButton({ motherId, onDone, ios }) {
       alert("تم مسح بيانات العام الدراسي ✅");
       onDone();
     } else {
-      alert("تعذّر المسح، حاولي مرة ثانية.");
+      alert("تعذّر المسح، حاول مرة ثانية.");
     }
   }
 
@@ -6062,10 +6062,10 @@ function PushTestRow() {
       const countdown = setInterval(() => {
         setDetail((d) => {
           const left = Math.max(parseInt(d) || DELAY, 1) - 1;
-          return left > 0 ? `اقفلي شاشتك الحين — الإشعار بيوصل خلال ${left}...` : "";
+          return left > 0 ? `اقفل شاشتك الحين — الإشعار بيوصل خلال ${left}...` : "";
         });
       }, 1000);
-      setDetail(`اقفلي شاشتك الحين — الإشعار بيوصل خلال ${DELAY}...`);
+      setDetail(`اقفل شاشتك الحين — الإشعار بيوصل خلال ${DELAY}...`);
 
       const res = await fetch("/api/push/test", {
         method: "POST",
@@ -6130,7 +6130,7 @@ function appAccessSummary(access) {
     return { status: "منتهي", color: "#B91C1C", bg: "#FEF2F2", detail: `انتهى بتاريخ ${dateAr(sub.period_end)}`, action: "جدّدي اشتراكك" };
   }
   if (access.phase === "enforced") {
-    return { status: "غير مفعّل", color: "#B91C1C", bg: "#FEF2F2", detail: "اختاري باقة حسب عدد أبنائك", action: "اشتركي الآن" };
+    return { status: "غير مفعّل", color: "#B91C1C", bg: "#FEF2F2", detail: "اختار باقة حسب عدد أبنائك", action: "اشترك الآن" };
   }
   // الميزة معطّلة أصلاً — ما فيه حالة اشتراك نعرضها، بس نخلي الباقات متاحة.
   return { status: "", color: "#5C4B8C", bg: "#F1EFFA", detail: "", action: "عرض الباقات" };
@@ -6186,7 +6186,7 @@ function PasswordSetting({ ios }) {
             دخول قادم بموبايلك ورقمك السري بلا كود، حتى من جهاز جديد.
           </p>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رقم سري جديد" autoComplete="new-password" style={inputStyle} />
-          <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="أعيدي كتابته" autoComplete="new-password" style={inputStyle} />
+          <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} placeholder="أعد كتابته" autoComplete="new-password" style={inputStyle} />
           <button onClick={save} disabled={busy} style={{ width: "100%", padding: 11, borderRadius: 12, background: saved ? "#22C55E" : "#B7A6E8", color: "white", fontWeight: 700, fontSize: 13.5, minHeight: 42, opacity: busy ? 0.6 : 1 }}>
             {saved ? "تم الحفظ ✓" : busy ? "جاري الحفظ..." : "حفظ"}
           </button>
@@ -6612,7 +6612,7 @@ function DeleteAccountButton({ mother, onDeleted, ios }) {
       <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "#B91C1C" }}>حذف الحساب نهائياً</p>
       <p style={{ margin: "6px 0 10px", fontSize: 12.5, lineHeight: 1.75, color: "#7F1D1D" }}>
         سيُحذف حسابك وكل بيانات أبنائك (الواجبات، المتطلبات، الجدول، الحفظ، الدرجات، ملاحظات المعلم، ومحادثات المعلم الذكي) نهائياً
-        وبدون إمكانية استرجاع. لتأكيد الحذف، اكتبي رقم موبايلك ({lastEight}):
+        وبدون إمكانية استرجاع. لتأكيد الحذف، اكتب رقم موبايلك ({lastEight}):
       </p>
       <input
         value={confirmPhone}
