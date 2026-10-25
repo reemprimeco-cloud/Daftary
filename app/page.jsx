@@ -28,7 +28,7 @@ import CropModal from "./CropModal";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
 import { APP_TIERS, APP_PLAN, arabicDigits } from "@/lib/appPlans";
 import {
-  SEMESTERS, SCHEMES, MIDDLE_SCHEME_KEYS, guessScheme, schemeFor, summarize, yearResult,
+  SEMESTERS, SCHEMES, MIDDLE_SCHEME_KEYS, guessScheme, schemeFor, summarize, yearResult, overall,
 } from "@/lib/gradeScheme";
 
 // لون العلامة بدرجتين: الفاتح للخلفيات والحدود، والغامق لكل ما يحمل
@@ -5085,6 +5085,16 @@ function ProgressView({ children, motherId, classSchedule = [] }) {
     classSchedule.filter((s) => s.child_id === child?.id).map((s) => s.subject?.trim()).filter(Boolean)
   )].sort((a, b) => a.localeCompare(b, "ar"));
 
+  // وزن المادة بالمعدل = عدد حصصها الأسبوعية (تصحيح صاحبة التطبيق ٢٥
+  // أكتوبر) — يُقرأ من نفس الجدول، ما يُسأل عنه ولا يُفترض.
+  const subjectPeriods = {};
+  for (const row of classSchedule) {
+    if (row.child_id !== child?.id) continue;
+    const name = row.subject?.trim();
+    if (!name) continue;
+    subjectPeriods[name] = (subjectPeriods[name] || 0) + 1;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {children.length > 1 && (
@@ -5123,7 +5133,7 @@ function ProgressView({ children, motherId, classSchedule = [] }) {
       {child && (section === "notes" ? (
         <TeacherNotesSection child={child} motherId={motherId} subjects={subjects} />
       ) : (
-        <GradesSection child={child} motherId={motherId} subjects={subjects} />
+        <GradesSection child={child} motherId={motherId} subjects={subjects} subjectPeriods={subjectPeriods} />
       ))}
     </div>
   );
@@ -5543,7 +5553,7 @@ function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, l
   );
 }
 
-function GradesSection({ child, motherId, subjects = [] }) {
+function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) {
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
   // الأعمدة الجديدة تجي بترحيل منفصل. ما نعرض بطاقة البنود قبل ما يرد
@@ -5569,6 +5579,11 @@ function GradesSection({ child, motherId, subjects = [] }) {
   // تخص المتوسط ولا حرف GPA ما نعرف سلّمه. «مجموع المادة من ١٠٠» وحده
   // يشتغل لأي مرحلة، فيبقى متاحاً لهم بلا تصنيف.
   const isMiddle = stageForGrade(Number(child.grade)) === "متوسط";
+  // **جدول GPA واحد لكل المراحل** (قرارها ٢٥ أكتوبر: «الابتدائي نفس
+  // المتوسطة بالـGPA») — فالتصنيف يطلع لأي طالب/ة. اللي ينقص الابتدائي هو
+  // **بنود** كل مادة لا سلّم التقييم، فيبقى على «مجموع المادة من ١٠٠» لين
+  // توصل أوراقه.
+  const showGpaFor = true;
 
   const finalSubject = subject === "__other" ? customSubject.trim() : subject;
   const finalPeriod = period === "__other" ? customPeriod.trim() : period;
@@ -5626,6 +5641,18 @@ function GradesSection({ child, motherId, subjects = [] }) {
   // تضيفها الأم بنفسها — بلا تكرار.
   const subjectList = [...new Set([...subjects, ...itemRows.map((r) => r.subject), ...extras])].filter(Boolean);
 
+  // ملخّص كل المواد بالفصل المختار — المادة الناقصة تُعرض «ناقصة» ولا
+  // تدخل المعدل ولا تُحسب صفراً.
+  const perSubject = subjectList.map((s) => {
+    const rows = itemRows.filter((r) => r.subject === s && r.semester === semester);
+    const scheme = rows.find((r) => r.scheme)?.scheme || (isMiddle ? guessScheme(s) : "middle_quick");
+    const scores = {};
+    for (const r of rows) if (r.item) scores[r.item] = r.score;
+    return { subject: s, weight: subjectPeriods[s] || 0, ...summarize(scheme, scores) };
+  });
+  const all = overall(perSubject);
+  const num = (n, d = 2) => arabicDigits(Number(n).toFixed(d).replace(/\.?0+$/, ""));
+
   const byFreeSubject = {};
   for (const g of freeRows) {
     if (!byFreeSubject[g.subject]) byFreeSubject[g.subject] = [];
@@ -5646,8 +5673,8 @@ function GradesSection({ child, motherId, subjects = [] }) {
 
           {!isMiddle && (
             <p style={{ margin: 0, fontSize: 12, color: "#92400E", background: "#FEF3C7", borderRadius: 10, padding: "9px 11px", lineHeight: 1.85 }}>
-              توزيع درجات {stageForGrade(Number(child.grade))} لسه ما انضاف — فنعرض «مجموع المادة من ١٠٠» بلا
-              تصنيف حرفي، عشان ما نعطيك حرفاً من سلّم مرحلة ثانية.
+              بنود {stageForGrade(Number(child.grade))} لسه ما انضافت — اكتبي <strong>الدرجة النهائية من ١٠٠</strong>،
+              والتصنيف والمعدل يطلعان عادي (نفس سلّم GPA).
             </p>
           )}
 
@@ -5664,7 +5691,7 @@ function GradesSection({ child, motherId, subjects = [] }) {
                 rows={itemRows.filter((r) => r.subject === s && r.semester === semester)}
                 allRows={itemRows.filter((r) => r.subject === s)}
                 onSave={saveItem}
-                showGpa={isMiddle}
+                showGpa={showGpaFor}
                 lockQuick={!isMiddle}
               />
             ))
@@ -5684,6 +5711,47 @@ function GradesSection({ child, motherId, subjects = [] }) {
               إضافة
             </button>
           </div>
+
+          {all && (
+            <div style={{ border: `1px solid ${BRAND}`, borderRadius: 14, padding: 14, background: "#FBFAFF" }}>
+              <p style={{ margin: "0 0 10px", fontWeight: 800, fontSize: 14, color: BRAND_DARK }}>
+                الدرجة النهائية — {semester}
+              </p>
+
+              {perSubject.map((r) => (
+                <div key={r.subject} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderTop: "1px solid #EFECF8", fontSize: 13 }}>
+                  <span style={{ color: "#374151" }}>
+                    {r.subject}
+                    {/* الوزن معروض عشان تقدر الأم تقارنه بجدول بنتها */}
+                    <span style={{ color: "#616876", fontSize: 11.5 }}>
+                      {" · "}{r.weight > 0 ? `${arabicDigits(String(r.weight))} حصص` : "وزن مقدَّر"}
+                    </span>
+                  </span>
+                  {r.percent == null ? (
+                    <span style={{ color: "#616876", fontSize: 12.5 }}>ناقصة</span>
+                  ) : (
+                    <span style={{ fontWeight: 800, color: BRAND_DARK }}>
+                      {num(r.entered, 2)} من ١٠٠ · <GpaChip gpa={r.gpa} />
+                    </span>
+                  )}
+                </div>
+              ))}
+
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${BRAND}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13.5, fontWeight: 800, color: BRAND_DARK }}>
+                  <span>المعدل الموزون</span>
+                  <span>{num(all.percent)} من ١٠٠ · <GpaChip gpa={all.band} /></span>
+                </div>
+                <p style={{ margin: "8px 0 0", fontSize: 11.5, color: "#616876", lineHeight: 1.85 }}>
+                  موزون بعدد الحصص الأسبوعية لا بمتوسط عادي: (درجة المادة × حصصها) ÷{" "}
+                  {arabicDigits(String(all.totalWeight))} حصة.
+                  {" "}محسوب من {arabicDigits(String(all.count))} مادة مكتملة من {arabicDigits(String(all.total))}
+                  {all.count < all.total && " — الناقصة ما تدخل الحساب ولا تُحسب صفراً"}.
+                  {!all.allWeighted && " وفيه مادة مو بجدول الحصص فأخذت وزن حصة وحدة."}
+                </p>
+              </div>
+            </div>
+          )}
         </>
       )}
 
