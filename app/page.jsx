@@ -5447,7 +5447,7 @@ function GpaChip({ gpa }) {
 }
 
 // بطاقة مادة واحدة بفصل واحد.
-function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, defaultScheme }) {
+function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, defaultScheme, grade }) {
   // القالب اللي انحفظ به الصف يتقدّم على التخمين — وإلا تغيّر التخمين
   // بتحديث لاحق فاختفت درجات محفوظة من عين الأم.
   const savedScheme = rows.find((r) => r.scheme)?.scheme;
@@ -5498,7 +5498,10 @@ function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, d
 
       {open && (
         <div style={{ padding: "0 13px 13px" }}>
-          {/* قالب المادة الرسمي، أو الخانة الوحدة لو مدرستها تختلف */}
+          {/* قالب المادة الرسمي، أو الخانة الوحدة لو مدرستها تختلف.
+              **العنوان بصف الطالب/ة نفسه لا بمجموعة صفوف** (طلبها ٢٥
+              أكتوبر): «الصفان الرابع والخامس» عنوان عام يخلي الأم تتأكد
+              إن هذا توزيع بنتها ولا توزيع صف ثاني. */}
           {[...new Set([defaultScheme, "middle_quick"])].length > 1 && (
             <select
               value={scheme}
@@ -5507,7 +5510,11 @@ function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, d
               style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44, background: "white", marginBottom: 6 }}
             >
               {[...new Set([defaultScheme, "middle_quick"])].map((k) => (
-                <option key={k} value={k}>{SCHEMES[k].name}</option>
+                <option key={k} value={k}>
+                  {k === "middle_quick"
+                    ? "الدرجة النهائية من ١٠٠"
+                    : `توزيع درجات الصف ${arabicDigits(String(grade))}`}
+                </option>
               ))}
             </select>
           )}
@@ -5701,6 +5708,7 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
                 onSave={saveItem}
                 showGpa={showGpaFor}
                 defaultScheme={c.scheme}
+                grade={child.grade}
               />
             ))
           )}
