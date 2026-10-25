@@ -5417,6 +5417,16 @@ function GradeItemInput({ item, value, onSave, disabled }) {
   );
 }
 
+// الحرف والنقاط كتلة لاتينية داخل نص عربي — بلا dir="ltr" يرتّبها البيدي
+// بالمقلوب فتطلع «3.7 · A». نفس علة ترتيب وقتي الحصة بجدول الحصص.
+function GpaChip({ gpa }) {
+  return (
+    <span dir="ltr" style={{ display: "inline-block" }}>
+      {gpa.letter} · {gpa.points}
+    </span>
+  );
+}
+
 // بطاقة مادة واحدة بفصل واحد.
 function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, lockQuick }) {
   // القالب اللي انحفظ به الصف يتقدّم على التخمين — وإلا تغيّر التخمين
@@ -5453,13 +5463,17 @@ function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, l
       >
         <span style={{ fontWeight: 800, fontSize: 14, color: "#374151" }}>{subject}</span>
         <span style={{ fontSize: 12.5, fontWeight: 800, color: sum.complete ? BRAND_DARK : "#616876" }}>
-          {sum.complete && showGpa
-            ? `${arabicDigits(String(sum.entered))} · ${sum.gpa.letter} · ${sum.gpa.points}`
-            : sum.complete
-            ? `${arabicDigits(String(sum.entered))} من ١٠٠`
-            : sum.enteredMax > 0
-            ? `${arabicDigits(String(sum.entered))} من ${arabicDigits(String(sum.enteredMax))} المدخَل`
-            : "ما انرصد شي"}
+          {sum.complete && showGpa ? (
+            <>
+              {arabicDigits(String(sum.entered))} · <GpaChip gpa={sum.gpa} />
+            </>
+          ) : sum.complete ? (
+            `${arabicDigits(String(sum.entered))} من ١٠٠`
+          ) : sum.enteredMax > 0 ? (
+            `${arabicDigits(String(sum.entered))} من ${arabicDigits(String(sum.enteredMax))} المدخَل`
+          ) : (
+            "ما انرصد شي"
+          )}
         </span>
       </button>
 
@@ -5500,7 +5514,12 @@ function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, l
             {sum.complete ? (
               <p style={{ margin: 0, fontWeight: 800, color: BRAND_DARK }}>
                 المجموع {arabicDigits(String(sum.entered))} من ١٠٠
-                {showGpa && ` · ${sum.gpa.letter} — ${sum.gpa.label} · ${sum.gpa.points}`}
+                {showGpa && <> · <GpaChip gpa={sum.gpa} /> — {sum.gpa.label}</>}
+              </p>
+            ) : sum.enteredMax === 0 ? (
+              // «٠ من ٠» ما يقول شيئاً — نقول إنها ما انرصدت أصلاً
+              <p style={{ margin: 0, color: "#616876" }}>
+                ما انرصدت أي درجة بعد · المادة من ١٠٠
               </p>
             ) : (
               <p style={{ margin: 0, color: "#616876" }}>
@@ -5514,7 +5533,7 @@ function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, l
             {year && (
               <p style={{ margin: "4px 0 0", color: "#616876" }}>
                 نتيجة السنة (الفصلان ÷ ٢): {arabicDigits(year.percent.toFixed(2).replace(/\.00$/, ""))}
-                {" · "}{year.gpa.letter} · {year.gpa.points}
+                {" · "}<GpaChip gpa={year.gpa} />
               </p>
             )}
           </div>
