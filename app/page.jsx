@@ -28,8 +28,7 @@ import CropModal from "./CropModal";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
 import { APP_TIERS, APP_PLAN, arabicDigits } from "@/lib/appPlans";
 import {
-  SEMESTERS, SCHEMES, MIDDLE_SCHEME_KEYS, guessScheme, schemeFor, summarize, yearResult, overall,
-  subjectCatalog,
+  SEMESTERS, SCHEMES, schemeFor, summarize, yearResult, overall, subjectCatalog,
 } from "@/lib/gradeScheme";
 
 // لون العلامة بدرجتين: الفاتح للخلفيات والحدود، والغامق لكل ما يحمل
@@ -5448,11 +5447,11 @@ function GpaChip({ gpa }) {
 }
 
 // بطاقة مادة واحدة بفصل واحد.
-function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, lockQuick }) {
+function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, defaultScheme }) {
   // القالب اللي انحفظ به الصف يتقدّم على التخمين — وإلا تغيّر التخمين
   // بتحديث لاحق فاختفت درجات محفوظة من عين الأم.
   const savedScheme = rows.find((r) => r.scheme)?.scheme;
-  const [scheme, setScheme] = useState(lockQuick ? "middle_quick" : savedScheme || guessScheme(subject));
+  const [scheme, setScheme] = useState(savedScheme || defaultScheme);
   const [open, setOpen] = useState(false);
   useEffect(() => { if (savedScheme && savedScheme !== scheme) setScheme(savedScheme); }, [savedScheme]);
 
@@ -5499,14 +5498,15 @@ function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, l
 
       {open && (
         <div style={{ padding: "0 13px 13px" }}>
-          {!lockQuick && (
+          {/* قالب المادة الرسمي، أو الخانة الوحدة لو مدرستها تختلف */}
+          {[...new Set([defaultScheme, "middle_quick"])].length > 1 && (
             <select
               value={scheme}
               onChange={(e) => setScheme(e.target.value)}
               aria-label="قالب التوزيع"
               style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44, background: "white", marginBottom: 6 }}
             >
-              {MIDDLE_SCHEME_KEYS.map((k) => (
+              {[...new Set([defaultScheme, "middle_quick"])].map((k) => (
                 <option key={k} value={k}>{SCHEMES[k].name}</option>
               ))}
             </select>
@@ -5585,15 +5585,11 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
   const [saving, setSaving] = useState(false);
 
   // **المرحلة من صف الطالب/ة نفسه** — ما نسأل الأم عن شي مسجّل عندنا.
-  // الابتدائي والثانوي: جداولهما ما وصلتنا بعد، فما نعرض لهما درجات كلية
-  // تخص المتوسط ولا حرف GPA ما نعرف سلّمه. «مجموع المادة من ١٠٠» وحده
-  // يشتغل لأي مرحلة، فيبقى متاحاً لهم بلا تصنيف.
+  // المرحلة من صف الطالب/ة نفسه — ما نسأل الأم عن شي مسجّل عندنا. وقالب
+  // كل مادة يجي من الكتالوج حسب مجموعة الصفوف (١–٣ · ٤–٥ · ٦–٩).
   const stage = stageForGrade(Number(child.grade));
-  const isMiddle = stage === "متوسط";
   // **جدول GPA واحد لكل المراحل** (قرارها ٢٥ أكتوبر: «الابتدائي نفس
-  // المتوسطة بالـGPA») — فالتصنيف يطلع لأي طالب/ة. اللي ينقص الابتدائي هو
-  // **بنود** كل مادة لا سلّم التقييم، فيبقى على «مجموع المادة من ١٠٠» لين
-  // توصل أوراقه.
+  // المتوسطة بالـGPA») — فالتصنيف يطلع لأي طالب/ة.
   const showGpaFor = true;
 
   const finalSubject = subject === "__other" ? customSubject.trim() : subject;
@@ -5651,13 +5647,13 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
   // **كل المواد تُدرج** (طلبها ٢٥ أكتوبر) لا اللي بجدول الحصص وحدها: أم ما
   // رفعت جدولاً — أو جدولها ناقص مادة — كانت ما تشوف المادة أصلاً. واسم
   // الأم من جدولها يتقدّم على اسمنا، ووزنها الفعلي على الوزن المقيس.
-  const catalog = subjectCatalog(stage, subjectPeriods, [...itemRows.map((r) => r.subject), ...extras]);
+  const catalog = subjectCatalog(stage, subjectPeriods, [...itemRows.map((r) => r.subject), ...extras], child.grade);
 
   // ملخّص كل المواد بالفصل المختار — المادة الناقصة تُعرض «ناقصة» ولا
   // تدخل المعدل ولا تُحسب صفراً.
   const perSubject = catalog.map((c) => {
     const rows = itemRows.filter((r) => r.subject === c.name && r.semester === semester);
-    const scheme = rows.find((r) => r.scheme)?.scheme || (isMiddle ? guessScheme(c.name) : "middle_quick");
+    const scheme = rows.find((r) => r.scheme)?.scheme || c.scheme;
     const scores = {};
     for (const r of rows) if (r.item) scores[r.item] = r.score;
     return { subject: c.name, weight: c.weight, weightSource: c.weightSource, ...summarize(scheme, scores) };
@@ -5683,10 +5679,10 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
             ))}
           </div>
 
-          {!isMiddle && (
+          {catalog.some((c) => c.key === "science" && c.scheme === "middle_quick") && (
             <p style={{ margin: 0, fontSize: 12, color: "#92400E", background: "#FEF3C7", borderRadius: 10, padding: "9px 11px", lineHeight: 1.85 }}>
-              بنود {stageForGrade(Number(child.grade))} لسه ما انضافت — اكتبي <strong>الدرجة النهائية من ١٠٠</strong>،
-              والتصنيف والمعدل يطلعان عادي (نفس سلّم GPA).
+              بنود <strong>العلوم</strong> للابتدائي لسه ما انضافت — اكتبي درجتها النهائية من ١٠٠،
+              والتصنيف والمعدل يطلعان عادي.
             </p>
           )}
 
@@ -5704,7 +5700,7 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
                 allRows={itemRows.filter((r) => r.subject === c.name)}
                 onSave={saveItem}
                 showGpa={showGpaFor}
-                lockQuick={!isMiddle}
+                defaultScheme={c.scheme}
               />
             ))
           )}
