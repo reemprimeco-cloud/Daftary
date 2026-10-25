@@ -5686,12 +5686,6 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
             ))}
           </div>
 
-          {catalog.some((c) => c.key === "science" && c.scheme === "middle_quick") && (
-            <p style={{ margin: 0, fontSize: 12, color: "#92400E", background: "#FEF3C7", borderRadius: 10, padding: "9px 11px", lineHeight: 1.85 }}>
-              بنود <strong>العلوم</strong> للابتدائي لسه ما انضافت — اكتبي درجتها النهائية من ١٠٠،
-              والتصنيف والمعدل يطلعان عادي.
-            </p>
-          )}
 
           {catalog.length === 0 ? (
             <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "16px 0" }}>
@@ -5838,6 +5832,29 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
           );
         })
       )}
+
+      {/* **بلاغ عن خلل بالتوزيع** (طلبها ٢٥ أكتوبر): التوزيع منقول من
+          أوراق الوزارة، والمدارس تختلف وتتغيّر — فالأم اللي تلقى بنداً
+          غلط تحتاج طريق يوصلنا بالصورة. الانستقرام هو قناة التواصل
+          بالتطبيق (قرار ١٨ سبتمبر)، فالبلاغ يروح له لا لمسار جديد:
+          الصورة هي الدليل، وما عندنا شاشة ترفعها لنا هنا. */}
+      <a
+        href={INSTAGRAM_URL}
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          display: "flex", flexDirection: "column", gap: 3, marginTop: 6, padding: "12px 14px", minHeight: 44,
+          borderRadius: 12, border: `1px solid ${BRAND}`, background: "#FBFAFF", textDecoration: "none",
+        }}
+      >
+        <span style={{ fontWeight: 700, fontSize: 13, color: BRAND_DARK }}>
+          لقيتي بنداً غلط؟ بلّغينا
+        </span>
+        <span style={{ fontSize: 11.5, color: "#616876", lineHeight: 1.8 }}>
+          التوزيع منقول من أوراق وزارة التربية، ومدرستكم ممكن تختلف. أرسلي لنا صورة ورقة
+          الدرجات ورسالة بالدايركت ونعدّلها.
+        </span>
+      </a>
     </div>
   );
 }
