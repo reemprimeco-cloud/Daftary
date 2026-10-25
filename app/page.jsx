@@ -27,6 +27,9 @@ import { postUpload } from "@/lib/uploadRequest";
 import CropModal from "./CropModal";
 import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
 import { APP_TIERS, APP_PLAN, arabicDigits } from "@/lib/appPlans";
+import {
+  SEMESTERS, SCHEMES, MIDDLE_SCHEME_KEYS, guessScheme, schemeFor, summarize, yearResult,
+} from "@/lib/gradeScheme";
 
 // لون العلامة بدرجتين: الفاتح للخلفيات والحدود، والغامق لكل ما يحمل
 // نصاً — سواء كان هو النص أو الخلفية تحته.
@@ -5349,12 +5352,190 @@ function EditTeacherNoteModal({ item, subjects, onClose, onSave, onDelete }) {
   );
 }
 
+// ————————————————————————————————————————————————————————————
+// الدرجات ببنودها (قرارها ٢٥ أكتوبر)
+// ————————————————————————————————————————————————————————————
+// كانت الأم تكتب رقمين بخانتين فاضيتين: «الدرجة» و«الدرجة الكلية». الحين
+// تختار المادة والفصل فتطلع لها بطاقة فيها كل بند **ودرجته مكتوبة جنبه**،
+// وهي تعبّي الرقم بس — الدرجات الكلية من ورقة وزارة التربية لا من ذاكرتها.
+//
+// والقوالب بـ`lib/gradeScheme.js` كبيانات لا كشيفرة: إضافة مادة أو مرحلة
+// ناقصة بعدين تصير تعديل سطر بيانات.
+
+// خانة بند واحد. تنحفظ عند مغادرة الخانة لا بكل حرف — ٨٠ رقماً بالفصل
+// تعني ٨٠ طلباً بكل ضغطة لو حفظنا مع كل حرف.
+function GradeItemInput({ item, value, onSave, disabled }) {
+  const [v, setV] = useState(value == null ? "" : String(value));
+  const [state, setState] = useState("idle");
+  useEffect(() => { setV(value == null ? "" : String(value)); }, [value]);
+
+  async function commit() {
+    const trimmed = v.trim();
+    const same = trimmed === (value == null ? "" : String(value));
+    if (same) return;
+    if (trimmed !== "" && Number(trimmed) > item.max) {
+      setState("over");
+      return;
+    }
+    setState("saving");
+    const ok = await onSave(item, trimmed);
+    setState(ok ? "saved" : "failed");
+    if (ok) setTimeout(() => setState("idle"), 1200);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid #F5F3EF" }}>
+      <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>
+        {item.label}
+        {item.part && <span style={{ color: "#616876", fontSize: 11.5 }}> · {item.part}</span>}
+        {item.note && <span style={{ color: "#616876", fontSize: 11.5 }}> · {item.note}</span>}
+      </span>
+      <input
+        value={v}
+        onChange={(e) => { setV(e.target.value); if (state !== "idle") setState("idle"); }}
+        onBlur={commit}
+        disabled={disabled}
+        type="number"
+        inputMode="decimal"
+        step="0.5"
+        min="0"
+        max={item.max}
+        aria-label={`${item.label} من ${item.max}`}
+        style={{
+          width: 62, textAlign: "center", fontSize: 16, padding: "8px 6px", minHeight: 44,
+          border: `1px solid ${state === "over" || state === "failed" ? "#D70015" : "#E5E7EB"}`,
+          borderRadius: 10, background: disabled ? "#F5F3EF" : "white",
+        }}
+      />
+      <span style={{ fontSize: 12.5, color: "#616876", minWidth: 42 }}>
+        من {arabicDigits(String(item.max))}
+      </span>
+      <span style={{ width: 16, fontSize: 13, color: state === "saved" ? "#2F6E56" : "#D70015" }}>
+        {state === "saving" ? "…" : state === "saved" ? "✓" : state === "over" || state === "failed" ? "!" : ""}
+      </span>
+    </div>
+  );
+}
+
+// بطاقة مادة واحدة بفصل واحد.
+function SubjectGradeCard({ subject, semester, rows, allRows, onSave, showGpa, lockQuick }) {
+  // القالب اللي انحفظ به الصف يتقدّم على التخمين — وإلا تغيّر التخمين
+  // بتحديث لاحق فاختفت درجات محفوظة من عين الأم.
+  const savedScheme = rows.find((r) => r.scheme)?.scheme;
+  const [scheme, setScheme] = useState(lockQuick ? "middle_quick" : savedScheme || guessScheme(subject));
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (savedScheme && savedScheme !== scheme) setScheme(savedScheme); }, [savedScheme]);
+
+  const def = schemeFor(scheme);
+  const scores = {};
+  for (const r of rows) if (r.item) scores[r.item] = r.score;
+  const sum = summarize(scheme, scores);
+
+  // نتيجة السنة = (معدل ف١ + معدل ف٢) ÷ ٢ — ما تُحسب إلا لو الفصلان مكتملان
+  const other = SEMESTERS.find((s) => s !== semester);
+  const otherScores = {};
+  for (const r of allRows) if (r.item && r.semester === other) otherScores[r.item] = r.score;
+  const otherSum = summarize(scheme, otherScores);
+  const year = showGpa ? yearResult(sum.percent, otherSum.percent) : null;
+
+  const groups = [];
+  for (const it of def.items) {
+    const g = it.group || "";
+    if (!groups.length || groups[groups.length - 1].name !== g) groups.push({ name: g, items: [] });
+    groups[groups.length - 1].items.push(it);
+  }
+
+  return (
+    <div data-subject={subject} style={{ border: "1px solid #EEEDE8", borderRadius: 14, overflow: "hidden", background: "white" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 13px", minHeight: 44, background: "none", textAlign: "start" }}
+      >
+        <span style={{ fontWeight: 800, fontSize: 14, color: "#374151" }}>{subject}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: sum.complete ? BRAND_DARK : "#616876" }}>
+          {sum.complete && showGpa
+            ? `${arabicDigits(String(sum.entered))} · ${sum.gpa.letter} · ${sum.gpa.points}`
+            : sum.complete
+            ? `${arabicDigits(String(sum.entered))} من ١٠٠`
+            : sum.enteredMax > 0
+            ? `${arabicDigits(String(sum.entered))} من ${arabicDigits(String(sum.enteredMax))} المدخَل`
+            : "ما انرصد شي"}
+        </span>
+      </button>
+
+      {open && (
+        <div style={{ padding: "0 13px 13px" }}>
+          {!lockQuick && (
+            <select
+              value={scheme}
+              onChange={(e) => setScheme(e.target.value)}
+              aria-label="قالب التوزيع"
+              style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44, background: "white", marginBottom: 6 }}
+            >
+              {MIDDLE_SCHEME_KEYS.map((k) => (
+                <option key={k} value={k}>{SCHEMES[k].name}</option>
+              ))}
+            </select>
+          )}
+
+          {groups.map((g) => (
+            <div key={g.name || "_"}>
+              {g.name && (
+                <p style={{ margin: "10px 0 0", fontSize: 12, fontWeight: 800, color: BRAND_DARK }}>
+                  {g.name} {arabicDigits(String(g.items.reduce((a, b) => a + b.max, 0)))}
+                </p>
+              )}
+              {g.items.map((it) => (
+                <GradeItemInput
+                  key={it.key}
+                  item={it}
+                  value={scores[it.key]}
+                  onSave={(item, val) => onSave({ subject, semester, scheme, item, value: val })}
+                />
+              ))}
+            </div>
+          ))}
+
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #EEEDE8", fontSize: 12.5, lineHeight: 1.9 }}>
+            {sum.complete ? (
+              <p style={{ margin: 0, fontWeight: 800, color: BRAND_DARK }}>
+                المجموع {arabicDigits(String(sum.entered))} من ١٠٠
+                {showGpa && ` · ${sum.gpa.letter} — ${sum.gpa.label} · ${sum.gpa.points}`}
+              </p>
+            ) : (
+              <p style={{ margin: 0, color: "#616876" }}>
+                المدخَل {arabicDigits(String(sum.entered))} من {arabicDigits(String(sum.enteredMax))}
+                {" · "}
+                <span style={{ color: "#616876" }}>
+                  باقي {arabicDigits(String(sum.remaining))} درجة ما انرصدت بعد
+                </span>
+              </p>
+            )}
+            {year && (
+              <p style={{ margin: "4px 0 0", color: "#616876" }}>
+                نتيجة السنة (الفصلان ÷ ٢): {arabicDigits(year.percent.toFixed(2).replace(/\.00$/, ""))}
+                {" · "}{year.gpa.letter} · {year.gpa.points}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GradesSection({ child, motherId, subjects = [] }) {
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  // المادة قائمة من جدول حصص الطالب/ة + خيار كتابة مادة ثانية، والفترة
-  // بنفس تفاصيل ملاحظات المعلم (قرار صاحبة التطبيق ١٨ سبتمبر).
+  // الأعمدة الجديدة تجي بترحيل منفصل. ما نعرض بطاقة البنود قبل ما يرد
+  // المسار إنها موجودة — وإلا طلعت للأم خانات تنكسر أول ما تكتب فيها.
+  const [structured, setStructured] = useState(false);
+  const [semester, setSemester] = useState(SEMESTERS[0]);
+  const [extraSubject, setExtraSubject] = useState("");
+  const [extras, setExtras] = useState([]);
+  const [showFree, setShowFree] = useState(false);
+
+  // الإدخال الحر القديم — يبقى لأي شي برّا القوالب
   const [subject, setSubject] = useState("");
   const [customSubject, setCustomSubject] = useState("");
   const [period, setPeriod] = useState(TERMS[0]);
@@ -5364,6 +5545,12 @@ function GradesSection({ child, motherId, subjects = [] }) {
   const [examName, setExamName] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // **المرحلة من صف الطالب/ة نفسه** — ما نسأل الأم عن شي مسجّل عندنا.
+  // الابتدائي والثانوي: جداولهما ما وصلتنا بعد، فما نعرض لهما درجات كلية
+  // تخص المتوسط ولا حرف GPA ما نعرف سلّمه. «مجموع المادة من ١٠٠» وحده
+  // يشتغل لأي مرحلة، فيبقى متاحاً لهم بلا تصنيف.
+  const isMiddle = stageForGrade(Number(child.grade)) === "متوسط";
+
   const finalSubject = subject === "__other" ? customSubject.trim() : subject;
   const finalPeriod = period === "__other" ? customPeriod.trim() : period;
   const canAdd = !!finalSubject && !!score && !!maxScore && !saving;
@@ -5372,11 +5559,25 @@ function GradesSection({ child, motherId, subjects = [] }) {
     setLoading(true);
     fetch(`/api/grades?childId=${child.id}&motherId=${motherId}`)
       .then((r) => r.json())
-      .then((data) => setGrades(data.grades || []))
+      .then((data) => {
+        setGrades(data.grades || []);
+        setStructured(!!data.structured);
+      })
       .finally(() => setLoading(false));
   }
 
   useEffect(load, [child.id, motherId]);
+
+  async function saveItem({ subject, semester, scheme, item, value }) {
+    const res = await fetch("/api/grades", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ motherId, childId: child.id, subject, semester, scheme, item: item.key, score: value }),
+    });
+    if (!res.ok) return false;
+    load();
+    return true;
+  }
 
   async function handleAdd() {
     if (!canAdd) return;
@@ -5388,7 +5589,7 @@ function GradesSection({ child, motherId, subjects = [] }) {
     });
     if (res.ok) {
       setSubject(""); setCustomSubject(""); setScore(""); setMaxScore(""); setExamName("");
-      setShowAdd(false);
+      setShowFree(false);
       load();
     }
     setSaving(false);
@@ -5400,42 +5601,101 @@ function GradesSection({ child, motherId, subjects = [] }) {
     await fetch(`/api/grades/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId }) });
   }
 
-  const bySubject = {};
-  for (const g of grades) {
-    if (!bySubject[g.subject]) bySubject[g.subject] = [];
-    bySubject[g.subject].push(g);
+  const itemRows = grades.filter((g) => g.item);
+  const freeRows = grades.filter((g) => !g.item);
+  // المواد من جدول حصص الطالب/ة نفسه + أي مادة لها درجة محفوظة + اللي
+  // تضيفها الأم بنفسها — بلا تكرار.
+  const subjectList = [...new Set([...subjects, ...itemRows.map((r) => r.subject), ...extras])].filter(Boolean);
+
+  const byFreeSubject = {};
+  for (const g of freeRows) {
+    if (!byFreeSubject[g.subject]) byFreeSubject[g.subject] = [];
+    byFreeSubject[g.subject].push(g);
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <button onClick={() => setShowAdd((s) => !s)} style={{ padding: 10, borderRadius: 12, background: "#F1EFFA", color: "#5C4B8C", fontWeight: 700, fontSize: 13 }}>
-        {showAdd ? "إلغاء" : "+ إضافة درجة"}
+      {structured && (
+        <>
+          <div className="ios-segmented" style={{ display: "flex" }}>
+            {SEMESTERS.map((s) => (
+              <button key={s} onClick={() => setSemester(s)} data-active={semester === s} style={{ flex: 1 }}>
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {!isMiddle && (
+            <p style={{ margin: 0, fontSize: 12, color: "#92400E", background: "#FEF3C7", borderRadius: 10, padding: "9px 11px", lineHeight: 1.85 }}>
+              توزيع درجات {stageForGrade(Number(child.grade))} لسه ما انضاف — فنعرض «مجموع المادة من ١٠٠» بلا
+              تصنيف حرفي، عشان ما نعطيك حرفاً من سلّم مرحلة ثانية.
+            </p>
+          )}
+
+          {subjectList.length === 0 ? (
+            <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "16px 0" }}>
+              ارفعي جدول الحصص عشان تطلع مواد {child.name} هنا، أو أضيفي مادة بنفسك.
+            </p>
+          ) : (
+            subjectList.map((s) => (
+              <SubjectGradeCard
+                key={s}
+                subject={s}
+                semester={semester}
+                rows={itemRows.filter((r) => r.subject === s && r.semester === semester)}
+                allRows={itemRows.filter((r) => r.subject === s)}
+                onSave={saveItem}
+                showGpa={isMiddle}
+                lockQuick={!isMiddle}
+              />
+            ))
+          )}
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={extraSubject}
+              onChange={(e) => setExtraSubject(e.target.value)}
+              placeholder="مادة ثانية (اكتبيها)"
+              style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44 }}
+            />
+            <button
+              onClick={() => { const v = extraSubject.trim(); if (v) { setExtras((p) => [...p, v]); setExtraSubject(""); } }}
+              style={{ padding: "0 16px", minHeight: 44, borderRadius: 10, background: "#F1EFFA", color: BRAND_DARK, fontWeight: 700, fontSize: 13 }}
+            >
+              إضافة
+            </button>
+          </div>
+        </>
+      )}
+
+      <button onClick={() => setShowFree((s) => !s)} style={{ padding: 10, minHeight: 44, borderRadius: 12, background: "#F1EFFA", color: "#5C4B8C", fontWeight: 700, fontSize: 13 }}>
+        {showFree ? "إلغاء" : "+ درجة حرة (برّا التوزيع)"}
       </button>
 
-      {showAdd && (
+      {showFree && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 12, background: "#FAFAF8", border: "1px solid #EEEDE8" }}>
-          <select value={subject} onChange={(e) => setSubject(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, background: "white" }}>
+          <select value={subject} onChange={(e) => setSubject(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44, background: "white" }}>
             <option value="">اختاري المادة…</option>
             {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
             <option value="__other">مادة ثانية (اكتبيها)</option>
           </select>
           {subject === "__other" && (
-            <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+            <input value={customSubject} onChange={(e) => setCustomSubject(e.target.value)} placeholder="اسم المادة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44 }} />
           )}
-          <select value={period} onChange={(e) => setPeriod(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, background: "white" }}>
+          <select value={period} onChange={(e) => setPeriod(e.target.value)} style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44, background: "white" }}>
             {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
             <option value="__other">فترة ثانية (اكتبيها)</option>
           </select>
           {period === "__other" && (
-            <input value={customPeriod} onChange={(e) => setCustomPeriod(e.target.value)} placeholder="اسم الفترة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+            <input value={customPeriod} onChange={(e) => setCustomPeriod(e.target.value)} placeholder="اسم الفترة" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44 }} />
           )}
           <div style={{ display: "flex", gap: 8 }}>
-            <input value={score} onChange={(e) => setScore(e.target.value)} placeholder="الدرجة" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+            <input value={score} onChange={(e) => setScore(e.target.value)} placeholder="الدرجة" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44 }} />
             <span style={{ alignSelf: "center", color: "#616876" }}>من</span>
-            <input value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="الدرجة الكلية" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
+            <input value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="الدرجة الكلية" type="number" style={{ flex: 1, border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44 }} />
           </div>
-          <input value={examName} onChange={(e) => setExamName(e.target.value)} placeholder="اسم الاختبار (اختياري)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16 }} />
-          <button disabled={!canAdd} onClick={handleAdd} style={{ padding: 10, borderRadius: 10, background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 13, opacity: canAdd ? 1 : 0.5 }}>
+          <input value={examName} onChange={(e) => setExamName(e.target.value)} placeholder="اسم الاختبار (اختياري)" style={{ border: "1px solid #E5E7EB", borderRadius: 10, padding: "9px 12px", fontSize: 16, minHeight: 44 }} />
+          <button disabled={!canAdd} onClick={handleAdd} style={{ padding: 10, minHeight: 44, borderRadius: 10, background: BRAND_DARK, color: "white", fontWeight: 700, fontSize: 13, opacity: canAdd ? 1 : 0.5 }}>
             {saving ? "جاري الحفظ..." : "حفظ الدرجة"}
           </button>
         </div>
@@ -5443,17 +5703,15 @@ function GradesSection({ child, motherId, subjects = [] }) {
 
       {loading ? (
         <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "20px 0" }}>...جاري التحميل</p>
-      ) : Object.keys(bySubject).length === 0 ? (
-        <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "20px 0" }}>ما فيه درجات مسجّلة بعد لـ{child.name}</p>
       ) : (
-        Object.entries(bySubject).map(([subj, entries]) => {
+        Object.entries(byFreeSubject).map(([subj, entries]) => {
           const totalScore = entries.reduce((s, e) => s + Number(e.score), 0);
           const totalMax = entries.reduce((s, e) => s + Number(e.max_score), 0);
           const pct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
           return (
             <div key={subj} style={{ border: "1px solid #EEEDE8", borderRadius: 12, padding: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontWeight: 800, fontSize: 14 }}>{subj}</span>
+                <span style={{ fontWeight: 800, fontSize: 14 }}>{subj} — درجات حرة</span>
                 <span style={{ fontSize: 13, fontWeight: 800, color: "#5C4B8C" }}>{pct}% ({totalScore}/{totalMax})</span>
               </div>
               {entries.map((e) => (
@@ -5462,7 +5720,7 @@ function GradesSection({ child, motherId, subjects = [] }) {
                     {e.exam_name || "اختبار"} — {e.score}/{e.max_score}
                     {e.period && <span style={{ color: "#616876" }}> · {e.period}</span>}
                   </span>
-                  <button onClick={() => handleDelete(e.id)} style={{ background: "none", color: "#D1785A", fontSize: 12 }}>حذف</button>
+                  <button onClick={() => handleDelete(e.id)} className="tap" style={{ background: "none", color: "#D70015", fontSize: 12 }}>حذف</button>
                 </div>
               ))}
             </div>
