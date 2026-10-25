@@ -5740,7 +5740,7 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
                       ({r.weightSource === "none"
                         ? "وزن مقدَّر"
                         : countWord(r.weight, "حصة", "حصتان", "حصص", "حصة") +
-                          (r.weightSource === "typical" ? " تقديري" : "")})
+                          (r.weightSource === "typical" ? " · تقديري" : "")})
                     </span>
                   </span>
                   {r.percent == null ? (
