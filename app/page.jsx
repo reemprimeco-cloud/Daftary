@@ -29,6 +29,7 @@ import { PLAN, SUBSCRIPTION_TIERS, CREDIT_PRODUCT_ID } from "@/lib/plans";
 import { APP_TIERS, APP_PLAN, arabicDigits } from "@/lib/appPlans";
 import {
   SEMESTERS, SCHEMES, MIDDLE_SCHEME_KEYS, guessScheme, schemeFor, summarize, yearResult, overall,
+  subjectCatalog,
 } from "@/lib/gradeScheme";
 
 // لون العلامة بدرجتين: الفاتح للخلفيات والحدود، والغامق لكل ما يحمل
@@ -5427,6 +5428,15 @@ function GradeItemInput({ item, value, onSave, disabled }) {
   );
 }
 
+// جمع عربي صحيح: ١ مفرد، ٢ مثنى، ٣–١٠ جمع، ١١+ مفرد. «٢ حصص» خطأ
+// تقرأه الأم فوراً.
+function countWord(n, one, two, few, many) {
+  if (n === 1) return one;
+  if (n === 2) return two;
+  if (n <= 10) return `${arabicDigits(String(n))} ${few}`;
+  return `${arabicDigits(String(n))} ${many}`;
+}
+
 // الحرف والنقاط كتلة لاتينية داخل نص عربي — بلا dir="ltr" يرتّبها البيدي
 // بالمقلوب فتطلع «3.7 · A». نفس علة ترتيب وقتي الحصة بجدول الحصص.
 function GpaChip({ gpa }) {
@@ -5578,7 +5588,8 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
   // الابتدائي والثانوي: جداولهما ما وصلتنا بعد، فما نعرض لهما درجات كلية
   // تخص المتوسط ولا حرف GPA ما نعرف سلّمه. «مجموع المادة من ١٠٠» وحده
   // يشتغل لأي مرحلة، فيبقى متاحاً لهم بلا تصنيف.
-  const isMiddle = stageForGrade(Number(child.grade)) === "متوسط";
+  const stage = stageForGrade(Number(child.grade));
+  const isMiddle = stage === "متوسط";
   // **جدول GPA واحد لكل المراحل** (قرارها ٢٥ أكتوبر: «الابتدائي نفس
   // المتوسطة بالـGPA») — فالتصنيف يطلع لأي طالب/ة. اللي ينقص الابتدائي هو
   // **بنود** كل مادة لا سلّم التقييم، فيبقى على «مجموع المادة من ١٠٠» لين
@@ -5637,18 +5648,19 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
 
   const itemRows = grades.filter((g) => g.item);
   const freeRows = grades.filter((g) => !g.item);
-  // المواد من جدول حصص الطالب/ة نفسه + أي مادة لها درجة محفوظة + اللي
-  // تضيفها الأم بنفسها — بلا تكرار.
-  const subjectList = [...new Set([...subjects, ...itemRows.map((r) => r.subject), ...extras])].filter(Boolean);
+  // **كل المواد تُدرج** (طلبها ٢٥ أكتوبر) لا اللي بجدول الحصص وحدها: أم ما
+  // رفعت جدولاً — أو جدولها ناقص مادة — كانت ما تشوف المادة أصلاً. واسم
+  // الأم من جدولها يتقدّم على اسمنا، ووزنها الفعلي على الوزن المقيس.
+  const catalog = subjectCatalog(stage, subjectPeriods, [...itemRows.map((r) => r.subject), ...extras]);
 
   // ملخّص كل المواد بالفصل المختار — المادة الناقصة تُعرض «ناقصة» ولا
   // تدخل المعدل ولا تُحسب صفراً.
-  const perSubject = subjectList.map((s) => {
-    const rows = itemRows.filter((r) => r.subject === s && r.semester === semester);
-    const scheme = rows.find((r) => r.scheme)?.scheme || (isMiddle ? guessScheme(s) : "middle_quick");
+  const perSubject = catalog.map((c) => {
+    const rows = itemRows.filter((r) => r.subject === c.name && r.semester === semester);
+    const scheme = rows.find((r) => r.scheme)?.scheme || (isMiddle ? guessScheme(c.name) : "middle_quick");
     const scores = {};
     for (const r of rows) if (r.item) scores[r.item] = r.score;
-    return { subject: s, weight: subjectPeriods[s] || 0, ...summarize(scheme, scores) };
+    return { subject: c.name, weight: c.weight, weightSource: c.weightSource, ...summarize(scheme, scores) };
   });
   const all = overall(perSubject);
   const num = (n, d = 2) => arabicDigits(Number(n).toFixed(d).replace(/\.?0+$/, ""));
@@ -5678,18 +5690,18 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
             </p>
           )}
 
-          {subjectList.length === 0 ? (
+          {catalog.length === 0 ? (
             <p style={{ textAlign: "center", color: "#616876", fontSize: 13, padding: "16px 0" }}>
               ارفعي جدول الحصص عشان تطلع مواد {child.name} هنا، أو أضيفي مادة بنفسك.
             </p>
           ) : (
-            subjectList.map((s) => (
+            catalog.map((c) => (
               <SubjectGradeCard
-                key={s}
-                subject={s}
+                key={c.name}
+                subject={c.name}
                 semester={semester}
-                rows={itemRows.filter((r) => r.subject === s && r.semester === semester)}
-                allRows={itemRows.filter((r) => r.subject === s)}
+                rows={itemRows.filter((r) => r.subject === c.name && r.semester === semester)}
+                allRows={itemRows.filter((r) => r.subject === c.name)}
                 onSave={saveItem}
                 showGpa={showGpaFor}
                 lockQuick={!isMiddle}
@@ -5724,7 +5736,11 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
                     {r.subject}
                     {/* الوزن معروض عشان تقدر الأم تقارنه بجدول بنتها */}
                     <span style={{ color: "#616876", fontSize: 11.5 }}>
-                      {" · "}{r.weight > 0 ? `${arabicDigits(String(r.weight))} حصص` : "وزن مقدَّر"}
+                      {" "}
+                      ({r.weightSource === "none"
+                        ? "وزن مقدَّر"
+                        : countWord(r.weight, "حصة", "حصتان", "حصص", "حصة") +
+                          (r.weightSource === "typical" ? " تقديري" : "")})
                     </span>
                   </span>
                   {r.percent == null ? (
@@ -5744,10 +5760,14 @@ function GradesSection({ child, motherId, subjects = [], subjectPeriods = {} }) 
                 </div>
                 <p style={{ margin: "8px 0 0", fontSize: 11.5, color: "#616876", lineHeight: 1.85 }}>
                   موزون بعدد الحصص الأسبوعية لا بمتوسط عادي: (درجة المادة × حصصها) ÷{" "}
-                  {arabicDigits(String(all.totalWeight))} حصة.
-                  {" "}محسوب من {arabicDigits(String(all.count))} مادة مكتملة من {arabicDigits(String(all.total))}
+                  {countWord(all.totalWeight, "حصة", "حصتين", "حصص", "حصة")}.
+                  {" "}محسوب من {countWord(all.count, "مادة وحدة", "مادتين", "مواد", "مادة")} مكتملة
+                  {" "}من {countWord(all.total, "مادة", "مادتين", "مواد", "مادة")}
                   {all.count < all.total && " — الناقصة ما تدخل الحساب ولا تُحسب صفراً"}.
-                  {!all.allWeighted && " وفيه مادة مو بجدول الحصص فأخذت وزن حصة وحدة."}
+                  {perSubject.some((r) => r.percent != null && r.weightSource === "none") &&
+                    " وفيه مادة ما لها وزن معروف فأخذت حصة وحدة."}
+                  {perSubject.some((r) => r.percent != null && r.weightSource === "typical") &&
+                    " والحصص المعلَّمة «تقديري» من متوسط جداول المدارس عندنا — ارفعي جدول الحصص ياخذ وزن طالبك/طالبتك بالضبط."}
                 </p>
               </div>
             </div>
