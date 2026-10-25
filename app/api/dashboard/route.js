@@ -28,13 +28,16 @@ export async function GET(req) {
   };
   const [{ data: profile }, { data: rated }, { data: children, error: cErr }] = await Promise.all([
     sb.from("mothers").select("created_at, password_hash").eq("id", motherId).maybeSingle(),
-    sb.from("app_feedback").select("mother_id").eq("mother_id", motherId).maybeSingle(),
+    // صار سجلاً بعدة صفوف، فـmaybeSingle تنكسر بأكثر من صف
+    sb.from("app_feedback").select("mother_id").eq("mother_id", motherId).limit(1),
     // أبناء العائلة لا أبناء هذا الحساب وحده — فالأب يشوف نفس الأبناء.
     // (كل حساب بلا شريك = عائلة من شخص واحد، فالنتيجة ما تتغير له.)
     familyChildren(sb, motherId),
   ]);
+  // الشريط بالرئيسية يبقى «مرة وحدة»: يطلع لمن ما قيّمت أبداً. واللي
+  // قيّمت تدخل من سطر «رأيك وملاحظاتك» بحسابي، بلا شرط ولا اختفاء.
   const feedbackDue =
-    !rated &&
+    !rated?.length &&
     !!profile?.created_at &&
     Date.now() - new Date(profile.created_at).getTime() >= FEEDBACK_AFTER_DAYS * 86400e3;
 

@@ -1246,6 +1246,7 @@ export default function Home() {
           onAccountDeleted={handleAccountDeleted}
           onDataCleared={() => loadAll(mother.id)}
           onManageSubscription={() => setShowSubscriptionManage(true)}
+          onFeedback={() => setShowFeedback(true)}
         />
       )}
       {showFeedback && (
@@ -1829,6 +1830,16 @@ function EmptyState({ onAdd }) {
   );
 }
 
+// تاريخ اليوم بتوقيت الكويت لا بتوقيت الجهاز — أم مسافرة بتوقيت ثانٍ
+// كانت تشوف واجب اليوم «متأخراً» أو العكس. و`sv-SE` تعطي YYYY-MM-DD.
+function kuwaitToday() {
+  try {
+    return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kuwait" }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
 function addDays(iso, n) {
   const d = new Date(iso + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + n);
@@ -2371,11 +2382,23 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
 
   const sunday = weekRange?.sunday;
   const saturday = weekRange?.saturday || (sunday ? addDays(sunday, 6) : null);
+  // **الواجب المتأخر بقسم بروحه** (طلب مستخدم ٣ أكتوبر: «الواجبات
+  // المتأخرة… تكون بخانة بروحها نفس طريقة تيمز»). وفوق هذا، الواجب
+  // المتأخر من **قبل هذا الأسبوع** ما كان يطلع بأي قسم أصلاً — مجموعات
+  // الأيام تغطي أحد→سبت، و«واجبات الأسبوع» تغطي ما بعده، فاللي فات
+  // يختفي بصمت. القسم هنا يرجّعه للعين.
+  const today = kuwaitToday();
+  const isLate = (t) => t.type !== "درس" && !!t.due_date && t.due_date < today && !isDone(t);
+
   const groups = [];
+  const late = all.filter((t) => isLate(t) && show(t));
+  if (late.length) groups.push({ key: "late", label: "متأخر", items: late, tone: "late" });
+
   if (sunday) {
     for (let i = 0; i < 7; i++) {
       const date = addDays(sunday, i);
-      const items = all.filter((t) => t.type !== "درس" && t.due_date === date && show(t));
+      // المتأخر انتقل لقسمه — ما يتكرر تحت يومه
+      const items = all.filter((t) => t.type !== "درس" && t.due_date === date && !isLate(t) && show(t));
       if (items.length) groups.push({ key: date, label: FULL_DAY_NAMES[i], sub: shortDate(date), items, tone: "day" });
     }
   }
@@ -2506,8 +2529,11 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
 
         {groups.map((g) => (
           <div key={g.key} style={{ background: "white", borderRadius: 18, overflow: "hidden", border: "1px solid #EEEDE8" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: g.tone === "undated" ? "#FEF3C7" : g.tone === "upcoming" ? "#EBF4FA" : g.tone === "lesson" ? "#E0F2F1" : color.bg }}>
-              <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: g.tone === "undated" ? "#92400E" : g.tone === "upcoming" ? "#31607C" : g.tone === "lesson" ? "#0F766E" : color.text }}>{g.label}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: g.tone === "late" ? "#FDE2E2" : g.tone === "undated" ? "#FEF3C7" : g.tone === "upcoming" ? "#EBF4FA" : g.tone === "lesson" ? "#E0F2F1" : color.bg }}>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: g.tone === "late" ? "#A1121F" : g.tone === "undated" ? "#92400E" : g.tone === "upcoming" ? "#31607C" : g.tone === "lesson" ? "#0F766E" : color.text }}>{g.label}</p>
+              {g.tone === "late" && (
+                <span style={{ fontSize: 11.5, color: "#A1121F", fontWeight: 700 }}>فات موعد التسليم</span>
+              )}
               {g.sub && <span style={{ fontSize: 11.5, color: "#616876", fontWeight: 700 }}>{g.sub}</span>}
               <span style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 800, color: groupDone(g.items) === g.items.length ? "#15803D" : "#6B7280", background: "white", borderRadius: 999, padding: "3px 9px" }}>
                 {groupDone(g.items) === g.items.length ? "✓ " : ""}{groupDone(g.items)} من {g.items.length}
@@ -4306,6 +4332,12 @@ function FeedbackModal({ onClose, onDone }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // **التقييم المنخفض يفتح باب التواصل بدل ما ينقفل** (طلبها ٢٥ أكتوبر):
+  // ★١ أو ★٢ معناها فيه مشكلة ما نعرفها، واللي ما تلقى طريق تحكيها لنا
+  // تروح تكتبها بمتجر آبل — فتبقى شكوى عامة ما نقدر نرد عليها ولا نسأل
+  // عنها. شوهد بالإنتاج: «مو واضح ولا استفدت منه» ★١، والميزة اللي
+  // طلبتها موجودة من ثلاثة أسابيع وما لقتها.
+  const [lowDone, setLowDone] = useState(false);
 
   async function submit() {
     if (!rating) return;
@@ -4320,6 +4352,7 @@ function FeedbackModal({ onClose, onDone }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "تعذّر الإرسال");
       hapticSuccess();
+      if (rating <= 2) { setLowDone(true); setBusy(false); return; }
       onDone();
     } catch (e) {
       setError(e.message || "تعذّر الإرسال، حاولي مرة ثانية.");
@@ -4334,6 +4367,36 @@ function FeedbackModal({ onClose, onDone }) {
           <button onClick={onClose} aria-label="إغلاق" style={{ background: "#F3F4F6", color: "#616876", borderRadius: "50%", width: 28, height: 28, fontSize: 16, lineHeight: 1 }}>×</button>
         </div>
 
+        {lowDone ? (
+          <>
+            <p style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 800, color: "#374151", textAlign: "center" }}>
+              وصلنا تقييمك — شكراً لصراحتك
+            </p>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#616876", textAlign: "center", lineHeight: 1.9 }}>
+              ودّنا نسمع منك أكثر: وش اللي ضايقك بالضبط؟ أرسلي لنا بالدايركت ونصلّحه — وإذا كانت
+              الميزة موجودة وما لقيتيها، نوريك وين.
+            </p>
+            <a
+              href={INSTAGRAM_URL}
+              target="_blank"
+              rel="noreferrer"
+              onClick={onDone}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, width: "100%",
+                background: BRAND_DARK, color: "white", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 800,
+                minHeight: 48, textDecoration: "none" }}
+            >
+              <TileIcon name="instagram" size={22} />
+              كلّمينا بالدايركت
+            </a>
+            <button
+              onClick={onDone}
+              style={{ width: "100%", marginTop: 8, background: "none", color: "#616876", fontSize: 13, fontWeight: 700, minHeight: 44 }}
+            >
+              مو الحين
+            </button>
+          </>
+        ) : (
+        <>
         <p style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 800, color: "#374151", textAlign: "center" }}>شرايكم بدفتري؟</p>
         <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "#616876", textAlign: "center", lineHeight: 1.7 }}>
           رأيك يوصل لنا مباشرة ويساعدنا نطوّر البرنامج
@@ -4376,6 +4439,8 @@ function FeedbackModal({ onClose, onDone }) {
           {busy ? "جاري الإرسال..." : "إرسال التقييم"}
         </button>
         <p style={{ textAlign: "center", fontSize: 11.5, color: "#B0AAB8", margin: "10px 0 0" }}>شكراً لوقتكم 🤍</p>
+        </>
+        )}
       </div>
     </div>
   );
@@ -6245,7 +6310,7 @@ function FamilyInviteBanner({ onJoined }) {
   );
 }
 
-function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared, onManageSubscription }) {
+function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDeleted, onDataCleared, onManageSubscription, onFeedback }) {
   const phone = (mother.phone || "").replace(/^\+965/, "");
   const [native, setNative] = useState(false);
   const [access, setAccess] = useState(null);
@@ -6320,6 +6385,17 @@ function ProfileView({ mother, childrenCount, onClose, onLogout, onAccountDelete
               <span className="ios-chevron">›</span>
             </a>
             {/* شعار القناة بدل اسمها بين قوسين — الأيقونة تعرّف بنفسها */}
+            {/* **باب دائم للملاحظات** (طلبها ٢٥ أكتوبر): شريط التقييم
+                بالرئيسية يطلع مرة وحدة بعد ٧ أيام ويختفي للأبد أول ما
+                تقيّم — فأم قيّمت بسبتمبر وعندها ملاحظة اليوم ما عندها ولا
+                طريق توصلنا. هذا السطر بلا شرط ولا اختفاء. */}
+            <button onClick={onFeedback} className="ios-row">
+              <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <TileIcon name="star" size={25} />
+                رأيك وملاحظاتك
+              </span>
+              <span className="ios-chevron">›</span>
+            </button>
             <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" className="ios-row">
               <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 <TileIcon name="instagram" size={25} />
