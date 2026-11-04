@@ -586,6 +586,12 @@ export default function Home() {
   const [planChildId, setPlanChildId] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("daftary_plan_child") : null));
   const [requirements, setRequirements] = useState([]);
   const [classSchedule, setClassSchedule] = useState([]);
+  // الاجتماعات والحفظ ييون مع اللوحة بنفس الرحلة (قياس ٤ نوفمبر) بدل
+  // طلبين متسلسلين من `WeekPlanPanel` بعد ما ترد — الاثنان بيانات عائلة
+  // كاملة، والمكوّن يصفّي اللي يخص الطالب/ة المعروض.
+  const [meetings, setMeetings] = useState([]);
+  const [meetingsReady, setMeetingsReady] = useState(false);
+  const [memorization, setMemorization] = useState([]);
   // طلب التقييم: الخادم يقرر متى يستحق العرض (بعد أسبوع من التسجيل وطالما
   // ما قيّمت)، والواجهة تعرضه وتخفيه فور الإرسال بلا انتظار تحديث.
   const [feedbackDue, setFeedbackDue] = useState(false);
@@ -743,6 +749,9 @@ export default function Home() {
     setWeekRange(data.weekRange || null);
     setRequirements(data.requirements || []);
     setClassSchedule(data.classSchedule || []);
+    setMeetings(data.meetings || []);
+    setMeetingsReady(!!data.meetingsReady);
+    setMemorization(data.memorization || []);
     setFeedbackDue(!!data.feedbackDue);
     setNeedsPassword(!!data.needsPassword);
   }
@@ -941,7 +950,13 @@ export default function Home() {
     await loadAll(mother.id);
   }
 
-  if (loading || (mother && (!schools || !dataLoaded))) {
+  // **ما ننتظر `schools`** (قياس ٤ نوفمبر): ملف المدارس ٣٣ KB وما يُستخدم
+  // إلا داخل نموذج إضافة/تعديل الطالب/ة، وكان بالبوابة هنا فيحجب الشاشة
+  // الرئيسية كلها لين ينزل. على 3G ضعيف قيس: الملف ينتهي عند ٥٧٢٨ ms
+  // والشاشة تطلع عند ٦٢٦٠ — يعني الأم تقعد تنتظر قائمة مدارس ما طلبتها.
+  // والنموذجان يتعاملان مع `null` أصلاً، والملف ينزل بالتوازي فيكون جاهزاً
+  // قبل ما تفتحهما بوقت طويل.
+  if (loading || (mother && !dataLoaded)) {
     return (
       <>
         <div style={{ height: "100%", background: "#FAF7F2", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 28 }}>
@@ -1083,6 +1098,9 @@ export default function Home() {
                   motherId={mother.id}
                   tasks={[...weekTasksFor(planChild.id), ...undatedTasksFor(planChild.id), ...upcomingTasksFor(planChild.id)]}
                   doneTasks={doneTasks.filter((t) => t.child_id === planChild.id)}
+                  meetings={meetings}
+                  meetingsReady={meetingsReady}
+                  memorization={memorization}
                   weekRange={weekRange}
                   hasPEToday={hasPEToday(planChild.id)}
                   onToggle={handleMarkDone}
@@ -2292,7 +2310,7 @@ function AttachmentsCard({ children, refreshKey }) {
   );
 }
 
-function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToday, onToggle, onOpenTask, onEdit, onAddTask, onClearedDone }) {
+function WeekPlanPanel({ child, motherId, tasks, doneTasks, meetings, meetingsReady, memorization, weekRange, hasPEToday, onToggle, onOpenTask, onEdit, onAddTask, onClearedDone }) {
   const color = PALETTE[child.color_idx % PALETTE.length];
   // **الافتراضي «غير مكتمل»** (قرارها ٢١ أكتوبر): اللي تفتح الرئيسية
   // تبي تشوف اللي **باقي** عليها لا كل شي. والمنجز ينتقل لتبويبه،
@@ -2314,34 +2332,26 @@ function WeekPlanPanel({ child, motherId, tasks, doneTasks, weekRange, hasPEToda
   };
   const toggleTask = (id, done) => { if (done && filter === "open") grace(id); onToggle(id, done); };
 
-  // موعد اجتماع أولياء الأمور — صف واحد جارٍ لكل طالب/ة (طلبها ٢٤ أكتوبر)
-  const [meeting, setMeeting] = useState(null);
+  // موعد اجتماع أولياء الأمور — صف واحد جارٍ لكل طالب/ة (طلبها ٢٤ أكتوبر).
+  // ييي مع اللوحة بنفس الرحلة، فالحالة المحلية تُبذَر من المعطى: التعديل
+  // بعد الحفظ محلي (`onSaved`) وما يحتاج رحلة ثانية.
+  // وحارس `meetingsReady` انتقل للخادم (يرجّعه مع اللوحة) بنفس المعنى:
+  // الميزة تبقى مخفية لو الجدول مفقود، وتولد وحدها لحظة ما ينطبّق الترحيل.
+  const mineMeeting = (list) => (list || []).find((m) => m.child_id === child.id) || null;
+  const mineMemo = (list) => (list || []).filter((m) => m.child_id === child.id);
+  const [meeting, setMeeting] = useState(() => mineMeeting(meetings));
   const [showMeeting, setShowMeeting] = useState(false);
-  // **ما يظهر السطر إلا لما يرد المسار بنجاح.** الجدول يُنشأ بترحيل
-  // منفصل (migrations/2026-10-24_parent_meetings.sql)، ولو انشر الكود
-  // قبله كان يطلع للأم زر ينكسر أول ما تضغطه. فالغياب الصامت هنا مقصود:
-  // الميزة تولد وحدها لحظة ما ينطبّق الترحيل، بلا نشر ثانٍ.
-  const [meetingsReady, setMeetingsReady] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/meetings")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`http_${r.status}`))))
-      .then((d) => {
-        if (!alive) return;
-        setMeeting((d.meetings || []).find((m) => m.child_id === child.id) || null);
-        setMeetingsReady(true);
-      })
-      .catch(() => { if (alive) setMeetingsReady(false); });
-    return () => { alive = false; };
-  }, [child.id]);
-  const [memo, setMemo] = useState([]);
+  const [memo, setMemo] = useState(() => mineMemo(memorization));
   const [editingMemo, setEditingMemo] = useState(null);
   const [clearing, setClearing] = useState(false);
 
-  useEffect(() => {
-    fetch(`/api/memorization?childId=${child.id}&motherId=${motherId}`)
-      .then((r) => r.json()).then((d) => setMemo(d.items || [])).catch(() => {});
-  }, [child.id, motherId]);
+  // بذرة جديدة كل ما ترد اللوحة ببيانات أحدث. تبديل الطالب/ة يعيد تركيب
+  // المكوّن أصلاً (`key={planChild.id}`) فالبذرة الأولى تكفيه — وهذا
+  // للحالة الثانية: اعتماد مسودة خطة يستدعي `loadAll` بلا إعادة تركيب،
+  // وكان الحفظ المستخرج ما يطلع إلا بعد إعادة فتح التطبيق.
+  // والتعديلات المتفائلة (✓ الحفظ) ما تستدعي `loadAll`، فما تُمسح.
+  useEffect(() => { setMeeting(mineMeeting(meetings)); }, [meetings, child.id]);
+  useEffect(() => { setMemo(mineMemo(memorization)); }, [memorization, child.id]);
 
   async function toggleMemo(id) {
     const wasDone = memo.find((it) => it.id === id)?.done;
@@ -3236,7 +3246,10 @@ function AddChildModal({ schools, nextColorIdx, child, onClose, onSave, onDelete
           <div>
             <label style={{ fontSize: 13, fontWeight: 700 }}>المحافظة</label>
             <select value={gov} onChange={(e) => { setGov(e.target.value); setSchool(""); setOtherSchool(false); }} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "9px 12px", marginTop: 5, background: "white" }}>
-              <option value="">— اختار —</option>
+              {/* الشاشة الرئيسية ما تنتظر ملف المدارس، فنادراً جداً (شبكة
+                  بطيئة + فتح النموذج بأول ثانية) يكون لسه نازلاً. نقول
+                  السبب بدل قائمة فاضية ما تفهم الأم ليش هي فاضية. */}
+              <option value="">{schools ? "— اختار —" : "— جاري تحميل المدارس —"}</option>
               {schools && Object.keys(schools).map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>

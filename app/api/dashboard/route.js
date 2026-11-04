@@ -52,10 +52,24 @@ export async function GET(req) {
   let doneTasks = [];
   let requirements = [];
   let classSchedule = [];
+  let meetings = [];
+  let memorization = [];
+  // الاجتماع ما يظهر إلا لو الاستعلام نجح — الجدول يُنشأ بترحيل منفصل
+  // (migrations/2026-10-24_parent_meetings.sql)، ولو انشر الكود قبله يطلع
+  // للأم زر ينكسر أول ما تضغطه. فالغياب الصامت مقصود، والميزة تولد وحدها
+  // لحظة ما ينطبّق الترحيل بلا نشر ثانٍ. (كان الحارس بالواجهة على رد
+  // /api/meetings، وانتقل هنا بعد ما انضم للوحة.)
+  let meetingsReady = false;
   if (childIds.length) {
-    // الستة مستقلة عن بعض تماماً، وكانت تنفّذ واحداً بعد الآخر — رحلات
+    // الثمانية مستقلة عن بعض تماماً، وكانت تنفّذ واحداً بعد الآخر — رحلات
     // شبكة متتابعة لقاعدة البيانات على كل فتحة للتطبيق. صارت رحلة وحدة.
-    const [{ data: t }, { data: u }, { data: up }, { data: r }, { data: cs }, { data: dn }] = await Promise.all([
+    //
+    // والاجتماعات والحفظ انضموا هنا (قياس ٤ نوفمبر): كانت `WeekPlanPanel`
+    // تجيبهم بطلبين **بعد** ما ترد اللوحة، فيتأخر اكتمال الشاشة الرئيسية
+    // برحلتين متسلسلتين — على 3G ضعيف قيست ~٨٠٠ ms زيادة. وفوقها كان
+    // `/api/meetings` يرجّع اجتماعات العائلة كلها ويُعاد طلبه **بكل تبديل
+    // طالب/ة** لأن `key={planChild.id}` يعيد تركيب المكوّن.
+    const [{ data: t }, { data: u }, { data: up }, { data: r }, { data: cs }, { data: dn }, mt, mz] = await Promise.all([
       // نجيب لين آخر السبت (مو الخميس بس) عشان أي واجب تاريخه صريح صادف
       // يوم جمعة/سبت (نادر، لكن ممكن بعد ميزة التواريخ البعيدة) ما يختفي.
       sb.from("tasks").select("*").in("child_id", childIds).eq("status", "active")
@@ -72,6 +86,15 @@ export async function GET(req) {
       // بعلامة ✓ ويدخل بنسبة الإنجاز. الأقدم ما يهم أحداً.
       sb.from("tasks").select("*").in("child_id", childIds).eq("status", "done")
         .or(`due_date.gte.${sunday},due_date.is.null`).order("due_date"),
+      // اجتماع أولياء الأمور: صف واحد جارٍ لكل طالب/ة، والواجهة تصفّي
+      // باللي معروض. نفس أعمدة /api/meetings بالضبط.
+      sb.from("parent_meetings")
+        .select("id, child_id, meet_on, meet_time, note, source_text, source_id")
+        .in("child_id", childIds).order("meet_on"),
+      // الحفظ بنفس ترتيب /api/memorization: غير المحفوظ أولاً، والأحدث
+      // أولاً بين كل مجموعة.
+      sb.from("memorization").select("*").in("child_id", childIds)
+        .order("done", { ascending: true }).order("created_at", { ascending: false }),
     ]);
     tasks = t || [];
     undatedTasks = u || [];
@@ -79,6 +102,9 @@ export async function GET(req) {
     requirements = r || [];
     classSchedule = cs || [];
     doneTasks = dn || [];
+    meetings = mt.data || [];
+    meetingsReady = !mt.error;
+    memorization = mz.data || [];
   }
 
   // حساب ما حدّد رقماً سرياً لسه: التطبيق يطلبه منه داخل التطبيق بجلسته
@@ -86,5 +112,5 @@ export async function GET(req) {
   // نفسها ما تطلع للعميل أبداً.
   const needsPassword = !profile?.password_hash;
 
-  return NextResponse.json({ children, tasks, undatedTasks, upcomingTasks, doneTasks, requirements, classSchedule, feedbackDue, needsPassword, weekRange: { sunday, thursday, saturday } });
+  return NextResponse.json({ children, tasks, undatedTasks, upcomingTasks, doneTasks, requirements, classSchedule, meetings, meetingsReady, memorization, feedbackDue, needsPassword, weekRange: { sunday, thursday, saturday } });
 }

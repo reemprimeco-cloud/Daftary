@@ -1,0 +1,11 @@
+{"children":[{"id":"c1","name":"لولو","grade":"5","stage":"ابتدائي","school":"مدرسة","color_idx":0,"family_id":"f1"}],
+"tasks":[{"id":"t0","child_id":"c1","subject":"رياضيات","type":"واجب","details":"تمارين صفحة 10","due_date":"2026-11-05","status":"active","source":"image"},
+{"id":"t1","child_id":"c1","subject":"عربي","type":"واجب","details":"إملاء","due_date":"2026-11-05","status":"active","source":"image"},
+{"id":"t2","child_id":"c1","subject":"علوم","type":"اختبار","details":"الوحدة الثانية","due_date":"2026-11-06","status":"active","source":"image"}],
+"undatedTasks":[],"upcomingTasks":[],"doneTasks":[],"requirements":[],
+"classSchedule":[{"id":"s1","child_id":"c1","day":"الأحد","period_number":1,"subject":"رياضيات","teacher":"أ. نورة","start_time":"7:30","end_time":"8:15"}],
+"meetings":[{"id":"mt1","child_id":"c1","meet_on":"2026-11-10","meet_time":"٥:٣٠ م","note":"قاعة المسرح","source_text":null,"source_id":null}],
+"meetingsReady":true,
+"memorization":[{"id":"z1","child_id":"c1","kind":"آية","reference":"البقرة ١-٥","details":"حفظ","done":false,"created_at":"2026-11-01"}],
+"feedbackDue":false,"needsPassword":false,
+"weekRange":{"sunday":"2026-11-01","thursday":"2026-11-05","saturday":"2026-11-07"}}
