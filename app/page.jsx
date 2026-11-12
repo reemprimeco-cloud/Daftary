@@ -846,23 +846,47 @@ export default function Home() {
     setEditingChild(null);
   }
 
-  // «تم» تنقل الواجب لقائمة المنجز (يبقى ظاهراً بـ✓ بالخطة الأسبوعية)،
-  // وdone=false ترجّعه لمكانه حسب تاريخه. تحديث محلي فوري بلا إعادة تحميل.
-  async function handleMarkDone(taskId, done = true) {
-    const res = await fetch(`/api/tasks/${taskId}/done`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id, done }) });
-    if (!res.ok) { alert("تعذّر تحديث الواجب، حاول مرة ثانية."); return; }
-    done ? hapticSuccess() : hapticLight();
-    const found = [...tasks, ...undatedTasks, ...upcomingTasks, ...doneTasks].find((t) => t.id === taskId);
-    const strip = (prev) => prev.filter((t) => t.id !== taskId);
+  // نقل الواجب بين القوائم حسب حالته الجديدة — تُستدعى مرتين: فوراً عند
+  // الضغط، ومرة ثانية بالعكس لو فشل الطلب.
+  function placeTask(task, done) {
+    const strip = (prev) => prev.filter((t) => t.id !== task.id);
     setTasks(strip); setUndatedTasks(strip); setUpcomingTasks(strip); setDoneTasks(strip);
-    if (found) {
-      const updated = { ...found, status: done ? "done" : "active" };
-      if (done) setDoneTasks((prev) => [...prev, updated]);
-      else if (!updated.due_date) setUndatedTasks((prev) => [...prev, updated]);
-      else if (weekRange?.saturday && updated.due_date > weekRange.saturday) setUpcomingTasks((prev) => [...prev, updated]);
-      else setTasks((prev) => [...prev, updated]);
-    }
+    const updated = { ...task, status: done ? "done" : "active" };
+    if (done) setDoneTasks((prev) => [...prev, updated]);
+    else if (!updated.due_date) setUndatedTasks((prev) => [...prev, updated]);
+    else if (weekRange?.saturday && updated.due_date > weekRange.saturday) setUpcomingTasks((prev) => [...prev, updated]);
+    else setTasks((prev) => [...prev, updated]);
+  }
+
+  // «تم» تنقل الواجب لقائمة المنجز (يبقى ظاهراً بـ✓ بالخطة الأسبوعية)،
+  // وdone=false ترجّعه لمكانه حسب تاريخه.
+  //
+  // **التحديث قبل الشبكة لا بعدها** (شكوى صاحبة التطبيق ١٢ نوفمبر: «لما
+  // أحدد المربع ما يظهر صح، بس يختفي باهتزاز وياخذ شوي وقت»).
+  //
+  // السبب: مهلة الـ٧٠٠ ms (`grace`) تبدأ من **الضغطة**، والعلامة ما تنرسم
+  // إلا بعد ما يرد الخادم — فالشبكة تاكل المهلة. قيس بمتصفح حقيقي: رد
+  // ١٥٠ ms يعطي العلامة ٥٠٠ ms، ورد ٥٠٠ ms يعطيها ١٥٠ ms، ورد ٩٠٠ ms
+  // **ما يعطيها ولا شي** — الصف يقفز من «غير محدَّد» إلى «اختفى»،
+  // والاهتزاز يجي بلحظة الاختفاء فتحس إنه عطل.
+  //
+  // فالحين نحرّكه فوراً: العلامة تبيّن بلحظتها والمهلة تمشي معها، والرد
+  // المتأخر ما يغيّر شيئاً بالعرض. والفشل يرجّعه مكانه ويقول السبب —
+  // وهذا نفس ما يسويه التسميع (`toggleMemo`) من زمان.
+  async function handleMarkDone(taskId, done = true) {
+    const found = [...tasks, ...undatedTasks, ...upcomingTasks, ...doneTasks].find((t) => t.id === taskId);
+    if (!found) return;
+
+    placeTask(found, done);
+    done ? hapticSuccess() : hapticLight();
     setOpenTask(null);
+
+    const res = await fetch(`/api/tasks/${taskId}/done`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motherId: mother.id, done }) });
+    if (!res.ok) {
+      // ما انحفظ: نرجّعه بحالته الأصلية بدل ما تظن إنه انسجّل وهو ضايع.
+      placeTask(found, !done);
+      alert("تعذّر تحديث الواجب، حاول مرة ثانية.");
+    }
   }
 
   async function handleDeleteTask(taskId) {
