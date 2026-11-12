@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createSessionToken } from "@/lib/session";
 import { normalizeKuwaitPhone } from "@/lib/otp";
-import { hashPassword, isValidPassword } from "@/lib/authPassword";
+import { hashPassword, isValidPassword, publicMother } from "@/lib/authPassword";
 
 // إنشاء حساب: الاسم + الموبايل + رقم سري، بلا كود تحقق (قرار صاحبة
 // التطبيق ١٩ سبتمبر — فاتورة Twilio). الرقم يُحفظ كما هو بلا تحقق منه:
@@ -77,5 +77,5 @@ export async function POST(req) {
     return NextResponse.json({ error: "إعدادات الجلسة ناقصة بالسيرفر" }, { status: 500 });
   }
 
-  return NextResponse.json({ mother: data, token });
+  return NextResponse.json({ mother: publicMother(data), token });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createSessionToken } from "@/lib/session";
+import { publicMother } from "@/lib/authPassword";
 import { isReviewCode, isReviewPhone, maskPhone, normalizeKuwaitPhone, twilioVerify } from "@/lib/otp";
 
 // التحقق من الكود. لو صح: ننشئ الحساب لو جديد، ونرجّع جلسة موقّعة تبقى شغالة
@@ -98,5 +99,6 @@ export async function POST(req) {
 
   // ما فيها رقم سري بعد (حساب جديد أو حساب قديم قبل هالميزة) — الواجهة
   // تعرض خطوة اختيارية لتحديد رقم سري عشان الدخول القادم يصير بلا كود.
-  return NextResponse.json({ mother, token, needsPassword: !mother.password_hash });
+  // `needsPassword` يُحسب من البصمة هنا بالخادم، والبصمة نفسها ما تطلع.
+  return NextResponse.json({ mother: publicMother(mother), token, needsPassword: !mother.password_hash });
 }

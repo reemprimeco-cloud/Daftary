@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createSessionToken } from "@/lib/session";
 import { normalizeKuwaitPhone } from "@/lib/otp";
-import { verifyPassword, loginLockStatus, nextFailedAttemptState } from "@/lib/authPassword";
+import { verifyPassword, loginLockStatus, nextFailedAttemptState, publicMother } from "@/lib/authPassword";
 
 // دخول بالجوال + رقم سري — بلا كود، بلا Twilio. راجع request-otp/route.js:
 // هذا المسار ما يُستدعى إلا لرقم سبق أن حدّد رقماً سرياً (channel:"password").
@@ -52,5 +52,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "إعدادات الجلسة ناقصة بالسيرفر" }, { status: 500 });
   }
 
-  return NextResponse.json({ mother, token });
+  // الصف كامل يبقى بالخادم (نحتاج البصمة للتحقق فوق)، واللي يطلع للعميل
+  // قائمة بيضاء — راجع publicMother.
+  return NextResponse.json({ mother: publicMother(mother), token });
 }

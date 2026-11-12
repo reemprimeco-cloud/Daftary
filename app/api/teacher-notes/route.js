@@ -26,7 +26,12 @@ export async function GET(req) {
 
 export async function POST(req) {
   const body = await req.json().catch(() => ({}));
-  const motherId = req.headers.get("x-mother-id") || body.motherId;
+  // **من الترويسة الموثوقة وحدها.** كان فيه ارتداد `|| body.motherId` —
+  // غير قابل للاستغلال اليوم لأن الحارس يكتب فوق الترويسة بـ`headers.set`
+  // فما توصل قيمة العميل أبداً، لكنه كان المسار الوحيد من ٧٥ اللي يرتد
+  // لجسم الطلب، ويصير ثغرة وصول لبيانات عائلة ثانية لحظة ما يتغيّر
+  // `matcher` بـmiddleware.js. (فحص ١٢ نوفمبر)
+  const motherId = req.headers.get("x-mother-id");
   const childId = body.childId;
   if (!motherId || !childId) return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
 
